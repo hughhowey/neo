@@ -18,6 +18,8 @@ let hintShown = false;
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+const isMac = window.neo.platform === 'darwin';
+
 // ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
@@ -2709,7 +2711,7 @@ async function doExport(format) {
 
 function chooseEmailMethod() {
   // Apple Mail only exists on Macs; elsewhere Gmail is the only offer
-  if (!navigator.platform.toLowerCase().includes('mac')) return Promise.resolve('gmail');
+  if (!isMac) return Promise.resolve('gmail');
   return new Promise((resolve) => {
     const bd = document.createElement('div');
     bd.className = 'modal-backdrop';
