@@ -2122,7 +2122,7 @@ function exitSiloAttempt() {
     <div class="modal" style="width:520px">
       <h2 style="font-size:16px">Leaving the Silo?</h2>
       <p>Type this, word for word, and the hatch opens:</p>
-      <p style="font-family:Georgia,serif;font-size:15px;font-style:italic;color:var(--accent);line-height:1.6">“${prompt}”</p>
+      <p style="font-family:Georgia,'Noto Serif',serif;font-size:15px;font-style:italic;color:var(--accent);line-height:1.6">“${prompt}”</p>
       <input id="silo-input" type="text" spellcheck="false" autocomplete="off" placeholder="Confess…"/>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
         <button class="m-cancel" style="background:var(--accent);border:none;border-radius:6px;padding:7px 16px;color:#191919">Never mind — back to writing</button>
@@ -2302,17 +2302,20 @@ $('#goal-counter').onclick = openStats;
 /*  MENU: Help + fonts                                                 */
 /* ================================================================== */
 
+// Mac names first; then free lookalikes most Linux desktops ship
+// (urw-base35 clones: P052 = Palatino, C059 = Century Schoolbook,
+//  URW Gothic = Futura-ish, Z003 = chancery script).
 const DROPCAP_FONTS = {
-  literary: '"Didot", "Bodoni 72", Georgia, serif',
-  fantasy: '"Apple Chancery", "Snell Roundhand", cursive',
-  scifi: 'Futura, "Avenir Next", "Helvetica Neue", sans-serif'
+  literary: '"Didot", "Bodoni 72", "Noto Serif Display", Georgia, "Noto Serif", serif',
+  fantasy: '"Apple Chancery", "Snell Roundhand", "URW Chancery L", "Z003", cursive',
+  scifi: 'Futura, "Avenir Next", "URW Gothic", "Century Gothic", "Helvetica Neue", "DejaVu Sans", sans-serif'
 };
 const BODY_FONTS = {
-  'Georgia': 'Georgia, "Times New Roman", serif',
-  'Palatino': '"Palatino", "Palatino Linotype", serif',
-  'Baskerville': 'Baskerville, Georgia, serif',
-  'Hoefler Text': '"Hoefler Text", Georgia, serif',
-  'Iowan Old Style': '"Iowan Old Style", Georgia, serif'
+  'Georgia': 'Georgia, "Noto Serif", "Liberation Serif", "Times New Roman", serif',
+  'Palatino': '"Palatino", "Palatino Linotype", "URW Palladio L", "P052", "TeX Gyre Pagella", serif',
+  'Baskerville': 'Baskerville, "Libertinus Serif", "Linux Libertine", "C059", Georgia, serif',
+  'Hoefler Text': '"Hoefler Text", "C059", "Century Schoolbook L", Georgia, "Noto Serif", serif',
+  'Iowan Old Style': '"Iowan Old Style", "Bitstream Charter", "Charter", "Noto Serif", Georgia, serif'
 };
 
 function applyFonts() {
@@ -2445,7 +2448,7 @@ function buildHtml() {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${book.title}</title>
 <style>
-  body { font-family: Georgia, serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
+  body { font-family: Georgia, "Noto Serif", "Liberation Serif", serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
   .titlepage { text-align: center; margin: 30vh 0 20vh; page-break-after: always; }
   .titlepage h1 { font-size: 30pt; margin: 0; }
   .titlepage .sub { font-style: italic; color: #555; }
@@ -2574,7 +2577,7 @@ function makeCoverJpeg() {
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 18;
-  ctx.font = 'bold 150px Georgia';
+  ctx.font = 'bold 150px Georgia, "Noto Serif", serif';
   const words = (book.title || 'Untitled').split(/\s+/);
   const lines = [];
   let line = '';
@@ -2586,7 +2589,7 @@ function makeCoverJpeg() {
   lines.push(line);
   let y = H * 0.32;
   for (const l of lines) { ctx.fillText(l, W / 2, y); y += 175; }
-  ctx.font = '72px Georgia';
+  ctx.font = '72px Georgia, "Noto Serif", serif';
   ctx.fillText((book.author || '').toUpperCase(), W / 2, H * 0.82);
   return canvas.toDataURL('image/jpeg', 0.86).split(',')[1];
 }
