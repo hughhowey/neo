@@ -12,6 +12,7 @@ Grab the latest installer from the **[Releases page](../../releases)**:
 
 - **macOS** — download the `.dmg`, open it, drag NEO to Applications.
 - **Windows** — download the `.exe` installer and run it. (This version is not as tested!) Defender might eat this file, so add the folder to your exclusions or look in your threat history and get NEO.exe out of quarantine.
+- **Linux** — download the `.AppImage`, make it executable (right-click → Properties, or `chmod +x`), and run it. There's also a `.deb` (Ubuntu/Mint) and an `.rpm` (Fedora). (Community contribution; this version is not tested!)
 
 ## What makes NEO different
 
@@ -39,7 +40,7 @@ Grab the latest installer from the **[Releases page](../../releases)**:
 
 ## Your files are yours
 
-Everything lives in `~/Documents/NEO Library` — a folder per book, chapters as readable HTML, metadata as JSON. Open them in any text editor.
+Everything lives in `~/Documents/NEO Library` (or your OS Documents convention) — a folder per book, chapters as readable HTML, metadata as JSON. Open them in any text editor.
 
 ## Building from source (for the eggheads):
 
@@ -52,7 +53,7 @@ npm install
 npm start
 ```
 
-To build installers: `npm install electron-builder --save-dev`, then `npm run package` (macOS), `npm run package:win` (Windows), or `npm run package:all`. Output lands in `dist/`.
+To build installers: `npm install electron-builder --save-dev`, then `npm run package` (macOS), `npm run package:win` (Windows), `npm run package:linux` (Linux — AppImage, .deb, and .rpm), or `npm run package:all`. Output lands in `dist/`.
 
 The app is deliberately simple: an Electron shell (`main.js`), a preload bridge (`preload.js`), and a single-file renderer (`app.js` + `styles.css` + `index.html`). If you can read JavaScript, you can change NEO. Have at it. Build me a better mousetrap.
 
