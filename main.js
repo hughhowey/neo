@@ -12,8 +12,20 @@ const isMac = process.platform === 'darwin';
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
 // ---------------------------------------------------------------------------
-const LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
-const LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
+let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+
+// "Documents" is not always ~/Documents: XDG dirs on Linux, OneDrive redirection
+// on Windows. Ask the OS once we can — but an existing library stays put.
+function resolveLibraryDir() {
+  let docs;
+  try { docs = app.getPath('documents'); } catch { return; } // OS won't say? keep the default
+  const dir = path.join(docs, 'NEO Library');
+  if (dir === LIBRARY_DIR) return;
+  if (fs.existsSync(LIBRARY_FILE)) return; // a legacy ~/Documents library exists — don't strand it
+  LIBRARY_DIR = dir;
+  LIBRARY_FILE = path.join(dir, 'library.json');
+}
 
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
@@ -233,7 +245,7 @@ async function buildZip(zipEntries) {
 ipcMain.handle('export:save', async (_e, { format, defaultName, content, zipEntries }) => {
   const win = BrowserWindow.getFocusedWindow();
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    defaultPath: path.join(os.homedir(), 'Documents', defaultName + '.' + format),
+    defaultPath: path.join(app.getPath('documents'), defaultName + '.' + format),
     filters: [{ name: format.toUpperCase(), extensions: [format] }]
   });
   if (canceled || !filePath) return null;
@@ -655,6 +667,7 @@ app.whenReady().then(() => {
       logError('prefs', err);
     }
   }
+  resolveLibraryDir();
   ensureLibrary();
   buildMenu();
   createWindow();
