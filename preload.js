@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('neo', {
+  platform: process.platform, // 'darwin' | 'win32' | 'linux'
+
   readLibrary: () => ipcRenderer.invoke('library:read'),
   writeLibrary: (data) => ipcRenderer.invoke('library:write', data),
   libraryPath: () => ipcRenderer.invoke('library:path'),

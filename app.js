@@ -18,6 +18,26 @@ let hintShown = false;
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+const isMac = window.neo.platform === 'darwin';
+
+// macOS is frameless (hiddenInset) and needs the drag strip; framed windows don't —
+// on Win/Linux it would just swallow clicks along the top edge.
+if (!isMac) $('#dragstrip').remove();
+
+// ⌘⇧X reads like scripture on a Mac; everyone else gets Ctrl+Shift+X.
+const keys = isMac ? (s) => s
+  : (s) => s.replace(/⌘/g, 'Ctrl+').replace(/⇧/g, 'Shift+').replace(/⌥/g, 'Alt+');
+if (!isMac) $$('[title]').forEach((el) => { el.title = keys(el.title); });
+
+// GTK claims Ctrl+/ for select-all before the menu accelerator ever sees it,
+// so the shortcut cheat-sheet needs a hand off-mac.
+if (!isMac) document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key === '/') {
+    e.preventDefault();
+    showHelp();
+  }
+});
+
 // ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
@@ -381,7 +401,7 @@ function bookTile(meta) {
     const choice = await optionModal(`“${meta.title}”`, null, [
       { label: 'Set word goal…', desc: 'Adds the subtle progress bar to the cover.', value: 'goal' },
       { label: 'Remove from bookshelf', desc: 'Takes it off your shelves. The files stay safe in your NEO Library folder on disk.', value: 'remove' },
-      { label: 'Move to Trash', desc: 'Sends the book folder to your Mac Trash.', danger: true, value: 'trash' }
+      { label: 'Move to Trash', desc: 'Sends the book folder to the Trash.', danger: true, value: 'trash' }
     ]);
     if (choice === 'goal') {
       const goal = await askInput(`Word count goal for “${meta.title}”`, 'e.g. 80000 — blank removes the goal',
@@ -489,7 +509,7 @@ async function openBook(bookId) {
 
   if (!hintShown) {
     hintShown = true;
-    setTimeout(() => toast('Enter twice = section break · three times = new chapter · ⌘/ shows everything else', 7000), 800);
+    setTimeout(() => toast(keys('Enter twice = section break · three times = new chapter · ⌘/ shows everything else'), 7000), 800);
   }
 }
 
@@ -567,7 +587,7 @@ async function deleteChapterToDarlings(chId) {
   }
   if (currentChapterId === chId) currentChapterId = null;
   await deleteChapterQuiet(chId);
-  if (text) toast('Chapter removed — its words are in Darlings, or ⌘Z to undo');
+  if (text) toast(keys('Chapter removed — its words are in Darlings, or ⌘Z to undo'));
 }
 
 async function chapterMenu(chId, index) {
@@ -723,7 +743,9 @@ function cleanPasteHtml(html) {
 
 // Em dash, ellipsis, smart quotes — without ever leaving the keyboard.
 function smartKeys(e, body) {
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  // AltGr (Win/Linux) arrives as Ctrl+Alt — that's typing, not a chord.
+  const altGr = !isMac && e.getModifierState('AltGraph');
+  if (!altGr && (e.metaKey || e.ctrlKey || e.altKey)) return;
   if (e.isComposing || e.keyCode === 229) return;
 
   const sel = window.getSelection();
@@ -869,7 +891,7 @@ function insertPlaceholder() {
   if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const bodyEl = el && el.closest ? el.closest('.chapter-body') : null;
   if (!bodyEl) {
-    toast('Click into a chapter first, then ⌘⇧X drops a placeholder');
+    toast(keys('Click into a chapter first, then ⌘⇧X drops a placeholder'));
     return;
   }
   currentChapterId = bodyEl.closest('.chapter').dataset.id;
@@ -905,7 +927,7 @@ function renderStickies() {
   wrap.innerHTML = '';
   const open = stickies.filter((s) => !s.resolved);
   if (open.length === 0) {
-    wrap.innerHTML = `<div class="stickies-empty">No notes yet.<br><br>Hit ⌘⇧X while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`;
+    wrap.innerHTML = keys(`<div class="stickies-empty">No notes yet.<br><br>Hit ⌘⇧X while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`);
     return;
   }
   for (const s of open) {
@@ -1070,7 +1092,7 @@ navList.addEventListener('drop', async (e) => {
   await saveMeta();
   renderChapters(); // renumbers heads and rebuilds the nav
   if (currentTab === 'outline') renderOutline();
-  toast('Chapters reordered — ⌘Z to undo');
+  toast(keys('Chapters reordered — ⌘Z to undo'));
 });
 
 function highlightNav() {
@@ -1189,14 +1211,14 @@ async function moveSelectionToDarlings(html, text) {
   });
   await window.neo.writeJSON(book.id, 'darlings', darlings);
   updateCounters();
-  toast('Saved to Darlings — kill without remorse (⌘Z to undo)');
+  toast(keys('Saved to Darlings — kill without remorse (⌘Z to undo)'));
 }
 
 // keyboard route: select a passage, ⌘⇧D, keep writing
 function darlingFromKeyboard() {
   const sel = window.getSelection();
   if (!sel.rangeCount || sel.isCollapsed) {
-    toast('Select the passage first, then ⌘⇧D sends it to Darlings');
+    toast(keys('Select the passage first, then ⌘⇧D sends it to Darlings'));
     return;
   }
   let el = sel.anchorNode;
@@ -1926,7 +1948,7 @@ function replaceAllMatches() {
     if (touched) syncChapter(body, chId);
   }
   if (n === 0) undoStack.pop(); // nothing changed, nothing to undo
-  toast(n ? `${n} replaced across the whole book — ⌘Z to undo` : '0 replaced');
+  toast(n ? keys(`${n} replaced across the whole book — ⌘Z to undo`) : '0 replaced');
   runSearch();
 }
 
@@ -2015,7 +2037,7 @@ function toggleSpellcheck() {
   const active = document.activeElement;
   if (active && active.blur) { active.blur(); if (active.focus) active.focus(); }
   toast(spellOn
-    ? 'Spellcheck pass ON — right-click any squiggle for suggestions. ⌘; again when you’re done.'
+    ? keys('Spellcheck pass ON — right-click any squiggle for suggestions. ⌘; again when you’re done.')
     : 'Spellcheck off. Back to flow.', 5000);
 }
 
@@ -2102,7 +2124,7 @@ function exitSiloAttempt() {
     <div class="modal" style="width:520px">
       <h2 style="font-size:16px">Leaving the Silo?</h2>
       <p>Type this, word for word, and the hatch opens:</p>
-      <p style="font-family:Georgia,serif;font-size:15px;font-style:italic;color:var(--accent);line-height:1.6">“${prompt}”</p>
+      <p style="font-family:Georgia,'Noto Serif',serif;font-size:15px;font-style:italic;color:var(--accent);line-height:1.6">“${prompt}”</p>
       <input id="silo-input" type="text" spellcheck="false" autocomplete="off" placeholder="Confess…"/>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
         <button class="m-cancel" style="background:var(--accent);border:none;border-radius:6px;padding:7px 16px;color:#191919">Never mind — back to writing</button>
@@ -2282,17 +2304,20 @@ $('#goal-counter').onclick = openStats;
 /*  MENU: Help + fonts                                                 */
 /* ================================================================== */
 
+// Mac names first; then free lookalikes most Linux desktops ship
+// (urw-base35 clones: P052 = Palatino, C059 = Century Schoolbook,
+//  URW Gothic = Futura-ish, Z003 = chancery script).
 const DROPCAP_FONTS = {
-  literary: '"Didot", "Bodoni 72", Georgia, serif',
-  fantasy: '"Apple Chancery", "Snell Roundhand", cursive',
-  scifi: 'Futura, "Avenir Next", "Helvetica Neue", sans-serif'
+  literary: '"Didot", "Bodoni 72", "Noto Serif Display", Georgia, "Noto Serif", serif',
+  fantasy: '"Apple Chancery", "Snell Roundhand", "URW Chancery L", "Z003", cursive',
+  scifi: 'Futura, "Avenir Next", "URW Gothic", "Century Gothic", "Helvetica Neue", "DejaVu Sans", sans-serif'
 };
 const BODY_FONTS = {
-  'Georgia': 'Georgia, "Times New Roman", serif',
-  'Palatino': '"Palatino", "Palatino Linotype", serif',
-  'Baskerville': 'Baskerville, Georgia, serif',
-  'Hoefler Text': '"Hoefler Text", Georgia, serif',
-  'Iowan Old Style': '"Iowan Old Style", Georgia, serif'
+  'Georgia': 'Georgia, "Noto Serif", "Liberation Serif", "Times New Roman", serif',
+  'Palatino': '"Palatino", "Palatino Linotype", "URW Palladio L", "P052", "TeX Gyre Pagella", serif',
+  'Baskerville': 'Baskerville, "Libertinus Serif", "Linux Libertine", "C059", Georgia, serif',
+  'Hoefler Text': '"Hoefler Text", "C059", "Century Schoolbook L", Georgia, "Noto Serif", serif',
+  'Iowan Old Style': '"Iowan Old Style", "Bitstream Charter", "Charter", "Noto Serif", Georgia, serif'
 };
 
 function applyFonts() {
@@ -2309,7 +2334,7 @@ function applyFonts() {
 }
 
 function showHelp() {
-  const row = (k, d) => `<span class="hk">${k}</span><span>${d}</span>`;
+  const row = (k, d) => `<span class="hk">${keys(k)}</span><span>${d}</span>`;
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
@@ -2425,7 +2450,7 @@ function buildHtml() {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${book.title}</title>
 <style>
-  body { font-family: Georgia, serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
+  body { font-family: Georgia, "Noto Serif", "Liberation Serif", serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
   .titlepage { text-align: center; margin: 30vh 0 20vh; page-break-after: always; }
   .titlepage h1 { font-size: 30pt; margin: 0; }
   .titlepage .sub { font-style: italic; color: #555; }
@@ -2554,7 +2579,7 @@ function makeCoverJpeg() {
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 18;
-  ctx.font = 'bold 150px Georgia';
+  ctx.font = 'bold 150px Georgia, "Noto Serif", serif';
   const words = (book.title || 'Untitled').split(/\s+/);
   const lines = [];
   let line = '';
@@ -2566,7 +2591,7 @@ function makeCoverJpeg() {
   lines.push(line);
   let y = H * 0.32;
   for (const l of lines) { ctx.fillText(l, W / 2, y); y += 175; }
-  ctx.font = '72px Georgia';
+  ctx.font = '72px Georgia, "Noto Serif", serif';
   ctx.fillText((book.author || '').toUpperCase(), W / 2, H * 0.82);
   return canvas.toDataURL('image/jpeg', 0.86).split(',')[1];
 }
@@ -2704,12 +2729,12 @@ async function doExport(format) {
   else if (format === 'epub') payload = { format, defaultName, zipEntries: buildEpubEntries() };
   else payload = { format, defaultName, content: format === 'txt' ? buildTxt() : format === 'md' ? buildMd() : buildHtml() };
   const saved = await window.neo.exportSave(payload);
-  if (saved) toast('Exported: ' + saved.split('/').pop());
+  if (saved) toast('Exported: ' + saved.split(/[\\/]/).pop()); // both slashes: Windows paths too
 }
 
 function chooseEmailMethod() {
   // Apple Mail only exists on Macs; elsewhere Gmail is the only offer
-  if (!navigator.platform.toLowerCase().includes('mac')) return Promise.resolve('gmail');
+  if (!isMac) return Promise.resolve('gmail');
   return new Promise((resolve) => {
     const bd = document.createElement('div');
     bd.className = 'modal-backdrop';
@@ -2753,6 +2778,7 @@ async function manuscriptHash() {
 
 async function doEmailDraft() {
   if (!book) { toast('Open a book first'); return; }
+  if (!isMac && library.emailMethod === 'mail') library.emailMethod = 'gmail'; // Apple Mail didn't make the trip
   flushAllSaves();
   if (!library.emailAddress || !library.emailMethod) {
     const ok = await emailSettings();
@@ -2765,7 +2791,7 @@ async function doEmailDraft() {
     + `Sent from NEO on ${new Date().toLocaleString()}.\n\n`
     + `SHA-256 fingerprint of the manuscript text:\n${hash}\n\n`
     + (library.emailMethod === 'gmail'
-      ? 'The PDF snapshot is in the Finder window NEO just opened — drag it into this email before sending.'
+      ? 'The PDF snapshot is in the folder NEO just opened — drag it into this email before sending.'
       : 'PDF snapshot attached.');
   toast('Preparing your draft…');
   const res = await window.neo.emailDraft({

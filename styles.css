@@ -10,8 +10,8 @@
   --muted: #8a8a8a;
   --pane: #202020;
   --red: #c0392b;
-  --body-font: Georgia, "Times New Roman", serif;
-  --dropcap-font: "Didot", "Bodoni 72", Georgia, serif;
+  --body-font: Georgia, "Noto Serif", "Liberation Serif", "Times New Roman", serif;
+  --dropcap-font: "Didot", "Bodoni 72", "Noto Serif Display", Georgia, "Noto Serif", serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,7 +20,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: #ddd;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -98,7 +98,7 @@ button { font: inherit; cursor: pointer; }
 }
 /* the house cover style: crisp caps inside a thin frame */
 .book.cv-serif .b-title {
-  font-family: Optima, Candara, Georgia, serif;
+  font-family: Optima, Candara, "Noto Sans", Georgia, "Noto Serif", serif;
   font-size: 12px; font-weight: 700;
   letter-spacing: 1.2px; line-height: 1.45;
 }
@@ -249,11 +249,11 @@ body.night .ol-hint { color: #5f5b52; }
   display: flex; flex-direction: column; justify-content: center;
 }
 #tp-title {
-  font-family: Georgia, serif; font-size: 34px; font-weight: 700;
+  font-family: Georgia, "Noto Serif", "Liberation Serif", serif; font-size: 34px; font-weight: 700;
   outline: none; min-height: 44px;
 }
 #tp-subtitle {
-  font-family: Georgia, serif; font-size: 17px; font-style: italic;
+  font-family: Georgia, "Noto Serif", "Liberation Serif", serif; font-size: 17px; font-style: italic;
   color: #555; margin-top: 14px; outline: none; min-height: 24px;
 }
 #tp-author {
@@ -266,7 +266,7 @@ body.night .ol-hint { color: #5f5b52; }
 
 /* --- Chapters: each starts on a fresh sheet --- */
 .chapter-head {
-  text-align: center; font-family: Georgia, serif;
+  text-align: center; font-family: Georgia, "Noto Serif", "Liberation Serif", serif;
   font-size: 15px; letter-spacing: 4px; text-transform: uppercase;
   color: #555; margin-bottom: 44px;
   user-select: none;
@@ -314,12 +314,12 @@ body.night .ol-hint { color: #5f5b52; }
 
 /* --- Aux paper (Notes / Outline / Darlings) --- */
 #aux-paper h2 {
-  font-family: Georgia, serif; font-weight: 400; letter-spacing: 3px;
+  font-family: Georgia, "Noto Serif", "Liberation Serif", serif; font-weight: 400; letter-spacing: 3px;
   text-transform: uppercase; font-size: 14px; color: #777;
   text-align: center; margin-bottom: 40px;
 }
 #aux-editor {
-  font-family: Georgia, serif; font-size: var(--editor-size, 16px); line-height: 1.7; outline: none;
+  font-family: Georgia, "Noto Serif", "Liberation Serif", serif; font-size: var(--editor-size, 16px); line-height: 1.7; outline: none;
   min-height: 50vh;
 }
 #aux-editor:empty::before { content: 'Write freely…'; color: #b9b4a8; font-style: italic; }
@@ -329,12 +329,12 @@ body.night .ol-hint { color: #5f5b52; }
 .ol-chapter { margin-top: 18px; }
 .ol-section { margin-left: 40px; }
 .ol-num {
-  font-family: Georgia, serif; color: #8d8778; min-width: 24px; text-align: right;
+  font-family: Georgia, "Noto Serif", "Liberation Serif", serif; color: #8d8778; min-width: 24px; text-align: right;
   user-select: none; flex-shrink: 0;
 }
 .ol-chapter .ol-num { font-weight: 700; color: #6b6455; }
 .ol-text {
-  flex: 1; outline: none; font-family: Georgia, serif; font-size: 15px;
+  flex: 1; outline: none; font-family: Georgia, "Noto Serif", "Liberation Serif", serif; font-size: 15px;
   line-height: 1.5; min-height: 20px; border-bottom: 1px dashed transparent;
 }
 .ol-text:focus { border-bottom-color: #d8d2c2; }
@@ -355,11 +355,11 @@ body.night .ol-hint { color: #5f5b52; }
 .darling {
   border: 1px solid #e3ddcf; border-left: 3px solid var(--accent);
   border-radius: 4px; padding: 16px 18px; margin-bottom: 18px;
-  font-family: Georgia, serif; font-size: 15px; line-height: 1.6;
+  font-family: Georgia, "Noto Serif", "Liberation Serif", serif; font-size: 15px; line-height: 1.6;
 }
 .darling .d-meta {
   display: flex; justify-content: space-between; align-items: center;
-  margin-top: 12px; font-family: -apple-system, sans-serif;
+  margin-top: 12px; font-family: -apple-system, system-ui, "Segoe UI", Ubuntu, Cantarell, sans-serif;
   font-size: 11px; color: #999;
 }
 .darling button {
@@ -514,7 +514,7 @@ body.night .ol-hint { color: #5f5b52; }
 /* --- Stats / goals modal --- */
 .stats-nums { display: flex; gap: 26px; margin: 14px 0 18px; }
 .stats-nums div { text-align: center; }
-.stats-nums .big { font-size: 26px; color: var(--accent); font-family: Georgia, serif; }
+.stats-nums .big { font-size: 26px; color: var(--accent); font-family: Georgia, "Noto Serif", "Liberation Serif", serif; }
 .stats-nums .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
 .stats-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
 .stats-row input {

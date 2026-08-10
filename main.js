@@ -7,11 +7,25 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+const isMac = process.platform === 'darwin';
+
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
 // ---------------------------------------------------------------------------
-const LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
-const LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
+let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+
+// "Documents" is not always ~/Documents: XDG dirs on Linux, OneDrive redirection
+// on Windows. Ask the OS once we can — but an existing library stays put.
+function resolveLibraryDir() {
+  let docs;
+  try { docs = app.getPath('documents'); } catch { return; } // OS won't say? keep the default
+  const dir = path.join(docs, 'NEO Library');
+  if (dir === LIBRARY_DIR) return;
+  if (fs.existsSync(LIBRARY_FILE)) return; // a legacy ~/Documents library exists — don't strand it
+  LIBRARY_DIR = dir;
+  LIBRARY_FILE = path.join(dir, 'library.json');
+}
 
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
@@ -149,12 +163,24 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
     defaultId: 0,
     cancelId: 0,
     message: `Move “${title}” to the Trash?`,
-    detail: 'The book folder will go to your Mac Trash, so you can recover it.'
+    detail: 'The book folder will go to the Trash, so you can recover it.'
   });
   if (response === 1) {
     const { shell } = require('electron');
-    await shell.trashItem(bookDir(bookId));
-    return true;
+    try {
+      await shell.trashItem(bookDir(bookId));
+      return true;
+    } catch (err) {
+      // Some filesystems have no Trash (network mounts, odd drives).
+      // Words are never lost: leave the book alone and show the writer where it lives.
+      logError('trash', err);
+      shell.showItemInFolder(bookDir(bookId));
+      dialog.showMessageBox(win, {
+        message: 'NEO couldn’t move that folder to the Trash.',
+        detail: 'The book is untouched. Its folder is highlighted so you can deal with it yourself.'
+      });
+      return false;
+    }
   }
   return false;
 });
@@ -174,12 +200,13 @@ ipcMain.handle('silo:set', (e, on) => {
   win.__silo = on;
   if (on) {
     if (win.isFullScreen()) win.setFullScreen(false);
-    win.setKiosk(true);
-    win.setAlwaysOnTop(true, 'screen-saver');
+    try { win.setKiosk(true); } catch { win.setFullScreen(true); } // kiosk or die trying — fullscreen is the floor
+    try { win.setAlwaysOnTop(true, 'screen-saver'); } catch { /* Wayland has no "above" — best effort */ }
     win.focus();
   } else {
-    win.setAlwaysOnTop(false);
-    win.setKiosk(false);
+    try { win.setAlwaysOnTop(false); } catch {}
+    try { win.setKiosk(false); } catch {}
+    if (process.platform !== 'darwin' && win.isFullScreen()) win.setFullScreen(false); // undo the fallback
   }
   return true;
 });
@@ -200,10 +227,12 @@ ipcMain.handle('fullscreen:escape', (e) => {
 
 async function renderPDF(html) {
   const pdfWin = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+  // Letter is a North American habit; most of the world prints A4.
+  const letterCountries = ['US', 'CA', 'MX', 'PH'];
   try {
     await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
     return await pdfWin.webContents.printToPDF({
-      pageSize: 'Letter',
+      pageSize: letterCountries.includes(app.getLocaleCountryCode()) ? 'Letter' : 'A4',
       margins: { top: 1, bottom: 1, left: 1, right: 1 },
       printBackground: false
     });
@@ -231,7 +260,7 @@ async function buildZip(zipEntries) {
 ipcMain.handle('export:save', async (_e, { format, defaultName, content, zipEntries }) => {
   const win = BrowserWindow.getFocusedWindow();
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    defaultPath: path.join(os.homedir(), 'Documents', defaultName + '.' + format),
+    defaultPath: path.join(app.getPath('documents'), defaultName + '.' + format),
     filters: [{ name: format.toUpperCase(), extensions: [format] }]
   });
   if (canceled || !filePath) return null;
@@ -265,6 +294,13 @@ ipcMain.handle('email:draft', async (_e, { to, subject, body, html, defaultName,
     await shell.openExternal(url);
     shell.showItemInFolder(file);
     return { ok: true, method: 'gmail', file };
+  }
+
+  if (process.platform !== 'darwin') {
+    // A 'mail' choice that drifted over from a Mac (synced library) —
+    // there is no Apple Mail here; reveal the snapshot instead.
+    shell.showItemInFolder(file);
+    return { ok: false, file };
   }
 
   const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -422,7 +458,10 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: 'hiddenInset', // macOS-only; Win/Linux keep their native frame
+    autoHideMenuBar: true, // Win/Linux: the menu bar stays out of sight until Alt (no-op on macOS)
+    icon: process.platform === 'linux' && fs.existsSync(path.join(__dirname, 'build', 'icons', '512x512.png'))
+      ? path.join(__dirname, 'build', 'icons', '512x512.png') : undefined, // lights up if build/icons ever gains art
     backgroundColor: '#191919',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -476,7 +515,7 @@ function sendToWindow(msg) {
 function buildMenu() {
   const bodyFonts = ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style'];
   const template = [
-    { role: 'appMenu' },
+    ...(isMac ? [{ role: 'appMenu' }] : []), // the app menu's roles are macOS-only
     {
       label: 'File',
       submenu: [
@@ -510,7 +549,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'import' })
         },
         { type: 'separator' },
-        { role: 'close' }
+        isMac ? { role: 'close' } : { role: 'quit' } // File → Quit is the Win/Linux idiom
       ]
     },
     {
@@ -578,7 +617,7 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => {
             const w = BrowserWindow.getFocusedWindow();
-            if (w && !w.isSimpleFullScreen()) w.setFullScreen(!w.isFullScreen());
+            if (w && !(isMac && w.isSimpleFullScreen())) w.setFullScreen(!w.isFullScreen()); // isSimpleFullScreen is macOS-only
           }
         },
         {
@@ -588,7 +627,7 @@ function buildMenu() {
         }
       ]
     },
-    { role: 'windowMenu' },
+    ...(isMac ? [{ role: 'windowMenu' }] : []), // zoom/front are macOS-only; Linux has a WM for this
     {
       label: 'Help',
       submenu: [
@@ -643,6 +682,7 @@ app.whenReady().then(() => {
       logError('prefs', err);
     }
   }
+  resolveLibraryDir();
   ensureLibrary();
   buildMenu();
   createWindow();

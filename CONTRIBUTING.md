@@ -17,7 +17,7 @@ No frameworks, just four files:
 - `app.js` — the entire UI: bookshelf, editor, outline, search, goals, the Silo. Organized in commented sections.
 - `styles.css` — all styling, with CSS variables for the palette at the top.
 
-Books are folders of plain files in `~/Documents/NEO Library`: `book.json` for metadata, `chapters/*.html` for text, JSON files for darlings/stickies.
+Books are folders of plain files in `~/Documents/NEO Library` (or your OS 'Documents' convention): `book.json` for metadata, `chapters/*.html` for text, JSON files for darlings/stickies.
 
 ## Ground rules for the writing experience
 
