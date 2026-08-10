@@ -7,6 +7,8 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+const isMac = process.platform === 'darwin';
+
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
 // ---------------------------------------------------------------------------
@@ -422,7 +424,10 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: 'hiddenInset', // macOS-only; Win/Linux keep their native frame
+    autoHideMenuBar: true, // Win/Linux: the menu bar stays out of sight until Alt (no-op on macOS)
+    icon: process.platform === 'linux' && fs.existsSync(path.join(__dirname, 'build', 'icons', '512x512.png'))
+      ? path.join(__dirname, 'build', 'icons', '512x512.png') : undefined, // lights up if build/icons ever gains art
     backgroundColor: '#191919',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -476,7 +481,7 @@ function sendToWindow(msg) {
 function buildMenu() {
   const bodyFonts = ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style'];
   const template = [
-    { role: 'appMenu' },
+    ...(isMac ? [{ role: 'appMenu' }] : []), // the app menu's roles are macOS-only
     {
       label: 'File',
       submenu: [
@@ -510,7 +515,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'import' })
         },
         { type: 'separator' },
-        { role: 'close' }
+        isMac ? { role: 'close' } : { role: 'quit' } // File → Quit is the Win/Linux idiom
       ]
     },
     {
@@ -578,7 +583,7 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => {
             const w = BrowserWindow.getFocusedWindow();
-            if (w && !w.isSimpleFullScreen()) w.setFullScreen(!w.isFullScreen());
+            if (w && !(isMac && w.isSimpleFullScreen())) w.setFullScreen(!w.isFullScreen()); // isSimpleFullScreen is macOS-only
           }
         },
         {
@@ -588,7 +593,7 @@ function buildMenu() {
         }
       ]
     },
-    { role: 'windowMenu' },
+    ...(isMac ? [{ role: 'windowMenu' }] : []), // zoom/front are macOS-only; Linux has a WM for this
     {
       label: 'Help',
       submenu: [

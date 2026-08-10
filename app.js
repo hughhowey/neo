@@ -20,6 +20,10 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const isMac = window.neo.platform === 'darwin';
 
+// macOS is frameless (hiddenInset) and needs the drag strip; framed windows don't —
+// on Win/Linux it would just swallow clicks along the top edge.
+if (!isMac) $('#dragstrip').remove();
+
 // ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
