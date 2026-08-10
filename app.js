@@ -743,7 +743,9 @@ function cleanPasteHtml(html) {
 
 // Em dash, ellipsis, smart quotes — without ever leaving the keyboard.
 function smartKeys(e, body) {
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  // AltGr (Win/Linux) arrives as Ctrl+Alt — that's typing, not a chord.
+  const altGr = !isMac && e.getModifierState('AltGraph');
+  if (!altGr && (e.metaKey || e.ctrlKey || e.altKey)) return;
   if (e.isComposing || e.keyCode === 229) return;
 
   const sel = window.getSelection();
