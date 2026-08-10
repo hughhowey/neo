@@ -167,8 +167,20 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
   });
   if (response === 1) {
     const { shell } = require('electron');
-    await shell.trashItem(bookDir(bookId));
-    return true;
+    try {
+      await shell.trashItem(bookDir(bookId));
+      return true;
+    } catch (err) {
+      // Some filesystems have no Trash (network mounts, odd drives).
+      // Words are never lost: leave the book alone and show the writer where it lives.
+      logError('trash', err);
+      shell.showItemInFolder(bookDir(bookId));
+      dialog.showMessageBox(win, {
+        message: 'NEO couldn’t move that folder to the Trash.',
+        detail: 'The book is untouched. Its folder is highlighted so you can deal with it yourself.'
+      });
+      return false;
+    }
   }
   return false;
 });
