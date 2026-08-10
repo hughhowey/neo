@@ -24,6 +24,11 @@ const isMac = window.neo.platform === 'darwin';
 // on Win/Linux it would just swallow clicks along the top edge.
 if (!isMac) $('#dragstrip').remove();
 
+// ⌘⇧X reads like scripture on a Mac; everyone else gets Ctrl+Shift+X.
+const keys = isMac ? (s) => s
+  : (s) => s.replace(/⌘/g, 'Ctrl+').replace(/⇧/g, 'Shift+').replace(/⌥/g, 'Alt+');
+if (!isMac) $$('[title]').forEach((el) => { el.title = keys(el.title); });
+
 // ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
@@ -495,7 +500,7 @@ async function openBook(bookId) {
 
   if (!hintShown) {
     hintShown = true;
-    setTimeout(() => toast('Enter twice = section break · three times = new chapter · ⌘/ shows everything else', 7000), 800);
+    setTimeout(() => toast(keys('Enter twice = section break · three times = new chapter · ⌘/ shows everything else'), 7000), 800);
   }
 }
 
@@ -573,7 +578,7 @@ async function deleteChapterToDarlings(chId) {
   }
   if (currentChapterId === chId) currentChapterId = null;
   await deleteChapterQuiet(chId);
-  if (text) toast('Chapter removed — its words are in Darlings, or ⌘Z to undo');
+  if (text) toast(keys('Chapter removed — its words are in Darlings, or ⌘Z to undo'));
 }
 
 async function chapterMenu(chId, index) {
@@ -875,7 +880,7 @@ function insertPlaceholder() {
   if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const bodyEl = el && el.closest ? el.closest('.chapter-body') : null;
   if (!bodyEl) {
-    toast('Click into a chapter first, then ⌘⇧X drops a placeholder');
+    toast(keys('Click into a chapter first, then ⌘⇧X drops a placeholder'));
     return;
   }
   currentChapterId = bodyEl.closest('.chapter').dataset.id;
@@ -911,7 +916,7 @@ function renderStickies() {
   wrap.innerHTML = '';
   const open = stickies.filter((s) => !s.resolved);
   if (open.length === 0) {
-    wrap.innerHTML = `<div class="stickies-empty">No notes yet.<br><br>Hit ⌘⇧X while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`;
+    wrap.innerHTML = keys(`<div class="stickies-empty">No notes yet.<br><br>Hit ⌘⇧X while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`);
     return;
   }
   for (const s of open) {
@@ -1076,7 +1081,7 @@ navList.addEventListener('drop', async (e) => {
   await saveMeta();
   renderChapters(); // renumbers heads and rebuilds the nav
   if (currentTab === 'outline') renderOutline();
-  toast('Chapters reordered — ⌘Z to undo');
+  toast(keys('Chapters reordered — ⌘Z to undo'));
 });
 
 function highlightNav() {
@@ -1195,14 +1200,14 @@ async function moveSelectionToDarlings(html, text) {
   });
   await window.neo.writeJSON(book.id, 'darlings', darlings);
   updateCounters();
-  toast('Saved to Darlings — kill without remorse (⌘Z to undo)');
+  toast(keys('Saved to Darlings — kill without remorse (⌘Z to undo)'));
 }
 
 // keyboard route: select a passage, ⌘⇧D, keep writing
 function darlingFromKeyboard() {
   const sel = window.getSelection();
   if (!sel.rangeCount || sel.isCollapsed) {
-    toast('Select the passage first, then ⌘⇧D sends it to Darlings');
+    toast(keys('Select the passage first, then ⌘⇧D sends it to Darlings'));
     return;
   }
   let el = sel.anchorNode;
@@ -1932,7 +1937,7 @@ function replaceAllMatches() {
     if (touched) syncChapter(body, chId);
   }
   if (n === 0) undoStack.pop(); // nothing changed, nothing to undo
-  toast(n ? `${n} replaced across the whole book — ⌘Z to undo` : '0 replaced');
+  toast(n ? keys(`${n} replaced across the whole book — ⌘Z to undo`) : '0 replaced');
   runSearch();
 }
 
@@ -2021,7 +2026,7 @@ function toggleSpellcheck() {
   const active = document.activeElement;
   if (active && active.blur) { active.blur(); if (active.focus) active.focus(); }
   toast(spellOn
-    ? 'Spellcheck pass ON — right-click any squiggle for suggestions. ⌘; again when you’re done.'
+    ? keys('Spellcheck pass ON — right-click any squiggle for suggestions. ⌘; again when you’re done.')
     : 'Spellcheck off. Back to flow.', 5000);
 }
 
@@ -2315,7 +2320,7 @@ function applyFonts() {
 }
 
 function showHelp() {
-  const row = (k, d) => `<span class="hk">${k}</span><span>${d}</span>`;
+  const row = (k, d) => `<span class="hk">${keys(k)}</span><span>${d}</span>`;
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
