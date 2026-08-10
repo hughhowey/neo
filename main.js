@@ -227,10 +227,12 @@ ipcMain.handle('fullscreen:escape', (e) => {
 
 async function renderPDF(html) {
   const pdfWin = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+  // Letter is a North American habit; most of the world prints A4.
+  const letterCountries = ['US', 'CA', 'MX', 'PH'];
   try {
     await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
     return await pdfWin.webContents.printToPDF({
-      pageSize: 'Letter',
+      pageSize: letterCountries.includes(app.getLocaleCountryCode()) ? 'Letter' : 'A4',
       margins: { top: 1, bottom: 1, left: 1, right: 1 },
       printBackground: false
     });
