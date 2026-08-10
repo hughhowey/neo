@@ -401,7 +401,7 @@ function bookTile(meta) {
     const choice = await optionModal(`“${meta.title}”`, null, [
       { label: 'Set word goal…', desc: 'Adds the subtle progress bar to the cover.', value: 'goal' },
       { label: 'Remove from bookshelf', desc: 'Takes it off your shelves. The files stay safe in your NEO Library folder on disk.', value: 'remove' },
-      { label: 'Move to Trash', desc: 'Sends the book folder to your Mac Trash.', danger: true, value: 'trash' }
+      { label: 'Move to Trash', desc: 'Sends the book folder to the Trash.', danger: true, value: 'trash' }
     ]);
     if (choice === 'goal') {
       const goal = await askInput(`Word count goal for “${meta.title}”`, 'e.g. 80000 — blank removes the goal',
@@ -2785,7 +2785,7 @@ async function doEmailDraft() {
     + `Sent from NEO on ${new Date().toLocaleString()}.\n\n`
     + `SHA-256 fingerprint of the manuscript text:\n${hash}\n\n`
     + (library.emailMethod === 'gmail'
-      ? 'The PDF snapshot is in the Finder window NEO just opened — drag it into this email before sending.'
+      ? 'The PDF snapshot is in the folder NEO just opened — drag it into this email before sending.'
       : 'PDF snapshot attached.');
   toast('Preparing your draft…');
   const res = await window.neo.emailDraft({

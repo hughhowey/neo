@@ -151,7 +151,7 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
     defaultId: 0,
     cancelId: 0,
     message: `Move “${title}” to the Trash?`,
-    detail: 'The book folder will go to your Mac Trash, so you can recover it.'
+    detail: 'The book folder will go to the Trash, so you can recover it.'
   });
   if (response === 1) {
     const { shell } = require('electron');
