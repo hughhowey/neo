@@ -29,6 +29,15 @@ const keys = isMac ? (s) => s
   : (s) => s.replace(/⌘/g, 'Ctrl+').replace(/⇧/g, 'Shift+').replace(/⌥/g, 'Alt+');
 if (!isMac) $$('[title]').forEach((el) => { el.title = keys(el.title); });
 
+// GTK claims Ctrl+/ for select-all before the menu accelerator ever sees it,
+// so the shortcut cheat-sheet needs a hand off-mac.
+if (!isMac) document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key === '/') {
+    e.preventDefault();
+    showHelp();
+  }
+});
+
 // ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
