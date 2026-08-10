@@ -40,7 +40,11 @@
       "deleteAppDataOnUninstall": false
     },
     "linux": {
-      "target": ["AppImage", "deb", "rpm"],
+      "target": [
+        { "target": "AppImage", "arch": ["x64", "arm64"] },
+        { "target": "deb", "arch": ["x64", "arm64"] },
+        { "target": "rpm", "arch": ["x64", "arm64"] }
+      ],
       "category": "Office",
       "synopsis": "A word processor for authors. Distraction-free by default.",
       "maintainer": "Hugh Howey <hughhowey@users.noreply.github.com>",
