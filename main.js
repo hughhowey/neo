@@ -269,6 +269,13 @@ ipcMain.handle('email:draft', async (_e, { to, subject, body, html, defaultName,
     return { ok: true, method: 'gmail', file };
   }
 
+  if (process.platform !== 'darwin') {
+    // A 'mail' choice that drifted over from a Mac (synced library) —
+    // there is no Apple Mail here; reveal the snapshot instead.
+    shell.showItemInFolder(file);
+    return { ok: false, file };
+  }
+
   const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const script = `
     tell application "Mail"

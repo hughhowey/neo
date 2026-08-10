@@ -2773,6 +2773,7 @@ async function manuscriptHash() {
 
 async function doEmailDraft() {
   if (!book) { toast('Open a book first'); return; }
+  if (!isMac && library.emailMethod === 'mail') library.emailMethod = 'gmail'; // Apple Mail didn't make the trip
   flushAllSaves();
   if (!library.emailAddress || !library.emailMethod) {
     const ok = await emailSettings();
