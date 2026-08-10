@@ -188,12 +188,13 @@ ipcMain.handle('silo:set', (e, on) => {
   win.__silo = on;
   if (on) {
     if (win.isFullScreen()) win.setFullScreen(false);
-    win.setKiosk(true);
-    win.setAlwaysOnTop(true, 'screen-saver');
+    try { win.setKiosk(true); } catch { win.setFullScreen(true); } // kiosk or die trying — fullscreen is the floor
+    try { win.setAlwaysOnTop(true, 'screen-saver'); } catch { /* Wayland has no "above" — best effort */ }
     win.focus();
   } else {
-    win.setAlwaysOnTop(false);
-    win.setKiosk(false);
+    try { win.setAlwaysOnTop(false); } catch {}
+    try { win.setKiosk(false); } catch {}
+    if (process.platform !== 'darwin' && win.isFullScreen()) win.setFullScreen(false); // undo the fallback
   }
   return true;
 });
