@@ -2729,7 +2729,7 @@ async function doExport(format) {
   else if (format === 'epub') payload = { format, defaultName, zipEntries: buildEpubEntries() };
   else payload = { format, defaultName, content: format === 'txt' ? buildTxt() : format === 'md' ? buildMd() : buildHtml() };
   const saved = await window.neo.exportSave(payload);
-  if (saved) toast('Exported: ' + saved.split('/').pop());
+  if (saved) toast('Exported: ' + saved.split(/[\\/]/).pop()); // both slashes: Windows paths too
 }
 
 function chooseEmailMethod() {
