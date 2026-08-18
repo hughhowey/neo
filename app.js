@@ -2369,6 +2369,30 @@ function showHelp() {
   bd.querySelector('.m-ok').focus();
 }
 
+// Check for Update (NEO menu) — manual, on-demand GitHub release lookup.
+// Only ever runs in response to a deliberate click, same as showHelp() above.
+async function checkForUpdate() {
+  const res = await window.neo.checkForUpdate();
+  if (res.error) { toast("Couldn't check for updates — try again later"); return; }
+  if (!res.hasUpdate) { toast("You're on the latest version"); return; }
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  bd.innerHTML = `
+    <div class="modal" style="width:380px">
+      <h2 style="font-size:16px">NEO ${res.latestVersion} is available</h2>
+      <p>You have ${res.currentVersion}.</p>
+      <div style="text-align:right;margin-top:14px">
+        <button class="m-cancel" style="background:none;border:none;color:#888;margin-right:14px">Later</button>
+        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">View Release</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  const close = () => bd.remove();
+  bd.querySelector('.m-cancel').onclick = close;
+  bd.querySelector('.m-ok').onclick = () => { window.neo.openExternal(res.releaseUrl); close(); };
+  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+}
+
 /* ================================================================== */
 /*  EXPORT + EMAIL                                                     */
 /* ================================================================== */
@@ -2783,6 +2807,7 @@ async function doEmailDraft() {
 
 window.neo.onMenu(async (msg) => {
   if (msg.type === 'help') showHelp();
+  if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'export') doExport(msg.format);
   if (msg.type === 'emailDraft') doEmailDraft();
   if (msg.type === 'emailSettings') emailSettings();
