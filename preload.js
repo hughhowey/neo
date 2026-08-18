@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('neo', {
   emailDraft: (payload) => ipcRenderer.invoke('email:draft', payload),
   logError: (msg) => ipcRenderer.invoke('log:error', msg),
   importPick: () => ipcRenderer.invoke('import:pick'),
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   setSilo: (on) => ipcRenderer.invoke('silo:set', on),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
 

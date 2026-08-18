@@ -476,7 +476,25 @@ function sendToWindow(msg) {
 function buildMenu() {
   const bodyFonts = ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style'];
   const template = [
-    { role: 'appMenu' },
+    {
+      label: app.name,
+      submenu: [
+        {
+          label: 'Check for Update…',
+          click: () => sendToWindow({ type: 'checkUpdate' })
+        },
+        { type: 'separator' },
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
     {
       label: 'File',
       submenu: [
@@ -630,6 +648,45 @@ function checkForUpdates() {
     logError('updater', err);
   }
 }
+
+// Manual update check (NEO → Check for Update…): a direct GitHub Releases
+// lookup, separate from the silent auto-updater above. Works in dev too,
+// since it doesn't require app.isPackaged or a signed build.
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na !== nb) return na - nb;
+  }
+  return 0;
+}
+
+ipcMain.handle('update:check', async () => {
+  try {
+    const res = await fetch('https://api.github.com/repos/hughhowey/neo/releases/latest', {
+      headers: { 'User-Agent': 'NEO-App' }
+    });
+    if (!res.ok) throw new Error('GitHub API returned ' + res.status);
+    const data = await res.json();
+    const latestVersion = String(data.tag_name || '').replace(/^v/, '');
+    const currentVersion = app.getVersion();
+    return {
+      hasUpdate: !!latestVersion && compareVersions(latestVersion, currentVersion) > 0,
+      latestVersion,
+      currentVersion,
+      releaseUrl: data.html_url
+    };
+  } catch (err) {
+    logError('update', err);
+    return { error: true };
+  }
+});
+
+ipcMain.handle('shell:openExternal', (_e, url) => {
+  require('electron').shell.openExternal(url);
+  return true;
+});
 
 app.whenReady().then(() => {
   // macOS press-and-hold accent picker can open invisibly inside Chromium
