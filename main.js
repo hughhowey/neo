@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
 // ---------------------------------------------------------------------------
@@ -632,6 +633,12 @@ function checkForUpdates() {
 }
 
 app.whenReady().then(() => {
+  // Packaged builds get their icon from build/icon.icns via electron-builder;
+  // this only covers the dev-mode dock icon (`npm start`).
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(path.join(__dirname, 'build', 'icon.png'));
+  }
+
   // macOS press-and-hold accent picker can open invisibly inside Chromium
   // and re-emit swallowed keys as phantom repeated letters. Within NEO,
   // held keys simply repeat — which is what writers expect anyway.
