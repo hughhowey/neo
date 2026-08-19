@@ -14,6 +14,10 @@ on:
       - 'v*'
   workflow_dispatch: {}
 
+# the robots need write access to create/attach to draft releases
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
