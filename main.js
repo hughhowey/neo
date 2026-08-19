@@ -10,8 +10,10 @@ const os = require('os');
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
 // ---------------------------------------------------------------------------
-const LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
-const LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+// Resolved properly at startup via app.getPath('documents') — this default
+// covers any early access and non-redirected setups.
+let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
+let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
 
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
@@ -158,8 +160,6 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
   }
   return false;
 });
-
-ipcMain.handle('library:path', () => LIBRARY_DIR);
 
 // ---------------------------------------------------------------------------
 // Fullscreen + The Silo
@@ -342,6 +342,21 @@ async function importFile(fp) {
   return { name, chapters };
 }
 
+// Same parsing as the picker, but for files dropped from Finder/Explorer
+ipcMain.handle('import:files', async (_e, paths) => {
+  const out = [];
+  for (const fp of paths || []) {
+    if (!/\.(docx|txt|md)$/i.test(fp)) continue;
+    try {
+      out.push(await importFile(fp));
+    } catch (err) {
+      logError('import', err);
+      out.push({ name: path.basename(fp), error: String(err.message || err) });
+    }
+  }
+  return out;
+});
+
 ipcMain.handle('import:pick', async () => {
   const win = BrowserWindow.getFocusedWindow();
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
@@ -474,9 +489,14 @@ function sendToWindow(msg) {
 }
 
 function buildMenu() {
-  const bodyFonts = ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style'];
+  const isMac = process.platform === 'darwin';
+  const bodyFonts = isMac
+    ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
+    : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
   const template = [
-    { role: 'appMenu' },
+    // appMenu exists only on macOS — including it on Windows throws,
+    // which is exactly what kept NEO from ever opening a window there
+    ...(isMac ? [{ role: 'appMenu' }] : []),
     {
       label: 'File',
       submenu: [
@@ -510,7 +530,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'import' })
         },
         { type: 'separator' },
-        { role: 'close' }
+        ...(isMac ? [{ role: 'close' }] : [{ role: 'quit' }])
       ]
     },
     {
@@ -578,7 +598,12 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => {
             const w = BrowserWindow.getFocusedWindow();
-            if (w && !w.isSimpleFullScreen()) w.setFullScreen(!w.isFullScreen());
+            if (!w) return;
+            // isSimpleFullScreen is macOS-only; never call it elsewhere
+            const inSilo = process.platform === 'darwin'
+              ? w.isSimpleFullScreen() || w.isKiosk()
+              : w.isKiosk();
+            if (!inSilo) w.setFullScreen(!w.isFullScreen());
           }
         },
         {
@@ -632,22 +657,43 @@ function checkForUpdates() {
 }
 
 app.whenReady().then(() => {
-  // macOS press-and-hold accent picker can open invisibly inside Chromium
-  // and re-emit swallowed keys as phantom repeated letters. Within NEO,
-  // held keys simply repeat — which is what writers expect anyway.
-  if (process.platform === 'darwin') {
+  // Startup discipline, learned the hard way: the window comes first, and
+  // every other step is fenced off so no single failure can ever leave the
+  // app running invisibly with no window — silently, on someone else's machine.
+  try {
+    // the real Documents folder (handles OneDrive-redirected Windows setups)
     try {
-      const { systemPreferences } = require('electron');
-      systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', false);
+      LIBRARY_DIR = path.join(app.getPath('documents'), 'NEO Library');
+      LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
     } catch (err) {
-      logError('prefs', err);
+      logError('paths', err);
     }
+
+    // macOS press-and-hold accent picker can open invisibly inside Chromium
+    // and re-emit swallowed keys as phantom repeated letters. Within NEO,
+    // held keys simply repeat — which is what writers expect anyway.
+    if (process.platform === 'darwin') {
+      try {
+        const { systemPreferences } = require('electron');
+        systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', false);
+      } catch (err) {
+        logError('prefs', err);
+      }
+    }
+
+    try { ensureLibrary(); } catch (err) { logError('library', err); }
+    createWindow();
+    try { buildMenu(); } catch (err) { logError('menu', err); }
+    try { dailyBackup(); } catch (err) { logError('backup', err); }
+    try { checkForUpdates(); } catch (err) { logError('updater', err); }
+  } catch (err) {
+    // catastrophic: tell the human instead of dying in silence
+    logError('startup', err);
+    try {
+      dialog.showErrorBox('NEO failed to start',
+        'Please report this at github.com/hughhowey/neo/issues:\n\n' + String((err && err.stack) || err));
+    } catch { /* nothing left to try */ }
   }
-  ensureLibrary();
-  buildMenu();
-  createWindow();
-  dailyBackup();
-  checkForUpdates();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

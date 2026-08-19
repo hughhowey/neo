@@ -59,6 +59,17 @@ button { font: inherit; cursor: pointer; }
 #add-shelf-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 .shelf { margin-bottom: 44px; }
+.shelf.dragging { opacity: 0.4; }
+.shelf-grip {
+  color: #3a3a3a; font-size: 13px; margin-right: 10px; cursor: grab;
+  opacity: 0; transition: opacity 0.15s; user-select: none;
+}
+.shelf:hover .shelf-grip { opacity: 1; }
+.shelf-grip:hover { color: var(--accent); }
+.shelf-drop-ind {
+  height: 3px; margin: 14px 20px; background: var(--accent);
+  border-radius: 2px; box-shadow: 0 0 10px rgba(201,168,106,0.8);
+}
 .shelf-label {
   font-size: 12px; text-transform: uppercase; letter-spacing: 2px;
   color: var(--muted); margin-bottom: 14px; cursor: text; display: inline-block;
@@ -271,6 +282,8 @@ body.night .ol-hint { color: #5f5b52; }
   color: #555; margin-bottom: 44px;
   user-select: none;
 }
+/* single-chapter works are chapterless: the heading waits for chapter two */
+.chapter.solo .chapter-head { display: none; }
 .chapter-head .ch-sep { margin: 0 10px; opacity: 0; transition: opacity 0.15s; }
 .chapter-head:hover .ch-sep, .chapter-head.has-title .ch-sep { opacity: 0.6; }
 .chapter-head .ch-title {

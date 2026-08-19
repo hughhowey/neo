@@ -1,0 +1,83 @@
+# Builds NEO on real Windows and Linux machines whenever a version tag is
+# pushed (e.g. git tag v0.3.0 && git push --tags), and attaches the installers
+# to a draft GitHub release. The Mac build stays on Hugh's laptop, where the
+# signing certificate lives.
+#
+# Why this exists: cross-building Windows apps from a Mac invites subtle
+# breakage that no one can test. These builds come from the real thing.
+
+name: Build NEO
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm install electron-builder --save-dev
+      - run: npx electron-builder --win --publish never
+      - name: Smoke test — app boots and creates its library
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist -Filter "*.exe" | Where-Object { $_.Name -notmatch "Setup" } | Select-Object -First 1
+          Write-Host "Launching $($exe.FullName)"
+          Start-Process $exe.FullName
+          Start-Sleep -Seconds 25
+          $proc = Get-Process | Where-Object { $_.ProcessName -like "*NEO*" }
+          if (-not $proc) { Write-Error "NEO process not running after launch"; exit 1 }
+          if (-not (Test-Path "$env:USERPROFILE\Documents\NEO Library\library.json")) {
+            Write-Error "NEO ran but never created its library — startup is broken"
+            exit 1
+          }
+          Write-Host "NEO booted and built its library. Windows works."
+          $proc | Stop-Process -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm install electron-builder --save-dev
+      - run: npx electron-builder --linux --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            dist/*.AppImage
+            dist/latest-linux.yml
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/*.AppImage
+            dist/latest-linux.yml

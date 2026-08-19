@@ -193,9 +193,72 @@ async function renderShelves() {
   $('#author-chip').textContent = displayAuthor();
   const wrap = $('#shelves');
   wrap.innerHTML = '';
+  // shelves drag by their grip to reorder, with a gold bar showing the landing
+  // spot (wired once — renderShelves runs often, listeners must not stack)
+  if (!wrap.dataset.dndWired) {
+    wrap.dataset.dndWired = '1';
+    wrap.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes('application/x-neo-shelf')) return;
+    e.preventDefault();
+    let ind = wrap.querySelector('.shelf-drop-ind');
+    if (!ind) {
+      ind = document.createElement('div');
+      ind.className = 'shelf-drop-ind';
+    }
+    let placed = false;
+    for (const s of wrap.querySelectorAll('.shelf:not(.dragging)')) {
+      const r = s.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        wrap.insertBefore(ind, s);
+        placed = true;
+        break;
+      }
+    }
+      if (!placed) wrap.appendChild(ind);
+    });
+    wrap.addEventListener('drop', async (e) => {
+      const shelfId = e.dataTransfer.getData('application/x-neo-shelf');
+      if (!shelfId) return;
+      e.preventDefault();
+      const ind = wrap.querySelector('.shelf-drop-ind');
+      let index = library.shelves.length;
+      if (ind) {
+        index = 0;
+        for (const c of wrap.children) {
+          if (c === ind) break;
+          if (c.classList.contains('shelf') && !c.classList.contains('dragging')) index++;
+        }
+        ind.remove();
+      }
+      const moving = library.shelves.find((s) => s.id === shelfId);
+      if (!moving) return;
+      library.shelves = library.shelves.filter((s) => s.id !== shelfId);
+      library.shelves.splice(index, 0, moving);
+      await window.neo.writeLibrary(library);
+      renderShelves();
+    });
+  }
+
   for (const shelf of library.shelves) {
     const sec = document.createElement('section');
     sec.className = 'shelf';
+
+    const grip = document.createElement('span');
+    grip.className = 'shelf-grip';
+    grip.textContent = '⠿';
+    grip.title = 'Drag to reorder shelves';
+    grip.draggable = true;
+    grip.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('application/x-neo-shelf', shelf.id);
+      sec.classList.add('dragging');
+    });
+    grip.addEventListener('dragend', () => {
+      sec.classList.remove('dragging');
+      const ind = document.querySelector('.shelf-drop-ind');
+      if (ind) ind.remove();
+    });
+    sec.appendChild(grip);
+
     const label = document.createElement('span');
     label.className = 'shelf-label';
     label.contentEditable = 'true';
@@ -209,22 +272,25 @@ async function renderShelves() {
     label.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); label.blur(); }
     });
-    // right-click a shelf label to delete the shelf (books are never lost)
+    // right-click a shelf label: publish it as one book, or delete it
     label.addEventListener('contextmenu', async (e) => {
       e.preventDefault();
-      if (library.shelves.length === 1) {
-        toast('This is your only shelf — add another before deleting this one');
-        return;
-      }
-      const other = library.shelves.find((s) => s.id !== shelf.id);
-      const choice = await optionModal(
-        `Delete shelf “${shelf.name}”?`,
-        shelf.bookIds.length
-          ? `Its ${shelf.bookIds.length} book${shelf.bookIds.length === 1 ? '' : 's'} will move to “${other.name}”. Nothing is deleted from disk.`
-          : null,
-        [{ label: 'Delete shelf', danger: true, value: 'del' }]
-      );
-      if (choice === 'del') {
+      const choice = await optionModal(`Shelf “${shelf.name}”`, null, [
+        {
+          label: 'Export shelf as anthology…',
+          desc: `Collect ${shelf.bookIds.length ? 'its ' + shelf.bookIds.length : 'the'} work${shelf.bookIds.length === 1 ? '' : 's'}, in shelf order, into a single book with a table of contents.`,
+          value: 'anthology'
+        },
+        { label: 'Delete shelf', desc: 'Books move to another shelf. Nothing is deleted from disk.', danger: true, value: 'del' }
+      ]);
+      if (choice === 'anthology') {
+        await exportShelfAnthology(shelf);
+      } else if (choice === 'del') {
+        if (library.shelves.length === 1) {
+          toast('This is your only shelf — add another before deleting this one');
+          return;
+        }
+        const other = library.shelves.find((s) => s.id !== shelf.id);
         for (const id of shelf.bookIds) {
           if (!other.bookIds.includes(id)) other.bookIds.push(id);
         }
@@ -237,9 +303,14 @@ async function renderShelves() {
     row.className = 'shelf-books';
     row.dataset.shelfId = shelf.id;
 
-    // drag targets: reorder within a shelf or move between shelves,
-    // with a gold indicator showing exactly where the book will land
+    // drag targets: reorder within a shelf, move between shelves, or drop
+    // manuscript files straight from Finder — the shelf takes them all
     row.addEventListener('dragover', (e) => {
+      if (e.dataTransfer.types.includes('Files')) {
+        e.preventDefault();
+        row.classList.add('drag-over');
+        return;
+      }
       if (!e.dataTransfer.types.includes('application/x-neo-book')) return;
       e.preventDefault();
       row.classList.add('drag-over');
@@ -263,6 +334,19 @@ async function renderShelves() {
     });
     row.addEventListener('drop', async (e) => {
       row.classList.remove('drag-over');
+      // files from Finder → import them right onto this shelf
+      if (e.dataTransfer.files && e.dataTransfer.files.length) {
+        e.preventDefault();
+        const paths = [...e.dataTransfer.files]
+          .map((f) => { try { return window.neo.pathForFile(f); } catch { return null; } })
+          .filter(Boolean);
+        if (!paths.length) return;
+        toast('Importing…');
+        const results = await window.neo.importFiles(paths);
+        if (!results.length) { toast('No .docx, .txt, or .md files in that drop'); return; }
+        await addImportedBooks(results, shelf);
+        return;
+      }
       const bookId = e.dataTransfer.getData('application/x-neo-book');
       if (!bookId) return;
       e.preventDefault();
@@ -498,9 +582,12 @@ function renderChapters() {
   wrap.innerHTML = '';
   wordCache = {};
   book.chapterTitles = book.chapterTitles || {};
+  // a lone chapter is just "the story" — no heading until a second one exists,
+  // at which point both appear, numbered (shorts stay clean, novels stay novels)
+  const solo = book.chapterOrder.length === 1;
   book.chapterOrder.forEach((chId, i) => {
     const sec = document.createElement('section');
-    sec.className = 'chapter sheet';
+    sec.className = 'chapter sheet' + (solo ? ' solo' : '');
     sec.dataset.id = chId;
     const head = document.createElement('div');
     head.className = 'chapter-head';
@@ -971,7 +1058,9 @@ function renderNav() {
     item.dataset.id = chId;
     item.innerHTML = `<div class="n-row" title="Drag to reorder chapters"><span class="n-label"></span>
       <span style="display:flex;align-items:center"><span class="n-words">${words.toLocaleString()}</span>${flagged ? '<span class="n-flag" title="Unresolved placeholder"></span>' : ''}</span></div>`;
-    item.querySelector('.n-label').textContent = chTitle ? `${i + 1} · ${chTitle}` : `Chapter ${i + 1}`;
+    item.querySelector('.n-label').textContent = book.chapterOrder.length === 1
+      ? (book.title || 'The story')
+      : (chTitle ? `${i + 1} · ${chTitle}` : `Chapter ${i + 1}`);
 
     // the row is the drag handle, so the note below stays freely editable
     const rowEl = item.querySelector('.n-row');
@@ -1598,9 +1687,11 @@ function updateCounters() {
   }
   const pos = $('#pos-counter');
   const idx = book.chapterOrder.indexOf(currentChapterId);
-  pos.textContent = idx >= 0
-    ? `chapter ${idx + 1} of ${book.chapterOrder.length}`
-    : `${book.chapterOrder.length} chapter${book.chapterOrder.length === 1 ? '' : 's'}`;
+  pos.textContent = book.chapterOrder.length <= 1
+    ? '' // a chapterless story needs no chapter locator
+    : (idx >= 0
+      ? `chapter ${idx + 1} of ${book.chapterOrder.length}`
+      : `${book.chapterOrder.length} chapters`);
   // cache for the bookshelf progress bar
   if (book.wordCount !== total) {
     book.wordCount = total;
@@ -1968,9 +2059,10 @@ $('#search-close').onclick = closeSearch;
 
 const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-async function importBooks() {
-  const results = await window.neo.importPick();
-  if (!results.length) return;
+// Turn parsed manuscripts into books on a shelf — used by the file picker
+// and by dropping files from Finder straight onto a shelf.
+async function addImportedBooks(results, shelf) {
+  shelf = shelf || library.shelves[0];
   let ok = 0;
   for (const r of results) {
     if (r.error) { toast(`Couldn't import ${r.name}: ${r.error}`, 6000); continue; }
@@ -1992,12 +2084,17 @@ async function importBooks() {
     }
     meta.wordCount = words;
     await window.neo.writeBookMeta(meta.id, meta);
-    library.shelves[0].bookIds.push(meta.id);
+    shelf.bookIds.push(meta.id);
     ok++;
   }
   await window.neo.writeLibrary(library);
   if (!$('#bookshelf-view').hidden) renderShelves();
-  if (ok) toast(`${ok} book${ok === 1 ? '' : 's'} imported onto “${library.shelves[0].name}” — chapters and scene breaks detected`, 6000);
+  if (ok) toast(`${ok} book${ok === 1 ? '' : 's'} imported onto “${shelf.name}” — chapters and scene breaks detected`, 6000);
+}
+
+async function importBooks() {
+  const results = await window.neo.importPick();
+  if (results.length) await addImportedBooks(results, library.shelves[0]);
 }
 
 $('#import-btn').onclick = importBooks;
@@ -2377,53 +2474,90 @@ function safeName(s) {
   return (s || 'Untitled').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 }
 
+// Clean paragraphs from any chapter HTML string — export-ready
+function parasFromHtml(html) {
+  const holder = document.createElement('div');
+  holder.innerHTML = html || '';
+  holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
+  return [...holder.querySelectorAll('p')].map((p) => ({
+    sceneBreak: p.classList.contains('scene-break'),
+    text: p.innerText.trim(),
+    html: p.outerHTML
+  })).filter((p) => p.sceneBreak || p.text);
+}
+
 function exportChapters() {
   // [{num, heading, paras: [{text, sceneBreak, html}]}]
   return book.chapterOrder.map((chId, i) => {
-    const holder = cleanChapterEl(chId);
-    const paras = [...holder.querySelectorAll('p')].map((p) => ({
-      sceneBreak: p.classList.contains('scene-break'),
-      text: p.innerText.trim(),
-      html: p.outerHTML
-    })).filter((p) => p.sceneBreak || p.text);
+    const el = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
+    const paras = parasFromHtml(el ? el.innerHTML : (chapterHTML[chId] || ''));
     const t = (book.chapterTitles || {})[chId];
-    return { num: i + 1, heading: 'Chapter ' + (i + 1) + (t ? ' — ' + t : ''), paras };
+    // chapterless stories export as continuous text: no heading at all
+    const heading = book.chapterOrder.length === 1
+      ? ''
+      : 'Chapter ' + (i + 1) + (t ? ' — ' + t : '');
+    return { num: i + 1, heading, paras };
   });
 }
 
-function buildTxt() {
-  let out = `${book.title.toUpperCase()}\n`;
-  if (book.subtitle) out += `${book.subtitle}\n`;
-  out += `by ${book.author}\n\n\n`;
-  for (const ch of exportChapters()) {
-    out += `${ch.heading.toUpperCase()}\n\n`;
+// The open book, packaged for the builders. Every builder takes an optional
+// data object in this shape, which is how a shelf becomes an anthology.
+function bookExportData() {
+  return {
+    id: book.id,
+    title: book.title,
+    subtitle: book.subtitle,
+    author: book.author,
+    coverSeed: book.coverSeed,
+    sections: exportChapters()
+  };
+}
+
+function buildTxt(data) {
+  const d = data || bookExportData();
+  let out = `${d.title.toUpperCase()}\n`;
+  if (d.subtitle) out += `${d.subtitle}\n`;
+  out += `by ${d.author}\n\n\n`;
+  for (const ch of d.sections) {
+    if (ch.heading) out += `${ch.heading.toUpperCase()}\n\n`;
     for (const p of ch.paras) out += p.sceneBreak ? '\n***\n\n' : p.text + '\n\n';
     out += '\n';
   }
   return out;
 }
 
-function buildMd() {
-  let out = `# ${book.title}\n\n`;
-  if (book.subtitle) out += `*${book.subtitle}*\n\n`;
-  out += `**by ${book.author}**\n\n`;
-  for (const ch of exportChapters()) {
-    out += `\n## ${ch.heading}\n\n`;
+function buildMd(data) {
+  const d = data || bookExportData();
+  let out = `# ${d.title}\n\n`;
+  if (d.subtitle) out += `*${d.subtitle}*\n\n`;
+  out += `**by ${d.author}**\n\n`;
+  for (const ch of d.sections) {
+    if (ch.heading) out += `\n## ${ch.heading}\n\n`;
     for (const p of ch.paras) out += p.sceneBreak ? '\n\\*\\*\\*\n\n' : p.text + '\n\n';
   }
   return out;
 }
 
-function buildHtml() {
-  const total = bookWordCount();
+function buildHtml(data) {
+  const d = data || bookExportData();
+  const total = d.sections.reduce((s, ch) => s + ch.paras.reduce((n, p) => n + countWords(p.text || ''), 0), 0);
   const stamp = new Date().toLocaleString();
-  const chaptersHtml = exportChapters().map((ch) => `
+  const chaptersHtml = d.sections.map((ch) => {
+    let first = true;
+    const paras = ch.paras.map((p) => {
+      if (p.sceneBreak) { first = true; return '<p class="brk">***</p>'; }
+      const html = (first && !p.html.includes('class=')) ? p.html.replace('<p', '<p class="first"') : p.html;
+      first = false;
+      return html;
+    }).join('\n');
+    return `
     <section class="chapter">
-      <h2>${ch.heading}</h2>
-      ${ch.paras.map((p) => p.sceneBreak ? '<p class="brk">***</p>' : p.html).join('\n')}
-    </section>`).join('\n');
+      ${ch.heading ? `<h2>${ch.heading}</h2>` : ''}
+      ${paras}
+    </section>`;
+  }).join('\n');
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${book.title}</title>
+<html><head><meta charset="utf-8"><title>${d.title}</title>
 <style>
   body { font-family: Georgia, serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
   .titlepage { text-align: center; margin: 30vh 0 20vh; page-break-after: always; }
@@ -2433,14 +2567,14 @@ function buildHtml() {
   .chapter { page-break-before: always; }
   .chapter h2 { text-align: center; letter-spacing: 4px; text-transform: uppercase; font-size: 12pt; font-weight: normal; color: #555; margin: 60px 0 40px; }
   .chapter p { text-indent: 2em; margin: 0; }
-  .chapter h2 + p, .brk + p { text-indent: 0; }
-  .chapter h2 + p::first-letter { font-size: 3em; float: left; line-height: 0.8; padding: 3px 6px 0 0; }
+  .chapter h2 + p, .brk + p, .chapter p.first { text-indent: 0; }
+  .chapter h2 + p::first-letter, .chapter p.first::first-letter { font-size: 3em; float: left; line-height: 0.8; padding: 3px 6px 0 0; }
   .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 1.5em 0; }
   .prov { margin-top: 80px; text-align: center; color: #999; font-size: 9pt; }
 </style></head><body>
-<div class="titlepage"><h1>${book.title}</h1>
-${book.subtitle ? `<p class="sub">${book.subtitle}</p>` : ''}
-<p class="auth">${book.author}</p></div>
+<div class="titlepage"><h1>${d.title}</h1>
+${d.subtitle ? `<p class="sub">${d.subtitle}</p>` : ''}
+<p class="auth">${d.author}</p></div>
 ${chaptersHtml}
 <p class="prov">${total.toLocaleString()} words · exported from NEO on ${stamp}</p>
 </body></html>`;
@@ -2486,15 +2620,20 @@ function docxP(runs, opts = {}) {
   return `<w:p><w:pPr>${pPr.join('')}</w:pPr>${rXml}</w:p>`;
 }
 
-function buildDocxEntries() {
+function buildDocxEntries(data) {
+  const d = data || bookExportData();
   const body = [];
   // title page
-  body.push(docxP([{ text: book.title, b: true }], { align: 'center', spaceBefore: 3000, size: 56 }));
-  if (book.subtitle) body.push(docxP([{ text: book.subtitle, i: true }], { align: 'center', size: 32 }));
-  body.push(docxP([{ text: book.author }], { align: 'center', spaceBefore: 800 }));
-  exportChapters().forEach((ch, idx) => {
-    body.push(docxP([{ text: ch.heading.toUpperCase(), b: false }], { align: 'center', pageBreak: true, spaceBefore: 1200, size: 28 }));
-    body.push(docxP([], {}));
+  body.push(docxP([{ text: d.title, b: true }], { align: 'center', spaceBefore: 3000, size: 56 }));
+  if (d.subtitle) body.push(docxP([{ text: d.subtitle, i: true }], { align: 'center', size: 32 }));
+  body.push(docxP([{ text: d.author }], { align: 'center', spaceBefore: 800 }));
+  d.sections.forEach((ch) => {
+    if (ch.heading) {
+      body.push(docxP([{ text: ch.heading.toUpperCase(), b: false }], { align: 'center', pageBreak: true, spaceBefore: 1200, size: 28 }));
+      body.push(docxP([], {}));
+    } else {
+      body.push(docxP([], { pageBreak: true })); // headingless story still starts fresh
+    }
     for (const p of ch.paras) {
       if (p.sceneBreak) body.push(docxP([{ text: '***' }], { align: 'center', spaceBefore: 240 }));
       else body.push(docxP(paraRuns(p.html), { indent: true }));
@@ -2532,7 +2671,7 @@ function buildDocxEntries() {
 
 /* ---------- EPUB (KDP-friendly: EPUB 3, nav + NCX TOC, cover image) ---------- */
 
-function makeCoverJpeg() {
+function makeCoverJpeg(d) {
   // 1600x2560 per KDP's recommended cover dimensions
   const W = 1600, H = 2560;
   const canvas = document.createElement('canvas');
@@ -2540,7 +2679,7 @@ function makeCoverJpeg() {
   canvas.height = H;
   const ctx = canvas.getContext('2d');
   // reuse the bookshelf gradient hues
-  const seed = String(book.coverSeed || book.id);
+  const seed = String(d.coverSeed || d.id);
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   const hue1 = h % 360, hue2 = (hue1 + 40 + (h >> 8) % 140) % 360;
@@ -2555,7 +2694,7 @@ function makeCoverJpeg() {
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 18;
   ctx.font = 'bold 150px Georgia';
-  const words = (book.title || 'Untitled').split(/\s+/);
+  const words = (d.title || 'Untitled').split(/\s+/);
   const lines = [];
   let line = '';
   for (const w of words) {
@@ -2567,11 +2706,11 @@ function makeCoverJpeg() {
   let y = H * 0.32;
   for (const l of lines) { ctx.fillText(l, W / 2, y); y += 175; }
   ctx.font = '72px Georgia';
-  ctx.fillText((book.author || '').toUpperCase(), W / 2, H * 0.82);
+  ctx.fillText((d.author || '').toUpperCase(), W / 2, H * 0.82);
   return canvas.toDataURL('image/jpeg', 0.86).split(',')[1];
 }
 
-function chapterXhtml(ch) {
+function chapterXhtml(ch, d) {
   let first = true;
   const paras = ch.paras.map((p) => {
     if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
@@ -2588,22 +2727,23 @@ function chapterXhtml(ch) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>${escXml(ch.heading)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body><section epub:type="chapter"><h1>${escXml(ch.heading)}</h1>
+<head><title>${escXml(ch.heading || d.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body><section epub:type="chapter">${ch.heading ? `<h1>${escXml(ch.heading)}</h1>` : ''}
 ${paras}
 </section></body></html>`;
 }
 
-function buildEpubEntries() {
-  const chapters = exportChapters();
-  const uuid = 'urn:uuid:neo-' + book.id;
+function buildEpubEntries(data) {
+  const d = data || bookExportData();
+  const chapters = d.sections;
+  const uuid = 'urn:uuid:neo-' + d.id;
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const chItems = chapters.map((ch) =>
     `<item id="ch${ch.num}" href="ch${ch.num}.xhtml" media-type="application/xhtml+xml"/>`).join('\n');
   const chSpine = chapters.map((ch) => `<itemref idref="ch${ch.num}"/>`).join('\n');
-  const navPoints = chapters.map((ch) => `<li><a href="ch${ch.num}.xhtml">${escXml(ch.heading)}</a></li>`).join('\n');
+  const navPoints = chapters.map((ch) => `<li><a href="ch${ch.num}.xhtml">${escXml(ch.heading || d.title)}</a></li>`).join('\n');
   const ncxPoints = chapters.map((ch) => `
-<navPoint id="ch${ch.num}" playOrder="${ch.num + 1}"><navLabel><text>${escXml(ch.heading)}</text></navLabel><content src="ch${ch.num}.xhtml"/></navPoint>`).join('');
+<navPoint id="ch${ch.num}" playOrder="${ch.num + 1}"><navLabel><text>${escXml(ch.heading || d.title)}</text></navLabel><content src="ch${ch.num}.xhtml"/></navPoint>`).join('');
 
   const entries = [
     { path: 'mimetype', content: 'application/epub+zip', store: true },
@@ -2615,8 +2755,8 @@ function buildEpubEntries() {
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="bookid">${uuid}</dc:identifier>
-<dc:title>${escXml(book.title)}</dc:title>
-<dc:creator>${escXml(book.author)}</dc:creator>
+<dc:title>${escXml(d.title)}</dc:title>
+<dc:creator>${escXml(d.author)}</dc:creator>
 <dc:language>en</dc:language>
 <meta property="dcterms:modified">${modified}</meta>
 <meta name="cover" content="cover-image"/>
@@ -2660,7 +2800,7 @@ ${navPoints}
     { path: 'OEBPS/toc.ncx', content: `<?xml version="1.0" encoding="utf-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
 <head><meta name="dtb:uid" content="${uuid}"/></head>
-<docTitle><text>${escXml(book.title)}</text></docTitle>
+<docTitle><text>${escXml(d.title)}</text></docTitle>
 <navMap>
 <navPoint id="titlepage" playOrder="1"><navLabel><text>Title Page</text></navLabel><content src="title.xhtml"/></navPoint>${ncxPoints}
 </navMap></ncx>` },
@@ -2679,20 +2819,76 @@ p.brk { text-align: center; text-indent: 0; margin: 1.5em 0; letter-spacing: 0.5
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>Cover</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body><div class="coverimg"><img src="cover.jpg" alt="${escXml(book.title)}"/></div></body></html>` },
+<body><div class="coverimg"><img src="cover.jpg" alt="${escXml(d.title)}"/></div></body></html>` },
     { path: 'OEBPS/title.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>${escXml(book.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body><div class="titlepage"><h2>${escXml(book.title)}</h2>
-${book.subtitle ? `<p class="sub">${escXml(book.subtitle)}</p>` : ''}
-<p class="auth">${escXml(book.author)}</p></div></body></html>` },
-    { path: 'OEBPS/cover.jpg', content: makeCoverJpeg(), base64: true }
+<head><title>${escXml(d.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body><div class="titlepage"><h2>${escXml(d.title)}</h2>
+${d.subtitle ? `<p class="sub">${escXml(d.subtitle)}</p>` : ''}
+<p class="auth">${escXml(d.author)}</p></div></body></html>` },
+    { path: 'OEBPS/cover.jpg', content: makeCoverJpeg(d), base64: true }
   ];
   for (const ch of chapters) {
-    entries.push({ path: `OEBPS/ch${ch.num}.xhtml`, content: chapterXhtml(ch) });
+    entries.push({ path: `OEBPS/ch${ch.num}.xhtml`, content: chapterXhtml(ch, d) });
   }
   return entries;
+}
+
+/* ---------- ANTHOLOGY: a whole shelf becomes one book ---------- */
+
+// Read every book on a shelf from disk and merge into export sections.
+// Each story's title becomes its TOC entry; multi-chapter works keep
+// their chapters as continuation sections.
+async function shelfExportData(shelf, anthologyTitle) {
+  const sections = [];
+  let num = 0;
+  for (const bookId of shelf.bookIds) {
+    const meta = await window.neo.readBookMeta(bookId);
+    if (!meta || !meta.chapterOrder) continue;
+    const multi = meta.chapterOrder.length > 1;
+    for (let i = 0; i < meta.chapterOrder.length; i++) {
+      const html = await window.neo.readChapter(bookId, meta.chapterOrder[i]);
+      const paras = parasFromHtml(html);
+      if (!paras.length) continue;
+      num++;
+      const t = (meta.chapterTitles || {})[meta.chapterOrder[i]];
+      const heading = !multi
+        ? meta.title
+        : (i === 0 ? meta.title : `${meta.title} — Chapter ${i + 1}${t ? ': ' + t : ''}`);
+      sections.push({ num, heading, paras });
+    }
+  }
+  return {
+    id: 'shelf-' + shelf.id,
+    title: anthologyTitle,
+    subtitle: '',
+    author: displayAuthor(),
+    coverSeed: shelf.id + ':' + anthologyTitle,
+    sections
+  };
+}
+
+async function exportShelfAnthology(shelf) {
+  if (!shelf.bookIds.length) { toast('This shelf has no books on it yet'); return; }
+  const title = await askInput('Anthology title', 'Shown on the title page, cover, and metadata', shelf.name);
+  if (title === null) return;
+  const format = await optionModal('Export the anthology as…', null, [
+    { label: 'EPUB', desc: 'For ebook stores — the TOC lists every story.', value: 'epub' },
+    { label: 'Word (.docx)', desc: 'For editors — each story starts on a new page.', value: 'docx' },
+    { label: 'PDF', desc: 'For reading, sharing, and print.', value: 'pdf' }
+  ]);
+  if (!format) return;
+  toast('Collecting the shelf…');
+  const data = await shelfExportData(shelf, title || shelf.name);
+  if (!data.sections.length) { toast('No words found on this shelf yet'); return; }
+  const defaultName = safeName(data.title);
+  let payload;
+  if (format === 'docx') payload = { format, defaultName, zipEntries: buildDocxEntries(data) };
+  else if (format === 'epub') payload = { format, defaultName, zipEntries: buildEpubEntries(data) };
+  else payload = { format: 'pdf', defaultName, content: buildHtml(data) };
+  const saved = await window.neo.exportSave(payload);
+  if (saved) toast(`Anthology of ${shelf.bookIds.length} works exported: ` + saved.split('/').pop(), 6000);
 }
 
 async function doExport(format) {

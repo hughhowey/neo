@@ -1,14 +1,15 @@
 {
   "name": "neo",
   "productName": "NEO",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A word processor for authors. Distraction-free by default.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "package": "electron-builder --mac",
     "package:win": "electron-builder --win",
-    "package:all": "electron-builder --mac --win"
+    "package:linux": "electron-builder --linux",
+    "package:all": "electron-builder --mac --win --linux"
   },
   "build": {
     "appId": "com.hughhowey.neo",
@@ -31,7 +32,16 @@
       "notarize": true
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "linux": {
+      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "category": "Office",
+      "maintainer": "Hugh Howey <hughhowey@gmail.com>",
+      "synopsis": "A distraction-free word processor for authors"
     },
     "nsis": {
       "oneClick": true,

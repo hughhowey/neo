@@ -1,9 +1,8 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('neo', {
   readLibrary: () => ipcRenderer.invoke('library:read'),
   writeLibrary: (data) => ipcRenderer.invoke('library:write', data),
-  libraryPath: () => ipcRenderer.invoke('library:path'),
 
   createBook: (meta) => ipcRenderer.invoke('book:create', meta),
   readBookMeta: (bookId) => ipcRenderer.invoke('book:readMeta', bookId),
@@ -24,6 +23,8 @@ contextBridge.exposeInMainWorld('neo', {
   emailDraft: (payload) => ipcRenderer.invoke('email:draft', payload),
   logError: (msg) => ipcRenderer.invoke('log:error', msg),
   importPick: () => ipcRenderer.invoke('import:pick'),
+  importFiles: (paths) => ipcRenderer.invoke('import:files', paths),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   setSilo: (on) => ipcRenderer.invoke('silo:set', on),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
 
