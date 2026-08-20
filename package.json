@@ -1,7 +1,7 @@
 {
   "name": "neo",
   "productName": "NEO",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "A word processor for authors. Distraction-free by default.",
   "main": "main.js",
   "scripts": {
@@ -22,8 +22,18 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        { "target": "dmg", "arch": ["universal"] },
-        { "target": "zip", "arch": ["universal"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
@@ -33,12 +43,29 @@
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "linux": {
-      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "category": "Office",
       "maintainer": "Hugh Howey <hughhowey@gmail.com>",
       "synopsis": "A distraction-free word processor for authors"
