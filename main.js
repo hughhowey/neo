@@ -14,7 +14,8 @@ const os = require('os');
 // covers any early access and non-redirected setups.
 let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
 let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
-let libraryDirty = false;
+let libraryRevision = 0;
+let lastBackedUpRevision = 0;
 
 const DAILY_BACKUP_LIMIT = 14;
 const SESSION_BACKUP_LIMIT = 8;
@@ -68,7 +69,7 @@ function resolveLibraryAtStartup() {
 }
 
 function markLibraryDirty() {
-  libraryDirty = true;
+  libraryRevision++;
 }
 
 function ensureLibrary() {
@@ -594,7 +595,8 @@ async function dailyBackup() {
 
 // While the app is open, snapshot only when something has changed.
 async function sessionBackup(force = false) {
-  if (!force && !libraryDirty) return true;
+  if (!force && libraryRevision === lastBackedUpRevision) return true;
+  const revisionAtStart = libraryRevision;
   try {
     ensureLibrary();
     const backupsDir = path.join(LIBRARY_DIR, 'Backups');
@@ -602,16 +604,16 @@ async function sessionBackup(force = false) {
     const stamp = new Date().toISOString()
       .replace(/[:.]/g, '')
       .replace('T', '-')
-      .slice(0, 15);
+      .slice(0, 17);
     const target = path.join(backupsDir, `neo-backup-${stamp}.zip`);
     await writeLibraryBackup(target);
     pruneBackups(
       backupsDir,
-      /^neo-backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/,
+      /^neo-backup-\d{4}-\d{2}-\d{2}-\d{6}\.zip$/,
       SESSION_BACKUP_LIMIT
     );
-    libraryDirty = false;
-    return true;
+  lastBackedUpRevision = revisionAtStart;
+  return true;
   } catch (err) {
     logError('backup-session', err);
     return false;
@@ -724,7 +726,8 @@ async function changeLibraryLocation() {
   prefs.libraryPath = target;
   writePreferences(prefs);
   setLibraryPath(target);
-  libraryDirty = false;
+  libraryRevision = 0;
+  lastBackedUpRevision = 0;
 
   await dialog.showMessageBox(win, {
     type: 'info',
