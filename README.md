@@ -11,13 +11,13 @@ NEO runs entirely on your machine. Your words live in plain, readable files on y
 Grab the latest installer from the **[Releases page](../../releases)**:
 
 - **macOS** — download the `.dmg`, open it, drag NEO to Applications.
-- **Windows** — download the `.exe` installer and run it. (This version is not as tested!) Defender might eat this file, so add the folder to your exclusions or look in your threat history and get NEO.exe out of quarantine.
+- **Windows** — download the `.exe` and run it. Or get the setup installer and run that.
 
 ## What makes NEO different
 
-**The bookshelf.** Your library looks like a bookshelf, not a file list. Labeled shelves you organize however you like — by series, by status, by pen name. Progress bars on the covers show how far you are from your word goals. You can drag-and-drop books anywhere.
+**The bookshelf.** Your library looks like a bookshelf, not a file list. Labeled shelves you organize however you like — by series, by status, by pen name. Progress bars on the covers show how far you are from your word goals. You can drag-and-drop books anywhere. You can also drag shelves around and put cover art on your titles.
 
-**A page, and not much else.** There's a white page by default or a dark mode. Controls fade until you reach for them. Chapters number and renumber themselves automatically. Drop caps mark chapter openings, because I'm a sucker for drop-caps. Em dashes, true ellipses, and curly quotes sort themselves out as you type. Spellcheck exists only as a deliberate pass you invoke when *you're* ready — never a red squiggle mid-sentence firing up your imposter syndrome.
+**A page, and not much else.** There's a white page by default or a dark mode (which I now prefer!). Controls fade until you reach for them. Chapters number and renumber themselves automatically. Drop caps mark chapter openings, because I'm a sucker for drop-caps. Em dashes, true ellipses, and curly quotes sort themselves out as you type. Spellcheck exists only as a deliberate pass you invoke when *you're* ready — never a red squiggle mid-sentence triggering your imposter syndrome.
 
 **Enter, Enter, Enter.** One Enter: new paragraph. Two: a `***` section break. Three: a new chapter. The goal is to KEEP WRITING.
 
