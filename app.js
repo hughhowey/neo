@@ -613,6 +613,7 @@ async function openBook(bookId) {
 
   renderChapters();
   renderStickies();
+  migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
   updateCounters();
 
   // Plotters land in the outline for a brand-new book
@@ -738,7 +739,7 @@ async function chapterMenu(chId, index) {
 function wireChapterBody(body, chId) {
   body.addEventListener('focus', () => { currentChapterId = chId; updateCounters(); highlightNav(); });
   body.addEventListener('input', () => {
-    chapterHTML[chId] = body.innerHTML;
+    chapterHTML[chId] = captureBody(body);
     wordCache[chId] = null;
     scheduleChapterSave(chId);
     updateCounters();
@@ -768,6 +769,7 @@ function wireChapterBody(body, chId) {
   body.addEventListener('compositionend', () => { composing = false; });
   body.addEventListener('keydown', (e) => {
     if (composing || e.isComposing || e.keyCode === 229) return;
+    if (guardMarkerDelete(e, body, chId)) return;
     if (handleEnter(e, body, chId)) return;
     smartKeys(e, body);
   });
@@ -796,6 +798,45 @@ function wireChapterBody(body, chId) {
       ghost.classList.remove('ghost');
     }
   });
+}
+
+// Chromium mangles Backspace/Delete beside non-editable inline elements
+// (our ? placeholder marks): it can duplicate a neighboring character.
+// When a deletion happens adjacent to a mark, do it by hand with a clean
+// Range operation instead of trusting the engine.
+function guardMarkerDelete(e, body, chId) {
+  if (e.key !== 'Backspace' && e.key !== 'Delete') return false;
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  const node = r.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return false;
+  const back = e.key === 'Backspace';
+  // only step in when the char being deleted exists in this text node
+  if (back ? r.startOffset === 0 : r.startOffset >= node.textContent.length) return false;
+  // ...and the text node touches a non-editable marker
+  const isMark = (n) => n && n.nodeType === Node.ELEMENT_NODE &&
+    (n.classList.contains('ph-mark') || n.classList.contains('darling-anchor'));
+  if (!isMark(node.previousSibling) && !isMark(node.nextSibling)) return false;
+
+  e.preventDefault();
+  const del = document.createRange();
+  if (back) {
+    del.setStart(node, r.startOffset - 1);
+    del.setEnd(node, r.startOffset);
+  } else {
+    del.setStart(node, r.startOffset);
+    del.setEnd(node, r.startOffset + 1);
+  }
+  del.deleteContents();
+  const caret = document.createRange();
+  caret.setStart(node, back ? r.startOffset - 1 : r.startOffset);
+  caret.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(caret);
+  syncChapter(body, chId);
+  return true;
 }
 
 // Enter once: new paragraph. Enter twice: *** section break.
@@ -843,13 +884,43 @@ function handleEnter(e, body, chId) {
   return false;
 }
 
+// Read a body's HTML for saving, minus transient editing classes
+function captureBody(body) {
+  const clone = body.cloneNode(true);
+  clone.querySelectorAll('.cap-off').forEach((p) => {
+    p.classList.remove('cap-off');
+    if (!p.className) p.removeAttribute('class');
+  });
+  return clone.innerHTML;
+}
+
 function syncChapter(body, chId) {
-  chapterHTML[chId] = body.innerHTML;
+  chapterHTML[chId] = captureBody(body);
   wordCache[chId] = null;
   scheduleChapterSave(chId);
   updateCounters();
   scheduleNavRefresh();
 }
+
+// Suspend the drop cap while the caret is inside the opening paragraph
+document.addEventListener('selectionchange', () => {
+  if (!book || currentTab !== 'manuscript') return;
+  const sel = window.getSelection();
+  let capPara = null;
+  if (sel && sel.rangeCount) {
+    let el = sel.anchorNode;
+    if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+    const p = el && el.closest ? el.closest('p') : null;
+    if (p && p.parentElement && p.parentElement.classList.contains('chapter-body') &&
+        p.matches('p:first-of-type') && !p.classList.contains('scene-break')) {
+      capPara = p;
+    }
+  }
+  document.querySelectorAll('.chapter-body p.cap-off').forEach((p) => {
+    if (p !== capPara) p.classList.remove('cap-off');
+  });
+  if (capPara) capPara.classList.add('cap-off');
+});
 
 // Reduce pasted HTML to what a manuscript is made of: paragraphs, bold, italic.
 function cleanPasteHtml(html) {
@@ -1041,9 +1112,9 @@ function insertPlaceholder() {
 
   stickies.push({ id: sid, chapterId: currentChapterId, text: '', resolved: false });
   window.neo.writeJSON(book.id, 'stickies', stickies);
-  chapterHTML[currentChapterId] = document.querySelector(
+  chapterHTML[currentChapterId] = captureBody(document.querySelector(
     `.chapter[data-id="${currentChapterId}"] .chapter-body`
-  ).innerHTML;
+  ));
   scheduleChapterSave(currentChapterId);
   renderStickies();
   scheduleNavRefresh();
@@ -1088,7 +1159,7 @@ function resolveSticky(sid) {
   if (mark) {
     const chId = mark.closest('.chapter').dataset.id;
     mark.remove();
-    chapterHTML[chId] = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`).innerHTML;
+    chapterHTML[chId] = captureBody(document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`));
     scheduleChapterSave(chId);
   }
   stickies = stickies.filter((s) => s.id !== sid);
@@ -1296,8 +1367,57 @@ darlingsTab.addEventListener('drop', async (e) => {
   await moveSelectionToDarlings(html, text);
 });
 
+// ---- text-position helpers: how darlings remember home without leaving
+// anything behind in the manuscript (invisible marker elements corrupted
+// Chromium's delete behavior — never again) ----
+
+function bodyPlainText(body) {
+  let t = '';
+  const w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = w.nextNode())) t += n.textContent;
+  return t;
+}
+
+function textPosToRange(body, pos) {
+  const w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let n, acc = 0;
+  while ((n = w.nextNode())) {
+    const len = n.textContent.length;
+    if (acc + len >= pos) {
+      const r = document.createRange();
+      r.setStart(n, pos - acc);
+      r.collapse(true);
+      return r;
+    }
+    acc += len;
+  }
+  return null;
+}
+
+// Where in the chapter does this darling belong? Search for its remembered
+// surroundings; degrade gracefully as the prose around it changes.
+function findDarlingPosition(body, d) {
+  if (d.anchorPrefix == null && d.anchorSuffix == null) return -1;
+  const text = bodyPlainText(body);
+  const pre = d.anchorPrefix || '';
+  const suf = d.anchorSuffix || '';
+  let idx = (pre + suf) ? text.indexOf(pre + suf) : -1;
+  if (idx !== -1) return idx + pre.length;
+  if (pre) {
+    idx = text.indexOf(pre);
+    if (idx !== -1) return idx + pre.length;
+  }
+  if (suf) {
+    idx = text.indexOf(suf);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
 // The one move shared by drag-to-tab and ⌘⇧D: words leave the manuscript
-// but are never lost, and an invisible anchor marks the exact spot.
+// but are never lost, and the cut point is remembered by its surroundings —
+// no markers planted in the prose.
 async function moveSelectionToDarlings(html, text) {
   if (!text || !text.trim() || !book) return;
   const sel = window.getSelection();
@@ -1310,21 +1430,27 @@ async function moveSelectionToDarlings(html, text) {
 
   snapshotStructure('darling');
 
+  let anchorPrefix = null;
+  let anchorSuffix = null;
   if (sel.rangeCount && !sel.isCollapsed) {
     sel.deleteFromDocument();
     const r = sel.getRangeAt(0);
-    if (r.startContainer.parentElement?.closest?.('.chapter-body')) {
-      const anchor = document.createElement('span');
-      anchor.className = 'darling-anchor';
-      anchor.dataset.did = did;
-      anchor.contentEditable = 'false';
-      r.insertNode(anchor);
+    const body = r.startContainer.parentElement?.closest?.('.chapter-body');
+    if (body) {
+      const pre = document.createRange();
+      pre.selectNodeContents(body);
+      pre.setEnd(r.startContainer, r.startOffset);
+      anchorPrefix = pre.toString().slice(-60);
+      const post = document.createRange();
+      post.selectNodeContents(body);
+      post.setStart(r.startContainer, r.startOffset);
+      anchorSuffix = post.toString().slice(0, 60);
     }
   }
   if (chId) {
     const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
     if (body) {
-      chapterHTML[chId] = body.innerHTML;
+      chapterHTML[chId] = captureBody(body);
       wordCache[chId] = null;
       scheduleChapterSave(chId);
     }
@@ -1336,11 +1462,46 @@ async function moveSelectionToDarlings(html, text) {
     text: text,
     chapterId: chId || null,
     chapterLabel: chIdx >= 0 ? 'Chapter ' + (chIdx + 1) : 'Manuscript',
+    anchorPrefix,
+    anchorSuffix,
     date: new Date().toISOString()
   });
   await window.neo.writeJSON(book.id, 'darlings', darlings);
   updateCounters();
   toast('Saved to Darlings — kill without remorse (⌘Z to undo)');
+}
+
+// Older versions of NEO planted invisible marker spans at darling cut points.
+// Chromium's delete handling duplicates characters next to such markers, so on
+// open we convert each one into a remembered-context position and remove it —
+// same restore precision, no more haunted commas.
+async function migrateDarlingAnchors() {
+  const spans = [...document.querySelectorAll('.darling-anchor')];
+  if (!spans.length) return;
+  let changed = false;
+  for (const span of spans) {
+    const body = span.closest('.chapter-body');
+    const d = darlings.find((x) => x.id === span.dataset.did);
+    if (body && d && d.anchorPrefix == null) {
+      const pre = document.createRange();
+      pre.selectNodeContents(body);
+      pre.setEndBefore(span);
+      d.anchorPrefix = pre.toString().slice(-60);
+      const post = document.createRange();
+      post.selectNodeContents(body);
+      post.setStartAfter(span);
+      d.anchorSuffix = post.toString().slice(0, 60);
+      changed = true;
+    }
+    const chapter = span.closest('.chapter');
+    span.remove();
+    if (body && chapter) {
+      chapterHTML[chapter.dataset.id] = captureBody(body);
+      wordCache[chapter.dataset.id] = null;
+      scheduleChapterSave(chapter.dataset.id);
+    }
+  }
+  if (changed) await window.neo.writeJSON(book.id, 'darlings', darlings);
 }
 
 // keyboard route: select a passage, ⌘⇧D, keep writing
@@ -1685,31 +1846,34 @@ async function restoreDarling(id) {
   snapshotStructure('darling restore');
   switchTab('manuscript');
 
-  // Preferred: put it back in the exact spot it was cut from
-  const anchor = document.querySelector(`.darling-anchor[data-did="${id}"]`);
-  if (anchor) {
-    const body = anchor.closest('.chapter-body');
-    const chId = anchor.closest('.chapter').dataset.id;
-    let scrollTo = anchor.closest('p') || anchor;
-    if (d.html && /<p[\s>]/i.test(d.html)) {
-      // block content: paragraphs go back in after the host paragraph
-      const holder = document.createElement('div');
-      holder.innerHTML = d.html;
-      let ref = anchor.closest('p') || anchor;
-      scrollTo = holder.firstElementChild || ref;
-      for (const n of [...holder.childNodes]) { ref.after(n); ref = n; }
-    } else {
-      // inline content: slot it right where the caret was
-      const frag = document.createRange().createContextualFragment(d.html || d.text);
-      anchor.after(frag);
+  // Preferred: put it back in the exact spot it was cut from, located by
+  // the remembered text surrounding the cut point
+  if (d.chapterId && book.chapterOrder.includes(d.chapterId)) {
+    const body = document.querySelector(`.chapter[data-id="${d.chapterId}"] .chapter-body`);
+    const pos = body ? findDarlingPosition(body, d) : -1;
+    if (body && pos !== -1) {
+      const at = textPosToRange(body, pos);
+      if (at) {
+        let scrollTo = at.startContainer.parentElement?.closest?.('p') || body;
+        if (d.html && /<p[\s>]/i.test(d.html)) {
+          // block content: paragraphs go back in after the host paragraph
+          const holder = document.createElement('div');
+          holder.innerHTML = d.html;
+          let ref = scrollTo === body ? body.lastElementChild : scrollTo;
+          scrollTo = holder.firstElementChild || scrollTo;
+          for (const n of [...holder.childNodes]) { ref.after(n); ref = n; }
+        } else {
+          // inline content: slot it right where the caret was
+          at.insertNode(document.createRange().createContextualFragment(d.html || d.text));
+        }
+        syncChapter(body, d.chapterId);
+        darlings = darlings.filter((x) => x.id !== id);
+        await window.neo.writeJSON(book.id, 'darlings', darlings);
+        scrollTo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        toast('Darling restored to its original spot');
+        return;
+      }
     }
-    anchor.remove();
-    syncChapter(body, chId);
-    darlings = darlings.filter((x) => x.id !== id);
-    await window.neo.writeJSON(book.id, 'darlings', darlings);
-    scrollTo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    toast('Darling restored to its original spot');
-    return;
   }
 
   // Fallback: the spot no longer exists — end of its chapter (or the last one)
@@ -1720,7 +1884,7 @@ async function restoreDarling(id) {
   const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
   const frag = d.html ? d.html : '<p>' + d.text.replace(/\n+/g, '</p><p>') + '</p>';
   body.insertAdjacentHTML('beforeend', frag);
-  chapterHTML[chId] = body.innerHTML;
+  chapterHTML[chId] = captureBody(body);
   scheduleChapterSave(chId);
   darlings = darlings.filter((x) => x.id !== id);
   await window.neo.writeJSON(book.id, 'darlings', darlings);

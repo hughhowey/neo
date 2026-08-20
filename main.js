@@ -748,6 +748,10 @@ app.whenReady().then(() => {
       try {
         const { systemPreferences } = require('electron');
         systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', false);
+        // macOS injects its own items into any menu named "Edit" —
+        // these two official switches remove the ones writers can't use here
+        systemPreferences.setUserDefault('NSDisabledDictationMenuItem', 'boolean', true);
+        systemPreferences.setUserDefault('NSDisabledCharacterPaletteMenuItem', 'boolean', true);
       } catch (err) {
         logError('prefs', err);
       }
