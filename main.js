@@ -612,8 +612,8 @@ async function sessionBackup(force = false) {
       /^neo-backup-\d{4}-\d{2}-\d{2}-\d{6}\.zip$/,
       SESSION_BACKUP_LIMIT
     );
-  lastBackedUpRevision = revisionAtStart;
-  return true;
+    lastBackedUpRevision = revisionAtStart;
+    return true;
   } catch (err) {
     logError('backup-session', err);
     return false;
