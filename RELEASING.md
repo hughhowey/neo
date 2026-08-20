@@ -2,22 +2,21 @@
 
 (For future Hugh, who has been writing novels and has forgotten all of this.)
 
-## 0. Before anything
-
-Make sure the version number in `package.json` has been bumped (e.g. 0.3.0 → 0.3.1
-for fixes, → 0.4.0 for features). If you forget, builds overwrite each other and
-auto-update won't fire.
-
-## 1. Push the code and ring the bell
+## 1. Bump, commit, tag, and push — the short way
 
 ```
 cd ~/Downloads/NEO
 git add .
-git commit -m "v0.X.X — what changed"
+git commit -m "what changed"
+npm version patch        <- bug fixes (0.3.0 → 0.3.1); use `npm version minor` for features (→ 0.4.0)
 git push
-git tag v0.X.X
 git push --tags
 ```
+
+`npm version` bumps package.json, commits it, AND creates the matching tag in
+one stroke — so the version and tag can never disagree. (If Claude already
+bumped the version during the work session, skip the npm version line and tag
+by hand: `git tag v0.X.X`.)
 
 Pushing the tag wakes the GitHub robots (Actions tab). They build Windows on a
 real Windows machine — and boot-test it — plus the Linux AppImage, and attach

@@ -511,13 +511,6 @@ body.night .ol-hint { color: #5f5b52; }
 #search-count { font-size: 11px; color: var(--muted); min-width: 52px; text-align: center; }
 
 #goal-counter.goal-met { color: var(--accent); }
-#silo-btn {
-  background: none; border: none; color: #3d3d3d; font-size: 11px;
-  letter-spacing: 1px; padding: 2px 6px;
-}
-#silo-btn:hover { color: var(--accent); }
-#silo-btn.active { color: var(--accent); }
-#silo-input.match { border-color: #4a8a5c !important; }
 #import-btn {
   background: none; border: 1px solid #3a3a3a; color: var(--muted);
   border-radius: 6px; padding: 5px 12px; font-size: 12px;
@@ -557,6 +550,24 @@ body.night .ol-hint { color: #5f5b52; }
   font-size: 13.5px; line-height: 1.45; color: #bbb;
 }
 .help-grid .hk { color: #eee; font-weight: 600; white-space: nowrap; }
+
+/* --- Custom cover art: the image IS the cover --- */
+.book.has-cover .b-title,
+.book.has-cover .b-author,
+.book.has-cover .b-refresh { display: none; }
+.book.has-cover::before { display: none; }
+
+/* --- Brighter interface (View menu) — the quiet default, turned up --- */
+body.bright { --muted: #b4b4b4; }
+body.bright #bottombar { opacity: 0.92; }
+body.bright .tab { color: #b4b4b4; }
+body.bright .nav-item .n-row { color: #ccc; }
+body.bright .nav-item .n-words { color: #8f8f8f; }
+body.bright .nav-note { color: #999; }
+body.bright .shelf-grip { opacity: 0.55; }
+body.bright .book .b-refresh { color: rgba(255,255,255,0.4); }
+body.bright .new-book { border-color: #6a6a6a; color: #6a6a6a; }
+body.bright #add-shelf-btn, body.bright #import-btn { color: #b4b4b4; border-color: #555; }
 
 /* --- Hint toast --- */
 #hint {

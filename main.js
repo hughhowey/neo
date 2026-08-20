@@ -162,27 +162,62 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
 });
 
 // ---------------------------------------------------------------------------
-// Fullscreen + The Silo
+// Cover art: images live inside the book's folder, so covers travel with
+// the library. Timestamped filenames sidestep every caching gremlin.
 // ---------------------------------------------------------------------------
 
-// The Silo means it: kiosk mode (no Dock, no menu bar, no hover-reveal)
-// plus always-on-top at screen-saver level across every workspace — so even
-// app-switching leaves NEO covering the screen. The typed prompt is the way out.
-ipcMain.handle('silo:set', (e, on) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (!win) return false;
-  win.__silo = on;
-  if (on) {
-    if (win.isFullScreen()) win.setFullScreen(false);
-    win.setKiosk(true);
-    win.setAlwaysOnTop(true, 'screen-saver');
-    win.focus();
-  } else {
-    win.setAlwaysOnTop(false);
-    win.setKiosk(false);
+const COVER_EXTS = ['png', 'jpg', 'jpeg', 'webp'];
+
+ipcMain.handle('library:path', () => LIBRARY_DIR);
+
+ipcMain.handle('cover:pick', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Choose cover art',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: COVER_EXTS }]
+  });
+  return canceled || !filePaths.length ? null : filePaths[0];
+});
+
+function clearCovers(dir) {
+  for (const f of fs.readdirSync(dir)) {
+    if (/^cover-\d+\./.test(f)) fs.unlinkSync(path.join(dir, f));
   }
+}
+
+ipcMain.handle('cover:set', (_e, bookId, srcPath) => {
+  const ext = path.extname(srcPath).toLowerCase().replace('.', '');
+  if (!COVER_EXTS.includes(ext)) return null;
+  const dir = bookDir(bookId);
+  if (!fs.existsSync(dir)) return null;
+  clearCovers(dir);
+  const fname = 'cover-' + Date.now() + '.' + (ext === 'jpeg' ? 'jpg' : ext);
+  fs.copyFileSync(srcPath, path.join(dir, fname));
+  return fname;
+});
+
+ipcMain.handle('cover:remove', (_e, bookId) => {
+  const dir = bookDir(bookId);
+  if (fs.existsSync(dir)) clearCovers(dir);
   return true;
 });
+
+ipcMain.handle('cover:read', (_e, bookId, fname) => {
+  try {
+    if (!/^cover-\d+\.(png|jpg|webp)$/.test(fname)) return null;
+    const buf = fs.readFileSync(path.join(bookDir(bookId), fname));
+    const ext = path.extname(fname).slice(1);
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    return { base64: buf.toString('base64'), mime, ext };
+  } catch {
+    return null;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Fullscreen
+// ---------------------------------------------------------------------------
 
 // Regular fullscreen: Esc walks you out like any civilized app
 ipcMain.handle('fullscreen:escape', (e) => {
@@ -321,25 +356,78 @@ async function importFile(fp) {
       .filter((p) => p.text);
   }
 
-  // Chapterize: page breaks and "Chapter N"-style headings start new chapters,
-  // lines of asterisks become scene breaks.
-  const isHeading = (t) => /^(chapter|prologue|epilogue|part)\b/i.test(t) && t.length < 60;
+  // Chapterize: page breaks and heading lines start new chapters. Headings
+  // include "Chapter N" styles plus bare chapter numbers — "7", "VII",
+  // "Seven" — which get stripped so NEO's own numbering doesn't duplicate them.
+  const SPELLED = /^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\.?$/i;
+  const isNumeralish = (t) => /^\d{1,3}\.?$/.test(t) || /^[IVXLC]{1,7}\.?$/.test(t) || SPELLED.test(t);
+  // Bare numbers only count as chapter markers when there's a ladder of them —
+  // a story that merely OPENS with "Seven." keeps its seven.
+  const numeralMode = paras.filter((p) => p.text && isNumeralish(p.text.trim())).length >= 2;
+  const isHeading = (t) => t && (
+    (/^(chapter|prologue|epilogue|part)\b/i.test(t) && t.length < 60) ||
+    (numeralMode && isNumeralish(t))
+  );
   const isBreak = (t) => /^([*#•~]\s*){1,7}$/.test(t);
-  const chapters = [];
-  let cur = [];
-  for (const p of paras) {
-    if (!p.text && !p.pageBreak) continue;
-    if ((p.pageBreak || isHeading(p.text)) && cur.length) {
-      chapters.push(cur);
-      cur = [];
+
+  const chapterize = (usePageBreaks) => {
+    const chapters = [];
+    let cur = [];
+    for (const p of paras) {
+      const brk = usePageBreaks && p.pageBreak;
+      if (!p.text && !brk) continue;
+      if ((brk || isHeading(p.text)) && cur.length) {
+        chapters.push(cur);
+        cur = [];
+      }
+      if (isHeading(p.text)) continue; // the heading line itself is replaced by NEO's numbering
+      if (isBreak(p.text)) { cur.push({ scene: true }); continue; }
+      if (p.text) cur.push({ text: p.text });
     }
-    if (isHeading(p.text)) continue; // the heading line itself becomes the chapter head
-    if (isBreak(p.text)) { cur.push({ scene: true }); continue; }
-    if (p.text) cur.push({ text: p.text });
+    if (cur.length) chapters.push(cur);
+    return chapters;
+  };
+
+  const countAllWords = (list) =>
+    list.reduce((n, ch) => n + ch.reduce((m, p) => m + (p.text ? p.text.trim().split(/\s+/).length : 0), 0), 0);
+
+  // First pass trusts page breaks. Some word processors sprinkle page-break
+  // formatting on every paragraph, exploding a story into confetti — if the
+  // result is absurd (lots of tiny "chapters"), re-run trusting headings only.
+  let chapters = chapterize(true);
+  if (chapters.length > 6 && countAllWords(chapters) / chapters.length < 250) {
+    chapters = chapterize(false);
   }
-  if (cur.length) chapters.push(cur);
   if (!chapters.length) chapters.push([{ text: '' }]);
-  return { name, chapters };
+
+  // Front matter: a short title line and a "by Author" line belong on the
+  // title page, not in the body. Detect, harvest, and remove them.
+  let title = null;
+  let author = null;
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const first = chapters[0];
+  if (first && first.length) {
+    const t0 = (first[0].text || '').trim();
+    const t1 = first.length > 1 ? (first[1].text || '').trim() : '';
+    const titleish = t0 && t0.length < 90 && !/[.!?]$/.test(t0) && (
+      (norm(t0).length > 3 && norm(name).includes(norm(t0))) ||
+      /^by\s+\S/i.test(t1) ||
+      (t0 === t0.toUpperCase() && /[A-Z].*[A-Z]/.test(t0) && t0.length < 60)
+    );
+    if (titleish) {
+      title = t0;
+      first.shift();
+    }
+    const bl = first.length ? (first[0].text || '').trim().match(/^by\s+(.{2,60})$/i) : null;
+    if (bl) {
+      author = bl[1].trim();
+      first.shift();
+    }
+    if (!first.length) chapters.shift();
+    if (!chapters.length) chapters.push([{ text: '' }]);
+  }
+
+  return { name, title, author, chapters };
 }
 
 // Same parsing as the picker, but for files dropped from Finder/Explorer
@@ -450,17 +538,6 @@ function createWindow() {
     }
   });
   win.loadFile('index.html');
-
-  // The Silo holds the door: if focus escapes (⌘Tab), pull it straight back.
-  win.on('blur', () => {
-    if (!win.__silo || win.isDestroyed()) return;
-    setTimeout(() => {
-      if (win.__silo && !win.isDestroyed()) {
-        win.show();
-        win.focus();
-      }
-    }, 60);
-  });
 
   // Right-click suggestions during a spellcheck pass
   win.webContents.on('context-menu', (_event, params) => {
@@ -598,18 +675,13 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => {
             const w = BrowserWindow.getFocusedWindow();
-            if (!w) return;
-            // isSimpleFullScreen is macOS-only; never call it elsewhere
-            const inSilo = process.platform === 'darwin'
-              ? w.isSimpleFullScreen() || w.isKiosk()
-              : w.isKiosk();
-            if (!inSilo) w.setFullScreen(!w.isFullScreen());
+            if (w) w.setFullScreen(!w.isFullScreen());
           }
         },
+        { type: 'separator' },
         {
-          label: 'The Silo',
-          accelerator: 'CmdOrCtrl+Shift+S',
-          click: () => sendToWindow({ type: 'silo' })
+          label: 'Brighter Interface',
+          click: () => sendToWindow({ type: 'uiBright' })
         }
       ]
     },

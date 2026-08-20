@@ -108,7 +108,15 @@ function chapterWords(chId) {
 /*  BOOKSHELF                                                          */
 /* ================================================================== */
 
+let libraryDirPath = '';
+
+function coverUrl(meta) {
+  const p = (libraryDirPath + '/' + meta.id + '/' + meta.coverImage).replace(/\\/g, '/');
+  return encodeURI('file://' + (p.startsWith('/') ? '' : '/') + p);
+}
+
 async function loadLibrary() {
+  libraryDirPath = await window.neo.libraryPath();
   library = await window.neo.readLibrary();
   if (!library.firstRunDone) {
     showFirstRun();
@@ -423,7 +431,12 @@ function bookTile(meta) {
     <div class="b-author"></div>
     <span class="b-refresh" title="New cover, woven from the current text">&#8635;</span>
     <div class="b-progress" hidden><div></div></div>`;
-  el.style.background = coverGradient(meta);
+  if (meta.coverImage) {
+    el.classList.add('has-cover');
+    el.style.background = `#1d1d1d url("${coverUrl(meta)}") center / cover no-repeat`;
+  } else {
+    el.style.background = coverGradient(meta);
+  }
   // ALL CAPS, with each word's initial slightly larger — classic jacket typography
   const titleEl = el.querySelector('.b-title');
   const inner = document.createElement('span');
@@ -460,14 +473,65 @@ function bookTile(meta) {
     el.classList.add('dragging');
   });
   el.addEventListener('dragend', () => el.classList.remove('dragging'));
+  // images dragged from Finder onto a book become its cover;
+  // manuscripts dropped here import onto this book's shelf
+  el.addEventListener('dragover', (e) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+  el.addEventListener('drop', async (e) => {
+    if (!e.dataTransfer.files || !e.dataTransfer.files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    let p = null;
+    try { p = window.neo.pathForFile(e.dataTransfer.files[0]); } catch { /* no path */ }
+    if (!p) return;
+    if (/\.(png|jpe?g|webp)$/i.test(p)) {
+      const fname = await window.neo.setCover(meta.id, p);
+      if (fname) {
+        meta.coverImage = fname;
+        await window.neo.writeBookMeta(meta.id, meta);
+        renderShelves();
+        toast(`“${meta.title}” has its cover — looking like a real book`);
+      }
+    } else if (/\.(docx|txt|md)$/i.test(p)) {
+      const homeShelf = library.shelves.find((s) => s.bookIds.includes(meta.id)) || library.shelves[0];
+      const results = await window.neo.importFiles([p]);
+      if (results.length) await addImportedBooks(results, homeShelf);
+    }
+  });
+
   el.addEventListener('contextmenu', async (e) => {
     e.preventDefault();
-    const choice = await optionModal(`“${meta.title}”`, null, [
+    const options = [
+      { label: meta.coverImage ? 'Replace cover art…' : 'Set cover art…', desc: 'Pick an image (2:3 works best). Or just drag one from Finder onto the book.', value: 'cover' }
+    ];
+    if (meta.coverImage) {
+      options.push({ label: 'Remove cover art', desc: 'Back to the generated cover.', value: 'uncover' });
+    }
+    options.push(
       { label: 'Set word goal…', desc: 'Adds the subtle progress bar to the cover.', value: 'goal' },
       { label: 'Remove from bookshelf', desc: 'Takes it off your shelves. The files stay safe in your NEO Library folder on disk.', value: 'remove' },
       { label: 'Move to Trash', desc: 'Sends the book folder to your Mac Trash.', danger: true, value: 'trash' }
-    ]);
-    if (choice === 'goal') {
+    );
+    const choice = await optionModal(`“${meta.title}”`, null, options);
+    if (choice === 'cover') {
+      const src = await window.neo.pickCover();
+      if (!src) return;
+      const fname = await window.neo.setCover(meta.id, src);
+      if (fname) {
+        meta.coverImage = fname;
+        await window.neo.writeBookMeta(meta.id, meta);
+        renderShelves();
+      }
+    } else if (choice === 'uncover') {
+      await window.neo.removeCover(meta.id);
+      meta.coverImage = null;
+      await window.neo.writeBookMeta(meta.id, meta);
+      renderShelves();
+    } else if (choice === 'goal') {
       const goal = await askInput(`Word count goal for “${meta.title}”`, 'e.g. 80000 — blank removes the goal',
         meta.wordGoal ? String(meta.wordGoal) : '');
       if (goal === null) return;
@@ -884,7 +948,6 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') {
     if (!$('#searchbar').hidden) closeSearch();
-    else if (siloActive) exitSiloAttempt();
     else window.neo.fullscreenEscape().then((exited) => { if (!exited) backToShelf(); });
   }
 });
@@ -893,7 +956,6 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || !$('#editor-view').hidden) return;
   if (document.querySelector('.modal-backdrop:not([hidden])')) return;
-  if (siloActive) { exitSiloAttempt(); return; }
   window.neo.fullscreenEscape();
 });
 
@@ -2066,8 +2128,9 @@ async function addImportedBooks(results, shelf) {
   let ok = 0;
   for (const r of results) {
     if (r.error) { toast(`Couldn't import ${r.name}: ${r.error}`, 6000); continue; }
-    const meta = await window.neo.createBook({ author: displayAuthor() });
-    meta.title = r.name;
+    // title/byline harvested from the document beat the filename
+    const meta = await window.neo.createBook({ author: r.author || displayAuthor() });
+    meta.title = r.title || r.name;
     meta.tabNames = {
       notes: (library.tabDefaults && library.tabDefaults.notes) || 'Notes',
       outline: (library.tabDefaults && library.tabDefaults.outline) || 'Outline'
@@ -2140,116 +2203,6 @@ document.addEventListener('selectionchange', () => {
     } catch { /* selection mid-mutation; skip this frame */ }
   });
 });
-
-/* ================================================================== */
-/*  THE SILO                                                           */
-/*  A fullscreen with no green button and no gestures out. The only    */
-/*  exit is typing the confession NEO hands you, word for word.        */
-/* ================================================================== */
-
-const SILO_PROMPTS = [
-  "I'm a great writer and I'll do another session later, but right now I really need to see a cat video.",
-  "Somewhere on the internet, a stranger is wrong, and only I can fix it.",
-  "My characters can sit in the dark until I get back from checking my email.",
-  "I choose the scroll of doom over the scroll of my own making.",
-  "This chapter was almost going somewhere, which is exactly why I must leave now.",
-  "My muse stepped out for coffee, so I'm stepping out for the whole afternoon.",
-  "I would rather read about writing than actually write.",
-  "The refrigerator has news for me and it cannot wait.",
-  "I am abandoning my book to research something I will forget in ten minutes.",
-  "I promise to think about my plot while watching videos that have nothing to do with it.",
-  "The blank page is winning today and I have decided to let it.",
-  "I'm leaving my imaginary friends for my imaginary obligations.",
-  "Nothing in my inbox is better than this book, but I'm going to go check anyway.",
-  "I hereby trade a page of my novel for a peek at the feeds.",
-  "My deadline believes in me more than I do right now.",
-  "I was one sentence away from brilliance and chose the exit instead.",
-  "The story will keep. The snacks, however, are calling.",
-  "I am not procrastinating; I am marinating, loudly, elsewhere.",
-  "Today's words were hard, so I'm going to go look at pictures instead.",
-  "I love my book, but right now I love my phone a little more.",
-  "Quitting this session is the plot twist nobody asked for.",
-  "I will return to this manuscript older and no wiser.",
-  "My protagonist would never give up this easily.",
-  "Every minute away from this book is a minute my villain wins.",
-  "I typed this whole sentence just to avoid typing a different one.",
-  "The cursor blinked at me funny, so I'm leaving.",
-  "I could finish this scene, or I could check the weather in cities I will never visit.",
-  "Future me has agreed to write these words, and future me is a saint.",
-  "I came, I saw, I alt-tabbed."
-];
-
-let siloActive = false;
-let siloStartCount = 0;
-
-async function enterSilo() {
-  await window.neo.setSilo(true);
-  siloActive = true;
-  siloStartCount = book ? bookWordCount() : 0;
-  $('#silo-btn').classList.add('active');
-  toast('The hatch is sealed. Nothing exists but the page. (Esc when you want out)', 6000);
-}
-
-function exitSiloAttempt() {
-  const prompt = SILO_PROMPTS[Math.floor(Math.random() * SILO_PROMPTS.length)];
-  const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ').replace(/[’‘]/g, "'").trim();
-  const bd = document.createElement('div');
-  bd.className = 'modal-backdrop';
-  bd.innerHTML = `
-    <div class="modal" style="width:520px">
-      <h2 style="font-size:16px">Leaving the Silo?</h2>
-      <p>Type this, word for word, and the hatch opens:</p>
-      <p style="font-family:Georgia,serif;font-size:15px;font-style:italic;color:var(--accent);line-height:1.6">“${prompt}”</p>
-      <input id="silo-input" type="text" spellcheck="false" autocomplete="off" placeholder="Confess…"/>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
-        <button class="m-cancel" style="background:var(--accent);border:none;border-radius:6px;padding:7px 16px;color:#191919">Never mind — back to writing</button>
-        <button class="m-ok" style="background:none;border:1px solid #3a3a3a;border-radius:6px;padding:7px 18px;color:#666" disabled>Open the hatch</button>
-      </div>
-    </div>`;
-  document.body.appendChild(bd);
-  const input = bd.querySelector('#silo-input');
-  const ok = bd.querySelector('.m-ok');
-  const cancel = bd.querySelector('.m-cancel');
-  input.focus();
-  // writing stays the golden path; the hatch only lights up once you've confessed
-  const check = () => {
-    const good = normalize(input.value) === normalize(prompt);
-    ok.disabled = !good;
-    input.classList.toggle('match', good);
-    if (good) {
-      ok.style.cssText = 'background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919';
-      cancel.style.cssText = 'background:none;border:none;color:#888';
-    } else {
-      ok.style.cssText = 'background:none;border:1px solid #3a3a3a;border-radius:6px;padding:7px 18px;color:#666';
-      cancel.style.cssText = 'background:var(--accent);border:none;border-radius:6px;padding:7px 16px;color:#191919';
-    }
-  };
-  input.addEventListener('input', check);
-  const leave = async () => {
-    if (ok.disabled) return;
-    bd.remove();
-    await window.neo.setSilo(false);
-    siloActive = false;
-    $('#silo-btn').classList.remove('active');
-    const written = book ? bookWordCount() - siloStartCount : 0;
-    toast(written > 0
-      ? `Back to the surface — ${written.toLocaleString()} words richer.`
-      : 'Back to the surface.');
-  };
-  ok.onclick = leave;
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); leave(); }
-    if (e.key === 'Escape') { e.stopPropagation(); bd.remove(); } // no shame in staying
-  });
-  bd.querySelector('.m-cancel').onclick = () => bd.remove();
-}
-
-function toggleSilo() {
-  if (siloActive) exitSiloAttempt();
-  else enterSilo();
-}
-
-$('#silo-btn').onclick = toggleSilo;
 
 /* ================================================================== */
 /*  GOALS, SPRINTS, AND THE CHART                                      */
@@ -2401,6 +2354,7 @@ function applyFonts() {
     document.documentElement.style.setProperty('--dropcap-font', DROPCAP_FONTS[f.dropcap]);
   }
   document.body.classList.toggle('night', library.pageTheme === 'night');
+  document.body.classList.toggle('bright', !!library.uiBright);
   const size = Math.min(22, Math.max(14, library.editorFontSize || 17));
   document.documentElement.style.setProperty('--editor-size', size + 'px');
 }
@@ -2434,7 +2388,6 @@ function showHelp() {
       <div class="help-sec">Modes</div>
       <div class="help-grid">
         ${row('⌘⇧F', 'Full screen (Esc leaves)')}
-        ${row('⌘⇧S', 'The Silo — write your way out')}
         ${row('⌘⇧T', 'Typewriter scrolling')}
         ${row('⌘;', 'Spellcheck pass (right-click squiggles for fixes)')}
       </div>
@@ -2509,6 +2462,7 @@ function bookExportData() {
     subtitle: book.subtitle,
     author: book.author,
     coverSeed: book.coverSeed,
+    coverImage: book.coverImage || null,
     sections: exportChapters()
   };
 }
@@ -2733,11 +2687,25 @@ ${paras}
 </section></body></html>`;
 }
 
-function buildEpubEntries(data) {
+async function buildEpubEntries(data) {
   const d = data || bookExportData();
   const chapters = d.sections;
   const uuid = 'urn:uuid:neo-' + d.id;
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+
+  // real cover art when the book has it; the generated gradient otherwise
+  let coverName = 'cover.jpg';
+  let coverMime = 'image/jpeg';
+  let coverContent = null;
+  if (d.coverImage) {
+    const c = await window.neo.readCover(d.id, d.coverImage);
+    if (c) {
+      coverName = 'cover.' + c.ext;
+      coverMime = c.mime;
+      coverContent = c.base64;
+    }
+  }
+  if (!coverContent) coverContent = makeCoverJpeg(d);
   const chItems = chapters.map((ch) =>
     `<item id="ch${ch.num}" href="ch${ch.num}.xhtml" media-type="application/xhtml+xml"/>`).join('\n');
   const chSpine = chapters.map((ch) => `<itemref idref="ch${ch.num}"/>`).join('\n');
@@ -2762,7 +2730,7 @@ function buildEpubEntries(data) {
 <meta name="cover" content="cover-image"/>
 </metadata>
 <manifest>
-<item id="cover-image" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+<item id="cover-image" href="${coverName}" media-type="${coverMime}" properties="cover-image"/>
 <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
 <item id="titlepage" href="title.xhtml" media-type="application/xhtml+xml"/>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -2819,7 +2787,7 @@ p.brk { text-align: center; text-indent: 0; margin: 1.5em 0; letter-spacing: 0.5
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>Cover</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body><div class="coverimg"><img src="cover.jpg" alt="${escXml(d.title)}"/></div></body></html>` },
+<body><div class="coverimg"><img src="${coverName}" alt="${escXml(d.title)}"/></div></body></html>` },
     { path: 'OEBPS/title.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -2827,7 +2795,7 @@ p.brk { text-align: center; text-indent: 0; margin: 1.5em 0; letter-spacing: 0.5
 <body><div class="titlepage"><h2>${escXml(d.title)}</h2>
 ${d.subtitle ? `<p class="sub">${escXml(d.subtitle)}</p>` : ''}
 <p class="auth">${escXml(d.author)}</p></div></body></html>` },
-    { path: 'OEBPS/cover.jpg', content: makeCoverJpeg(d), base64: true }
+    { path: 'OEBPS/' + coverName, content: coverContent, base64: true }
   ];
   for (const ch of chapters) {
     entries.push({ path: `OEBPS/ch${ch.num}.xhtml`, content: chapterXhtml(ch, d) });
@@ -2885,7 +2853,7 @@ async function exportShelfAnthology(shelf) {
   const defaultName = safeName(data.title);
   let payload;
   if (format === 'docx') payload = { format, defaultName, zipEntries: buildDocxEntries(data) };
-  else if (format === 'epub') payload = { format, defaultName, zipEntries: buildEpubEntries(data) };
+  else if (format === 'epub') payload = { format, defaultName, zipEntries: await buildEpubEntries(data) };
   else payload = { format: 'pdf', defaultName, content: buildHtml(data) };
   const saved = await window.neo.exportSave(payload);
   if (saved) toast(`Anthology of ${shelf.bookIds.length} works exported: ` + saved.split('/').pop(), 6000);
@@ -2897,7 +2865,7 @@ async function doExport(format) {
   const defaultName = safeName(book.title);
   let payload;
   if (format === 'docx') payload = { format, defaultName, zipEntries: buildDocxEntries() };
-  else if (format === 'epub') payload = { format, defaultName, zipEntries: buildEpubEntries() };
+  else if (format === 'epub') payload = { format, defaultName, zipEntries: await buildEpubEntries() };
   else payload = { format, defaultName, content: format === 'txt' ? buildTxt() : format === 'md' ? buildMd() : buildHtml() };
   const saved = await window.neo.exportSave(payload);
   if (saved) toast('Exported: ' + saved.split('/').pop());
@@ -2986,8 +2954,13 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'spellcheck') toggleSpellcheck();
   if (msg.type === 'typewriter') toggleTypewriter();
   if (msg.type === 'import') importBooks();
-  if (msg.type === 'silo') toggleSilo();
   if (msg.type === 'stats') openStats();
+  if (msg.type === 'uiBright') {
+    // no toast — the change announces itself
+    library.uiBright = !library.uiBright;
+    await window.neo.writeLibrary(library);
+    applyFonts();
+  }
   if (msg.type === 'pageTheme') {
     library.pageTheme = msg.value;
     await window.neo.writeLibrary(library);

@@ -23,9 +23,13 @@ contextBridge.exposeInMainWorld('neo', {
   emailDraft: (payload) => ipcRenderer.invoke('email:draft', payload),
   logError: (msg) => ipcRenderer.invoke('log:error', msg),
   importPick: () => ipcRenderer.invoke('import:pick'),
+  libraryPath: () => ipcRenderer.invoke('library:path'),
+  pickCover: () => ipcRenderer.invoke('cover:pick'),
+  setCover: (bookId, srcPath) => ipcRenderer.invoke('cover:set', bookId, srcPath),
+  removeCover: (bookId) => ipcRenderer.invoke('cover:remove', bookId),
+  readCover: (bookId, fname) => ipcRenderer.invoke('cover:read', bookId, fname),
   importFiles: (paths) => ipcRenderer.invoke('import:files', paths),
   pathForFile: (file) => webUtils.getPathForFile(file),
-  setSilo: (on) => ipcRenderer.invoke('silo:set', on),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
 
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
