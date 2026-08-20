@@ -68,6 +68,6 @@ Everything is saved automatically, constantly, into plain ordinary files in a fo
 
 **That's it**
 
-That's NEO. Hit ⌘/ anytime to see the shortcut list, but you already know the ones that matter: Enter, Enter, Enter. Write, write, write.
+That's NEO. Hit ⌘/ anytime to see the shortcut list, but the important bits are: Enter, Enter, Enter. Write, write, write.
 
 Go get it. Your rough draft doesn't have to be good. It just has to exist. If you want to know anything else I've learned about writing and publishing, I've posted it all for free starting here: https://hughhowey.com/writing-insights-part-one-becoming-a-writer/
