@@ -44,15 +44,15 @@ The screen stays distraction-free until you need something. Roll your mouse to t
 
 Along the bottom: tabs for your Notes, your Outline, and your Darlings. Plus a word count. Click the word count to toggle between the whole book and just this chapter.
 
-**The Silo**
-
-There's a fullscreen writing mode you can enter by pressing ⌘⇧F. This is how I love to write and why I made NEO. But sometimes you need to really lock in, and that's where Silo Mode comes in handy. Hit ⌘⇧S or click the faint little ◎ silo button at the bottom of the screen...
-
-...and the hatch seals. Full screen. No dock, no menu bar, and if you try to alt-tab away, Bernard blocks you. The only way out is to hit Escape and type the confession NEO gives you, word for word. Leaving is painful. Why don't you stay and write?
+The UI is deliberately difficult to see unless you roll your mouse over the semi-hidden options. If you prefer to brighten things up, there's an option for you under the VIEW menu.
 
 **Goals, sprints, and the chart**
 
 Click the word counter that says "0 today" and you get the progress room: set a daily goal, set a book goal, start a word sprint, and watch a chart of your last thirty days that looks a lot like the NaNoWriMo graph, because that graph is what got me through many of my novels. Get addicted to writing, to the daily habit!
+
+**Cover Art**
+
+As of v0.3.3 NEO accepts cover art dragged right onto your WIP, or uploaded after right-clicking the default gradient cover. This is the philosophy behind NEO: the more your WIPs look like books, the harder you'll work on them! Upload any kind of art at a 2:3 width:height ratio.
 
 **Getting your book out**
 
