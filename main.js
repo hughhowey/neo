@@ -14,6 +14,62 @@ const os = require('os');
 // covers any early access and non-redirected setups.
 let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
 let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+let libraryDirty = false;
+
+const DAILY_BACKUP_LIMIT = 14;
+const SESSION_BACKUP_LIMIT = 8;
+const SESSION_BACKUP_INTERVAL_MS = 30 * 60 * 1000;
+
+function setLibraryPath(dir) {
+  LIBRARY_DIR = path.resolve(dir);
+  LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+}
+
+function preferencesFile() {
+  return path.join(app.getPath('userData'), 'preferences.json');
+}
+
+function readPreferences() {
+  return readJSON(preferencesFile(), {});
+}
+
+function writePreferences(prefs) {
+  const file = preferencesFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  writeJSON(file, prefs);
+}
+
+function validLibrary(dir) {
+  if (!dir || !fs.existsSync(path.join(dir, 'library.json'))) return false;
+  const data = readJSON(path.join(dir, 'library.json'), null);
+  return !!data && typeof data === 'object' && Array.isArray(data.shelves);
+}
+
+function resolveLibraryAtStartup() {
+  const defaultDir = path.join(app.getPath('documents'), 'NEO Library');
+  const prefs = readPreferences();
+  const configured = typeof prefs.libraryPath === 'string' && prefs.libraryPath.trim()
+    ? path.resolve(prefs.libraryPath)
+    : null;
+
+  if (!configured) {
+    setLibraryPath(defaultDir);
+    return null;
+  }
+  if (validLibrary(configured)) {
+    setLibraryPath(configured);
+    return null;
+  }
+
+  // A sync folder can be temporarily unavailable. Never create a fresh library
+  // at a configured path that has disappeared.
+  setLibraryPath(defaultDir);
+  return configured;
+}
+
+function markLibraryDirty() {
+  libraryDirty = true;
+}
 
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
@@ -58,6 +114,7 @@ ipcMain.handle('library:read', () => {
 ipcMain.handle('library:write', (_e, data) => {
   ensureLibrary();
   writeJSON(LIBRARY_FILE, data);
+  markLibraryDirty();
   return true;
 });
 
@@ -84,6 +141,7 @@ ipcMain.handle('book:create', (_e, meta) => {
   fs.writeFileSync(path.join(dir, 'outline.html'), '');
   writeJSON(path.join(dir, 'darlings.json'), []);
   writeJSON(path.join(dir, 'stickies.json'), []);
+  markLibraryDirty();
   return book;
 });
 
@@ -94,6 +152,7 @@ ipcMain.handle('book:readMeta', (_e, bookId) => {
 ipcMain.handle('book:writeMeta', (_e, bookId, meta) => {
   meta.modified = new Date().toISOString();
   writeJSON(path.join(bookDir(bookId), 'book.json'), meta);
+  markLibraryDirty();
   return true;
 });
 
@@ -110,12 +169,14 @@ ipcMain.handle('chapter:write', (_e, bookId, chapterId, html) => {
   const dir = path.join(bookDir(bookId), 'chapters');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, chapterId + '.html'), html);
+  markLibraryDirty();
   return true;
 });
 
 ipcMain.handle('chapter:delete', (_e, bookId, chapterId) => {
   const file = path.join(bookDir(bookId), 'chapters', chapterId + '.html');
   if (fs.existsSync(file)) fs.unlinkSync(file);
+  markLibraryDirty();
   return true;
 });
 
@@ -131,6 +192,7 @@ ipcMain.handle('aux:read', (_e, bookId, name) => {
 
 ipcMain.handle('aux:write', (_e, bookId, name, html) => {
   fs.writeFileSync(path.join(bookDir(bookId), name + '.html'), html);
+  markLibraryDirty();
   return true;
 });
 
@@ -140,6 +202,7 @@ ipcMain.handle('json:read', (_e, bookId, name, fallback) => {
 
 ipcMain.handle('json:write', (_e, bookId, name, data) => {
   writeJSON(path.join(bookDir(bookId), name + '.json'), data);
+  markLibraryDirty();
   return true;
 });
 
@@ -156,6 +219,7 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
   if (response === 1) {
     const { shell } = require('electron');
     await shell.trashItem(bookDir(bookId));
+    markLibraryDirty();
     return true;
   }
   return false;
@@ -194,12 +258,14 @@ ipcMain.handle('cover:set', (_e, bookId, srcPath) => {
   clearCovers(dir);
   const fname = 'cover-' + Date.now() + '.' + (ext === 'jpeg' ? 'jpg' : ext);
   fs.copyFileSync(srcPath, path.join(dir, fname));
+  markLibraryDirty();
   return fname;
 });
 
 ipcMain.handle('cover:remove', (_e, bookId) => {
   const dir = bookDir(bookId);
   if (fs.existsSync(dir)) clearCovers(dir);
+  markLibraryDirty();
   return true;
 });
 
@@ -482,38 +548,193 @@ process.on('uncaughtException', (err) => logError('main', err));
 process.on('unhandledRejection', (err) => logError('main-promise', err));
 ipcMain.handle('log:error', (_e, msg) => logError('renderer', msg));
 
-// One zip of the whole library per day, keeping the last 14. Cheap insurance.
+async function writeLibraryBackup(target) {
+  ensureLibrary();
+  const JSZip = require('jszip');
+  const zip = new JSZip();
+  const skip = new Set(['Backups', 'Exports']);
+  const walk = (dir, rel) => {
+    for (const name of fs.readdirSync(dir)) {
+      if (rel === '' && skip.has(name)) continue;
+      const full = path.join(dir, name);
+      const relPath = rel ? rel + '/' + name : name;
+      const stat = fs.statSync(full);
+      if (stat.isDirectory()) walk(full, relPath);
+      else zip.file(relPath, fs.readFileSync(full));
+    }
+  };
+  walk(LIBRARY_DIR, '');
+  const tmp = target + '.tmp';
+  fs.writeFileSync(tmp, await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+  fs.renameSync(tmp, target);
+}
+
+function pruneBackups(backupsDir, pattern, limit) {
+  const backups = fs.readdirSync(backupsDir).filter((f) => pattern.test(f)).sort();
+  while (backups.length > limit) fs.unlinkSync(path.join(backupsDir, backups.shift()));
+}
+
+// One dated snapshot per day, retaining the existing 14-day safety net.
 async function dailyBackup() {
   try {
     ensureLibrary();
     const backupsDir = path.join(LIBRARY_DIR, 'Backups');
-    if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
+    fs.mkdirSync(backupsDir, { recursive: true });
     const today = new Date().toISOString().slice(0, 10);
     const target = path.join(backupsDir, `neo-backup-${today}.zip`);
-    if (fs.existsSync(target)) return;
-
-    const JSZip = require('jszip');
-    const zip = new JSZip();
-    const skip = new Set(['Backups', 'Exports']);
-    const walk = (dir, rel) => {
-      for (const name of fs.readdirSync(dir)) {
-        if (rel === '' && skip.has(name)) continue;
-        const full = path.join(dir, name);
-        const relPath = rel ? rel + '/' + name : name;
-        const stat = fs.statSync(full);
-        if (stat.isDirectory()) walk(full, relPath);
-        else zip.file(relPath, fs.readFileSync(full));
-      }
-    };
-    walk(LIBRARY_DIR, '');
-    fs.writeFileSync(target, await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
-
-    // prune old backups
-    const backups = fs.readdirSync(backupsDir).filter((f) => f.startsWith('neo-backup-')).sort();
-    while (backups.length > 14) fs.unlinkSync(path.join(backupsDir, backups.shift()));
+    if (fs.existsSync(target)) return true;
+    await writeLibraryBackup(target);
+    pruneBackups(backupsDir, /^neo-backup-\d{4}-\d{2}-\d{2}\.zip$/, DAILY_BACKUP_LIMIT);
+    return true;
   } catch (err) {
-    logError('backup', err);
+    logError('backup-daily', err);
+    return false;
   }
+}
+
+// While the app is open, snapshot only when something has changed.
+async function sessionBackup(force = false) {
+  if (!force && !libraryDirty) return true;
+  try {
+    ensureLibrary();
+    const backupsDir = path.join(LIBRARY_DIR, 'Backups');
+    fs.mkdirSync(backupsDir, { recursive: true });
+    const stamp = new Date().toISOString()
+      .replace(/[:.]/g, '')
+      .replace('T', '-')
+      .slice(0, 15);
+    const target = path.join(backupsDir, `neo-backup-${stamp}.zip`);
+    await writeLibraryBackup(target);
+    pruneBackups(
+      backupsDir,
+      /^neo-backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/,
+      SESSION_BACKUP_LIMIT
+    );
+    libraryDirty = false;
+    return true;
+  } catch (err) {
+    logError('backup-session', err);
+    return false;
+  }
+}
+
+function libraryTargetForSelection(selected) {
+  const picked = path.resolve(selected);
+  if (fs.existsSync(path.join(picked, 'library.json'))) return picked;
+  if (path.basename(picked).toLowerCase() === 'neo library') return picked;
+  return path.join(picked, 'NEO Library');
+}
+
+async function changeLibraryLocation() {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Choose where NEO stores your library',
+    defaultPath: path.dirname(LIBRARY_DIR),
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (canceled || !filePaths.length) return;
+
+  const oldLibrary = path.resolve(LIBRARY_DIR);
+  const target = path.resolve(libraryTargetForSelection(filePaths[0]));
+
+  if (target === oldLibrary) {
+    await dialog.showMessageBox(win, {
+      type: 'info',
+      message: 'NEO is already using this library.',
+      detail: oldLibrary
+    });
+    return;
+  }
+
+  if (target.startsWith(oldLibrary + path.sep)) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      message: 'Choose a location outside your current NEO Library.',
+      detail: 'Putting the new library inside the old one would make backups and migration unsafe.'
+    });
+    return;
+  }
+
+  // Give existing renderer-side debounced saves a chance to land first.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  if (!(await sessionBackup(true))) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      message: 'NEO could not create a safety backup.',
+      detail: 'Your library location was not changed. Check neo-errors.log and try again.'
+    });
+    return;
+  }
+
+  const targetExists = fs.existsSync(target);
+  const targetHasLibrary = targetExists && fs.existsSync(path.join(target, 'library.json'));
+
+  if (targetHasLibrary) {
+    if (!validLibrary(target)) {
+      await dialog.showMessageBox(win, {
+        type: 'error',
+        message: 'That folder does not contain a valid NEO library.',
+        detail: target
+      });
+      return;
+    }
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['Cancel', 'Use This Library'],
+      defaultId: 1,
+      cancelId: 0,
+      message: 'Use the existing NEO Library here?',
+      detail: `NEO will switch to:\n${target}\n\nYour current library will remain untouched at:\n${oldLibrary}`
+    });
+    if (response !== 1) return;
+  } else {
+    if (targetExists && fs.readdirSync(target).length > 0) {
+      await dialog.showMessageBox(win, {
+        type: 'error',
+        message: 'NEO Library already exists here but is not empty.',
+        detail: 'Choose another location or an existing valid NEO Library.'
+      });
+      return;
+    }
+
+    try {
+      if (targetExists) fs.rmdirSync(target);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.cpSync(oldLibrary, target, { recursive: true, errorOnExist: true });
+      if (!validLibrary(target)) throw new Error('Copied library failed validation');
+    } catch (err) {
+      try {
+        if (fs.existsSync(target) && !validLibrary(target)) {
+          fs.rmSync(target, { recursive: true, force: true });
+        }
+      } catch { /* preserve the original error */ }
+
+      logError('library-migrate', err);
+      await dialog.showMessageBox(win, {
+        type: 'error',
+        message: 'NEO could not copy your library.',
+        detail: 'Your original library is untouched. Check neo-errors.log and try again.'
+      });
+      return;
+    }
+  }
+
+  const prefs = readPreferences();
+  prefs.libraryPath = target;
+  writePreferences(prefs);
+  setLibraryPath(target);
+  libraryDirty = false;
+
+  await dialog.showMessageBox(win, {
+    type: 'info',
+    message: targetHasLibrary ? 'Library switched.' : 'Library copied and switched.',
+    detail: targetHasLibrary
+      ? `NEO is now using:\n${target}\n\nYour previous library remains untouched at:\n${oldLibrary}`
+      : `NEO is now using:\n${target}\n\nYour original remains at:\n${oldLibrary}\n\nKeep it until you are comfortable that the new location is working.`
+  });
+
+  for (const w of BrowserWindow.getAllWindows()) w.reload();
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +820,10 @@ function buildMenu() {
           label: 'Goals & Settings…',
           accelerator: 'CmdOrCtrl+,',
           click: () => sendToWindow({ type: 'stats' })
+        },
+        {
+          label: 'Library Location…',
+          click: () => changeLibraryLocation()
         },
         { type: 'separator' },
         {
@@ -733,10 +958,9 @@ app.whenReady().then(() => {
   // every other step is fenced off so no single failure can ever leave the
   // app running invisibly with no window — silently, on someone else's machine.
   try {
-    // the real Documents folder (handles OneDrive-redirected Windows setups)
+    let unavailableConfiguredLibrary = null;
     try {
-      LIBRARY_DIR = path.join(app.getPath('documents'), 'NEO Library');
-      LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+      unavailableConfiguredLibrary = resolveLibraryAtStartup();
     } catch (err) {
       logError('paths', err);
     }
@@ -756,7 +980,25 @@ app.whenReady().then(() => {
     try { ensureLibrary(); } catch (err) { logError('library', err); }
     createWindow();
     try { buildMenu(); } catch (err) { logError('menu', err); }
+
+    if (unavailableConfiguredLibrary) {
+      try {
+        dialog.showMessageBox({
+          type: 'warning',
+          message: 'Your configured NEO Library is unavailable.',
+          detail: `NEO opened the default Documents library for this session.\n\nConfigured location:\n${unavailableConfiguredLibrary}\n\nYour saved preference has not been changed.`
+        });
+      } catch (err) {
+        logError('library-path-warning', err);
+      }
+    }
+
     try { dailyBackup(); } catch (err) { logError('backup', err); }
+
+    setInterval(() => {
+      sessionBackup().catch((err) => logError('backup-session-timer', err));
+    }, SESSION_BACKUP_INTERVAL_MS);
+
     try { checkForUpdates(); } catch (err) { logError('updater', err); }
   } catch (err) {
     // catastrophic: tell the human instead of dying in silence
