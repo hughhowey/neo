@@ -27,7 +27,7 @@ Grab the latest installer from the **[Releases page](../../releases)**:
 
 **Outlining that becomes the book.** Outline chapters and sections in the Outline tab; section notes appear in the manuscript as gray ghost paragraphs, ready to be overwritten. Pantsers can ignore all of it or learn to draw a freakin' map for the first time. Try it. You might like it!
 
-**The Silo.** A focus mode: full screen, no Dock, no menus, always on top. The only way out is typing a confession, word for word, meant to humiliate you or at least make you giggle. Do your future self a favor and go back to writing.
+**Cover Art.** Whether you already have a cover in mind, want to whip up something in Canva or Photoshop, or are okay with using AI art either as placeholder or final file, NEO is happy to accept it all. Drag your 2:3 ratio art right on the book in your bookshelf. I've always done this as a habit, having the cover art early. Seeing the book inspires me to work on it daily and make it better!
 
 **Goals and momentum.** Daily word goals, word sprints, and a NaNoWriMo-style progress chart. Needs more testing, but I think it works okay!
 
@@ -35,7 +35,7 @@ Grab the latest installer from the **[Releases page](../../releases)**:
 
 **Import.** Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks are detected automatically. This is still a bit rough and might require you to tweak things. NEO is more intended for new projects than importing, but I did this so I can play around with some old stories in a new environment.
 
-**A safety net.** Continuous autosave, daily zip backups kept for two weeks, everything stored as plain files. Set up your NEO library folder on your iCloud if you want.
+**Safety net.** Continuous autosave, daily zip backups kept for two weeks, everything stored as plain files. Set up your NEO library folder on your iCloud if you want.
 
 ## Your files are yours
 
