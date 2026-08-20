@@ -18,6 +18,14 @@ let hintShown = false;
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+// Platform-aware key labels: Macs read ⌘⇧X, everyone else reads Ctrl+Shift+X
+const IS_MAC = navigator.platform.toLowerCase().includes('mac');
+const K = (mac, pc) => (IS_MAC ? mac : pc);
+const KZ = K('⌘Z', 'Ctrl+Z');
+const KPH = K('⌘⇧X', 'Ctrl+Shift+X');
+const KDA = K('⌘⇧D', 'Ctrl+Shift+D');
+const KHELP = K('⌘/', 'Ctrl+/');
+
 // ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
@@ -638,7 +646,7 @@ async function openBook(bookId) {
 
   if (!hintShown) {
     hintShown = true;
-    setTimeout(() => toast('Enter twice = section break · three times = new chapter · ⌘/ shows everything else', 7000), 800);
+    setTimeout(() => toast(`Enter twice = section break · three times = new chapter · ${KHELP} shows everything else`, 7000), 800);
   }
 }
 
@@ -719,7 +727,7 @@ async function deleteChapterToDarlings(chId) {
   }
   if (currentChapterId === chId) currentChapterId = null;
   await deleteChapterQuiet(chId);
-  if (text) toast('Chapter removed — its words are in Darlings, or ⌘Z to undo');
+  if (text) toast(`Chapter removed — its words are in Darlings, or ${KZ} to undo`);
 }
 
 async function chapterMenu(chId, index) {
@@ -769,8 +777,10 @@ function wireChapterBody(body, chId) {
   body.addEventListener('compositionend', () => { composing = false; });
   body.addEventListener('keydown', (e) => {
     if (composing || e.isComposing || e.keyCode === 229) return;
+    if (emptyChapterBackspace(e, body, chId)) return;
     if (guardMarkerDelete(e, body, chId)) return;
     if (handleEnter(e, body, chId)) return;
+    if (handleTabSpacing(e)) return;
     smartKeys(e, body);
   });
   body.addEventListener('click', (e) => {
@@ -798,6 +808,50 @@ function wireChapterBody(body, chId) {
       ghost.classList.remove('ghost');
     }
   });
+}
+
+// Backspace in an empty chapter dissolves it: the chapter disappears and the
+// caret lands at the end of the previous one. The natural undo for an
+// accidental Enter ×3.
+function emptyChapterBackspace(e, body, chId) {
+  if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
+  if (body.innerText.trim() !== '') return false; // ghosts count as content
+  const idx = book.chapterOrder.indexOf(chId);
+  if (idx <= 0 || book.chapterOrder.length < 2) return false;
+  e.preventDefault();
+  snapshotStructure('empty chapter removed');
+  const prev = book.chapterOrder[idx - 1];
+  deleteChapterQuiet(chId).then(() => focusChapter(prev));
+  return true;
+}
+
+// Tab means spacing, not "hurl my cursor into the interface":
+// each press indents with an em-space pair; Shift+Tab walks it back.
+function handleTabSpacing(e) {
+  if (e.key !== 'Tab' || e.metaKey || e.ctrlKey || e.altKey) return false;
+  e.preventDefault();
+  if (!e.shiftKey) {
+    document.execCommand('insertText', false, '  ');
+    return true;
+  }
+  // Shift+Tab: remove up to two preceding em spaces
+  const sel = window.getSelection();
+  if (sel.rangeCount && sel.isCollapsed) {
+    const r = sel.getRangeAt(0);
+    const node = r.startContainer;
+    if (node.nodeType === Node.TEXT_NODE) {
+      let n = 0;
+      while (n < 2 && r.startOffset - n > 0 &&
+             node.textContent[r.startOffset - n - 1] === ' ') n++;
+      if (n > 0) {
+        const del = document.createRange();
+        del.setStart(node, r.startOffset - n);
+        del.setEnd(node, r.startOffset);
+        del.deleteContents();
+      }
+    }
+  }
+  return true;
 }
 
 // Chromium mangles Backspace/Delete beside non-editable inline elements
@@ -1089,7 +1143,7 @@ function insertPlaceholder() {
   if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const bodyEl = el && el.closest ? el.closest('.chapter-body') : null;
   if (!bodyEl) {
-    toast('Click into a chapter first, then ⌘⇧X drops a placeholder');
+    toast(`Click into a chapter first, then ${KPH} drops a placeholder`);
     return;
   }
   currentChapterId = bodyEl.closest('.chapter').dataset.id;
@@ -1125,7 +1179,7 @@ function renderStickies() {
   wrap.innerHTML = '';
   const open = stickies.filter((s) => !s.resolved);
   if (open.length === 0) {
-    wrap.innerHTML = `<div class="stickies-empty">No notes yet.<br><br>Hit ⌘⇧X while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`;
+    wrap.innerHTML = `<div class="stickies-empty">No notes yet.<br><br>Hit ${KPH} while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`;
     return;
   }
   for (const s of open) {
@@ -1292,7 +1346,7 @@ navList.addEventListener('drop', async (e) => {
   await saveMeta();
   renderChapters(); // renumbers heads and rebuilds the nav
   if (currentTab === 'outline') renderOutline();
-  toast('Chapters reordered — ⌘Z to undo');
+  toast(`Chapters reordered — ${KZ} to undo`);
 });
 
 function highlightNav() {
@@ -1304,22 +1358,51 @@ function scheduleNavRefresh() {
   saveTimers.nav = setTimeout(renderNav, 1200);
 }
 
-// hover behavior for both panes
+// Hover behavior for both panes: instant open (the scrollbar lives beside
+// the page now, nowhere near these edges), but never mid-drag.
 function wireHoverPane(hotzone, pane, isPinnable) {
-  hotzone.addEventListener('mouseenter', () => pane.classList.add('open'));
+  const pinned = () => isPinnable && pane.dataset.pinned === '1';
+  hotzone.addEventListener('mouseenter', (e) => {
+    if (e.buttons) return; // dragging something — stand down
+    pane.classList.add('open');
+  });
+  hotzone.addEventListener('mouseleave', (e) => {
+    if (pinned()) return;
+    if (e.relatedTarget && pane.contains(e.relatedTarget)) return;
+    pane.classList.remove('open');
+  });
   pane.addEventListener('mouseleave', () => {
-    if (isPinnable && pane.dataset.pinned === '1') return;
+    if (pinned()) return;
     pane.classList.remove('open');
   });
 }
 wireHoverPane($('#nav-hotzone'), $('#nav-pane'), false);
 wireHoverPane($('#side-hotzone'), $('#side-pane'), true);
 
+// leaving the window closes unpinned panes (they used to stick open)
+function closeUnpinnedPanes() {
+  $('#nav-pane').classList.remove('open');
+  if ($('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
+}
+document.documentElement.addEventListener('mouseleave', closeUnpinnedPanes);
+window.addEventListener('blur', closeUnpinnedPanes);
+
+// the wheel scrolls the manuscript even when the pointer floats over the
+// dark margins beside the (narrower) page column
+$('#editor-view').addEventListener('wheel', (e) => {
+  const scroller = $('#paper-scroll');
+  if (scroller.contains(e.target)) return; // native scrolling handles it
+  if ($('#nav-pane').contains(e.target) || $('#side-pane').contains(e.target)) return;
+  scroller.scrollTop += e.deltaY;
+}, { passive: true });
+
 $('#side-pin').onclick = () => {
   const pane = $('#side-pane');
   const pinned = pane.dataset.pinned === '1';
   pane.dataset.pinned = pinned ? '0' : '1';
   $('#side-pin').classList.toggle('pinned', !pinned);
+  // pinned: the page steps aside so the scrollbar stays reachable
+  $('#editor-view').classList.toggle('side-pinned', !pinned);
   if (!pinned) pane.classList.add('open');
 };
 
@@ -1468,7 +1551,7 @@ async function moveSelectionToDarlings(html, text) {
   });
   await window.neo.writeJSON(book.id, 'darlings', darlings);
   updateCounters();
-  toast('Saved to Darlings — kill without remorse (⌘Z to undo)');
+  toast(`Saved to Darlings — kill without remorse (${KZ} to undo)`);
 }
 
 // Older versions of NEO planted invisible marker spans at darling cut points.
@@ -1508,7 +1591,7 @@ async function migrateDarlingAnchors() {
 function darlingFromKeyboard() {
   const sel = window.getSelection();
   if (!sel.rangeCount || sel.isCollapsed) {
-    toast('Select the passage first, then ⌘⇧D sends it to Darlings');
+    toast(`Select the passage first, then ${KDA} sends it to Darlings`);
     return;
   }
   let el = sel.anchorNode;
@@ -2243,7 +2326,7 @@ function replaceAllMatches() {
     if (touched) syncChapter(body, chId);
   }
   if (n === 0) undoStack.pop(); // nothing changed, nothing to undo
-  toast(n ? `${n} replaced across the whole book — ⌘Z to undo` : '0 replaced');
+  toast(n ? `${n} replaced across the whole book — ${KZ} to undo` : '0 replaced');
   runSearch();
 }
 
@@ -2523,6 +2606,28 @@ function applyFonts() {
   document.documentElement.style.setProperty('--editor-size', size + 'px');
 }
 
+// Format → Align Paragraph: applies to every paragraph the selection touches
+function applyAlign(value) {
+  if (!book || currentTab !== 'manuscript') { toast('Click into a paragraph first'); return; }
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  const r = sel.getRangeAt(0);
+  let el = r.startContainer;
+  if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const body = el && el.closest ? el.closest('.chapter-body') : null;
+  if (!body) { toast('Click into a paragraph first'); return; }
+  const chId = body.closest('.chapter').dataset.id;
+  const ps = [...body.querySelectorAll('p')].filter(
+    (p) => r.intersectsNode(p) && !p.classList.contains('scene-break')
+  );
+  for (const p of ps) {
+    if (value === 'left') p.style.removeProperty('text-align');
+    else p.style.textAlign = value;
+    if (!p.getAttribute('style')) p.removeAttribute('style');
+  }
+  syncChapter(body, chId);
+}
+
 function showHelp() {
   const row = (k, d) => `<span class="hk">${k}</span><span>${d}</span>`;
   const bd = document.createElement('div');
@@ -2535,31 +2640,31 @@ function showHelp() {
       <div class="help-grid">
         ${row('Enter ×2', 'Section break (***)')}
         ${row('Enter ×3', 'New chapter, auto-numbered')}
-        ${row('⌘⇧X', 'Placeholder note — mark it, keep writing')}
-        ${row('⌘⇧D', 'Send the selected passage to Darlings')}
-        ${row('⌘Z', 'Undo big moves (chapter deletes, replace-all, darlings) when not mid-typing')}
+        ${row(KPH, 'Placeholder note — mark it, keep writing')}
+        ${row(KDA, 'Send the selected passage to Darlings')}
+        ${row(KZ, 'Undo big moves (chapter deletes, replace-all, darlings) when not mid-typing')}
         ${row('-- and ...', 'Become an em dash — and a true ellipsis …')}
-        ${row('⌘B · ⌘I', 'Bold, italic. Quotes curl themselves.')}
+        ${row(K('⌘B · ⌘I', 'Ctrl+B · Ctrl+I'), 'Bold, italic. Quotes curl themselves.')}
       </div>
 
       <div class="help-sec">Getting around</div>
       <div class="help-grid">
-        ${row('⌘F', 'Find &amp; replace across the whole book')}
+        ${row(K('⌘F', 'Ctrl+F'), 'Find &amp; replace across the whole book')}
         ${row('Hover edges', 'Left: chapters &amp; outline notes. Right: comments (☉ pins).')}
         ${row('Esc', 'Closes whatever’s open; otherwise back to the shelf')}
       </div>
 
       <div class="help-sec">Modes</div>
       <div class="help-grid">
-        ${row('⌘⇧F', 'Full screen (Esc leaves)')}
-        ${row('⌘⇧T', 'Typewriter scrolling')}
-        ${row('⌘;', 'Spellcheck pass (right-click squiggles for fixes)')}
+        ${row(K('⌘⇧F', 'Ctrl+Shift+F'), 'Full screen (Esc leaves)')}
+        ${row(K('⌘⇧T', 'Ctrl+Shift+T'), 'Typewriter scrolling')}
+        ${row(K('⌘;', 'Ctrl+;'), 'Spellcheck pass (right-click squiggles for fixes)')}
       </div>
 
       <div class="help-sec">Files</div>
       <div class="help-grid">
-        ${row('⌘E', 'Email a timestamped draft to yourself')}
-        ${row('⌘⇧I', 'Import .docx / .txt / .md manuscripts')}
+        ${row(K('⌘E', 'Ctrl+E'), 'Email a timestamped draft to yourself')}
+        ${row(K('⌘⇧I', 'Ctrl+Shift+I'), 'Import .docx / .txt / .md manuscripts')}
         ${row('File → Export', 'txt · md · html · pdf · docx · epub')}
       </div>
 
@@ -2599,7 +2704,8 @@ function parasFromHtml(html) {
   return [...holder.querySelectorAll('p')].map((p) => ({
     sceneBreak: p.classList.contains('scene-break'),
     text: p.innerText.trim(),
-    html: p.outerHTML
+    html: p.outerHTML,
+    align: (p.style && p.style.textAlign) || ''
   })).filter((p) => p.sceneBreak || p.text);
 }
 
@@ -2754,6 +2860,7 @@ function buildDocxEntries(data) {
     }
     for (const p of ch.paras) {
       if (p.sceneBreak) body.push(docxP([{ text: '***' }], { align: 'center', spaceBefore: 240 }));
+      else if (p.align === 'center' || p.align === 'right') body.push(docxP(paraRuns(p.html), { align: p.align }));
       else body.push(docxP(paraRuns(p.html), { indent: true }));
     }
   });
@@ -2832,7 +2939,10 @@ function chapterXhtml(ch, d) {
   let first = true;
   const paras = ch.paras.map((p) => {
     if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
-    const cls = first ? ' class="first"' : '';
+    const classes = [];
+    if (first) classes.push('first');
+    if (p.align === 'center' || p.align === 'right') classes.push(p.align);
+    const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
     first = false;
     const inner = paraRuns(p.html).map((r) => {
       let t = escXml(r.text);
@@ -2940,6 +3050,8 @@ ${navPoints}
 h1 { text-align: center; font-weight: normal; letter-spacing: 0.2em; text-transform: uppercase; font-size: 1.2em; margin: 3em 0 2em; }
 p { text-indent: 1.2em; margin: 0; }
 p.first, p.brk + p { text-indent: 0; }
+p.center { text-align: center; text-indent: 0; }
+p.right { text-align: right; text-indent: 0; }
 p.brk { text-align: center; text-indent: 0; margin: 1.5em 0; letter-spacing: 0.5em; }
 .titlepage { text-align: center; margin-top: 30%; }
 .titlepage h2 { font-size: 2em; margin: 0; }
@@ -3119,6 +3231,9 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'typewriter') toggleTypewriter();
   if (msg.type === 'import') importBooks();
   if (msg.type === 'stats') openStats();
+  if (msg.type === 'align') {
+    applyAlign(msg.value);
+  }
   if (msg.type === 'uiBright') {
     // no toast — the change announces itself
     library.uiBright = !library.uiBright;

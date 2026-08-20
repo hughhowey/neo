@@ -220,13 +220,14 @@ body.night .ol-chapter .ol-num { color: #918b7d; }
 body.night .ol-text:focus { border-bottom-color: #4a4742; }
 body.night .ol-hint { color: #5f5b52; }
 
+/* The scroller is a centered column barely wider than the page, so the
+   scrollbar lives right beside the manuscript — nowhere near the hover
+   zones at the window edges. */
 #paper-scroll {
-  position: absolute; inset: 0 0 40px 0;
+  position: absolute; top: 0; bottom: 40px;
+  left: 50%; transform: translateX(-50%);
+  width: min(760px, 94%);
   overflow-y: auto;
-  display: flex; justify-content: center;
-  /* flex-start, or the paper's height gets pinned to the window and long
-     outlines/darlings spill past the page background */
-  align-items: flex-start;
 }
 
 /* Search highlights — no DOM mutation, no focus theft */
@@ -235,8 +236,8 @@ body.night .ol-hint { color: #5f5b52; }
 
 /* Each page of the book is its own sheet of paper */
 #paper {
-  width: 680px; max-width: 90%;
-  margin: 40px 0 120px;
+  width: 680px; max-width: 92%;
+  margin: 40px auto 120px;
 }
 .sheet {
   background: var(--paper); color: var(--ink);
@@ -246,9 +247,9 @@ body.night .ol-hint { color: #5f5b52; }
   margin-bottom: 44px;
 }
 #aux-paper {
-  width: 680px; max-width: 90%;
+  width: 680px; max-width: 92%;
   background: var(--paper); color: var(--ink);
-  margin: 40px 0 120px;
+  margin: 40px auto 120px;
   padding: 70px 72px 90px;
   box-shadow: 0 4px 30px rgba(0,0,0,0.5);
   min-height: 85vh;
@@ -322,6 +323,8 @@ body.night .ol-hint { color: #5f5b52; }
   margin: 1.6em 0; user-select: none;
 }
 .chapter-body p.scene-break + p { text-indent: 0; }
+/* aligned paragraphs drop the first-line indent */
+.chapter-body p[style*="text-align"] { text-indent: 0; }
 /* Invisible anchors marking where a darling was cut from */
 .darling-anchor {
   display: inline-block; width: 0; height: 0; overflow: hidden;
@@ -584,6 +587,10 @@ body.bright #add-shelf-btn, body.bright #import-btn { color: #b4b4b4; border-col
   box-shadow: 0 3px 14px rgba(0,0,0,0.4);
 }
 
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+::-webkit-scrollbar { width: 11px; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* pinned notes pane: the page column shifts left to clear the pane */
+#editor-view.side-pinned #paper-scroll { left: calc(50% - 125px); }

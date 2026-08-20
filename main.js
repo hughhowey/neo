@@ -655,6 +655,14 @@ function buildMenu() {
             { label: 'Night', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) }
           ]
         },
+        {
+          label: 'Align Paragraph',
+          submenu: [
+            { label: 'Left', click: () => sendToWindow({ type: 'align', value: 'left' }) },
+            { label: 'Center', click: () => sendToWindow({ type: 'align', value: 'center' }) },
+            { label: 'Right', click: () => sendToWindow({ type: 'align', value: 'right' }) }
+          ]
+        },
         { type: 'separator' },
         { label: 'Larger Text', accelerator: 'CmdOrCtrl+=', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
         { label: 'Smaller Text', accelerator: 'CmdOrCtrl+-', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
