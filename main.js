@@ -32,6 +32,34 @@ function bookDir(bookId) {
   return path.join(LIBRARY_DIR, bookId);
 }
 
+// A human-readable map of the library, regenerated on every change:
+// which folder is which book, and what shelf it lives on. Sorts to the
+// top of the folder so browsing writers can always find their way.
+function writeCatalog() {
+  try {
+    const lib = readJSON(LIBRARY_FILE, { shelves: [] });
+    const onShelf = {};
+    for (const s of lib.shelves || []) {
+      for (const id of s.bookIds) onShelf[id] = s.name;
+    }
+    const lines = [];
+    for (const d of fs.readdirSync(LIBRARY_DIR)) {
+      if (!d.startsWith('book-')) continue;
+      try {
+        const m = JSON.parse(fs.readFileSync(path.join(LIBRARY_DIR, d, 'book.json'), 'utf8'));
+        lines.push(`${m.title || 'Untitled'}  —  ${d}  —  shelf: ${onShelf[m.id] || '(none — removed from shelves)'}`);
+      } catch { /* not a valid book folder */ }
+    }
+    lines.sort((a, b) => a.localeCompare(b));
+    fs.writeFileSync(path.join(LIBRARY_DIR, '_catalog.txt'),
+      'NEO LIBRARY CATALOG — which folder is which book\n' +
+      '(regenerated automatically; edits here do nothing)\n\n' +
+      lines.join('\n') + '\n');
+  } catch (err) {
+    logError('catalog', err);
+  }
+}
+
 function readJSON(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -58,13 +86,19 @@ ipcMain.handle('library:read', () => {
 ipcMain.handle('library:write', (_e, data) => {
   ensureLibrary();
   writeJSON(LIBRARY_FILE, data);
+  writeCatalog();
   return true;
 });
 
 // A book is a folder: book.json + chapters/*.html + notes.html + outline.html + darlings.json
 ipcMain.handle('book:create', (_e, meta) => {
   ensureLibrary();
-  const id = 'book-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  // folders carry a slug of the title when it's known at creation (imports),
+  // so the library reads like a bookshelf in Finder too
+  const slug = String(meta.title || '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+  const id = 'book-' + (slug ? slug + '-' : '') +
+    Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   const dir = bookDir(id);
   fs.mkdirSync(path.join(dir, 'chapters'), { recursive: true });
   const book = {
@@ -94,6 +128,7 @@ ipcMain.handle('book:readMeta', (_e, bookId) => {
 ipcMain.handle('book:writeMeta', (_e, bookId, meta) => {
   meta.modified = new Date().toISOString();
   writeJSON(path.join(bookDir(bookId), 'book.json'), meta);
+  writeCatalog();
   return true;
 });
 
@@ -344,7 +379,9 @@ async function importFile(fp) {
     const xml = await docFile.async('string');
     paras = [...xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)].map((m) => {
       const p = m[0];
-      const text = [...p.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)]
+      // <w:t> or <w:t attr...> ONLY — never <w:tab>/<w:tabs>, which share
+      // the same first letters and once leaked raw XML into a manuscript
+      const text = [...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
         .map((t) => decodeEntities(t[1])).join('');
       const pageBreak = /<w:br [^>]*w:type="page"/.test(p) || /<w:pageBreakBefore/.test(p);
       return { text: text.trim(), pageBreak };
@@ -737,9 +774,9 @@ function checkForUpdates() {
 }
 
 app.whenReady().then(() => {
-  // Startup discipline, learned the hard way: the window comes first, and
-  // every other step is fenced off so no single failure can ever leave the
-  // app running invisibly with no window — silently, on someone else's machine.
+  // Startup discipline: the window is created first, and every other step is
+  // individually guarded so no single failure can leave the app running
+  // invisibly with no window.
   try {
     // the real Documents folder (handles OneDrive-redirected Windows setups)
     try {

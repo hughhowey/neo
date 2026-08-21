@@ -575,6 +575,30 @@ async function createBookOnShelf(shelf) {
   openBook(meta.id);
 }
 
+// While dragging a book or shelf, nearing the window's top or bottom edge
+// scrolls the bookshelf — faster the deeper into the edge zone you push.
+let shelfScrollDir = 0;
+let shelfScrollRAF = null;
+function shelfAutoScrollStep() {
+  if (!shelfScrollDir) { shelfScrollRAF = null; return; }
+  $('#bookshelf-view').scrollTop += shelfScrollDir;
+  shelfScrollRAF = requestAnimationFrame(shelfAutoScrollStep);
+}
+{
+  const view = $('#bookshelf-view');
+  const EDGE = 90;
+  view.addEventListener('dragover', (e) => {
+    const h = window.innerHeight;
+    if (e.clientY < EDGE) shelfScrollDir = -Math.ceil((EDGE - e.clientY) / 5);
+    else if (e.clientY > h - EDGE) shelfScrollDir = Math.ceil((e.clientY - (h - EDGE)) / 5);
+    else shelfScrollDir = 0;
+    if (shelfScrollDir && !shelfScrollRAF) shelfScrollRAF = requestAnimationFrame(shelfAutoScrollStep);
+  });
+  view.addEventListener('drop', () => { shelfScrollDir = 0; });
+  view.addEventListener('dragend', () => { shelfScrollDir = 0; });
+  view.addEventListener('dragleave', (e) => { if (!e.relatedTarget) shelfScrollDir = 0; });
+}
+
 $('#add-shelf-btn').onclick = async () => {
   library.shelves.push({
     id: 'shelf-' + Date.now().toString(36),
@@ -746,6 +770,7 @@ async function chapterMenu(chId, index) {
 
 function wireChapterBody(body, chId) {
   body.addEventListener('focus', () => { currentChapterId = chId; updateCounters(); highlightNav(); });
+
   body.addEventListener('input', () => {
     chapterHTML[chId] = captureBody(body);
     wordCache[chId] = null;
@@ -777,11 +802,24 @@ function wireChapterBody(body, chId) {
   body.addEventListener('compositionend', () => { composing = false; });
   body.addEventListener('keydown', (e) => {
     if (composing || e.isComposing || e.keyCode === 229) return;
+    // Chromium's selection-delete can duplicate a neighboring character when
+    // the selection spans fragmented text nodes. Merging the fragments right
+    // before any destructive keystroke removes the hazard entirely.
+    if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+      const s = window.getSelection();
+      const destructive = e.key === 'Backspace' || e.key === 'Delete' ||
+        (s && !s.isCollapsed && (e.key.length === 1 || e.key === 'Enter'));
+      if (destructive) healSelectionSeams(body);
+    }
     if (emptyChapterBackspace(e, body, chId)) return;
     if (guardMarkerDelete(e, body, chId)) return;
     if (handleEnter(e, body, chId)) return;
     if (handleTabSpacing(e)) return;
     smartKeys(e, body);
+  });
+  // when the whole chapter loses focus, merge every fragmented text node
+  body.addEventListener('blur', () => {
+    try { body.normalize(); } catch { /* nothing to merge */ }
   });
   body.addEventListener('click', (e) => {
     const mark = e.target.closest('.ph-mark');
@@ -854,6 +892,22 @@ function handleTabSpacing(e) {
   return true;
 }
 
+// Merge fragmented text nodes in the paragraph(s) the selection touches,
+// so native editing operates on whole text instead of seams.
+function healSelectionSeams(body) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  const r = sel.getRangeAt(0);
+  const paraOf = (n) => {
+    if (n && n.nodeType === Node.TEXT_NODE) n = n.parentElement;
+    return n && n.closest ? n.closest('p') : null;
+  };
+  const a = paraOf(r.startContainer);
+  const b = paraOf(r.endContainer);
+  try { if (a && body.contains(a)) a.normalize(); } catch { /* fine */ }
+  try { if (b && b !== a && body.contains(b)) b.normalize(); } catch { /* fine */ }
+}
+
 // Chromium mangles Backspace/Delete beside non-editable inline elements
 // (our ? placeholder marks): it can duplicate a neighboring character.
 // When a deletion happens adjacent to a mark, do it by hand with a clean
@@ -865,13 +919,34 @@ function guardMarkerDelete(e, body, chId) {
   if (!sel.rangeCount || !sel.isCollapsed) return false;
   const r = sel.getRangeAt(0);
   const node = r.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return false;
   const back = e.key === 'Backspace';
-  // only step in when the char being deleted exists in this text node
-  if (back ? r.startOffset === 0 : r.startOffset >= node.textContent.length) return false;
-  // ...and the text node touches a non-editable marker
   const isMark = (n) => n && n.nodeType === Node.ELEMENT_NODE &&
     (n.classList.contains('ph-mark') || n.classList.contains('darling-anchor'));
+
+  // Case 1: the deletion would cross INTO a marker (caret at a node boundary,
+  // marker on the far side) — delete the marker itself, cleanly.
+  let adjacent = null;
+  if (node.nodeType === Node.TEXT_NODE) {
+    if (back && r.startOffset === 0) adjacent = node.previousSibling;
+    else if (!back && r.startOffset === node.textContent.length) adjacent = node.nextSibling;
+  } else if (node.nodeType === Node.ELEMENT_NODE) {
+    adjacent = back ? node.childNodes[r.startOffset - 1] : node.childNodes[r.startOffset];
+  }
+  if (isMark(adjacent)) {
+    e.preventDefault();
+    if (adjacent.classList.contains('ph-mark') && adjacent.dataset.sid) {
+      resolveSticky(adjacent.dataset.sid); // removes mark + its note, syncs
+    } else {
+      adjacent.remove();
+      syncChapter(body, chId);
+    }
+    return true;
+  }
+
+  // Case 2: deleting a character inside a text node that TOUCHES a marker —
+  // do the surgery by hand so Chromium's merge logic never runs.
+  if (node.nodeType !== Node.TEXT_NODE) return false;
+  if (back ? r.startOffset === 0 : r.startOffset >= node.textContent.length) return false;
   if (!isMark(node.previousSibling) && !isMark(node.nextSibling)) return false;
 
   e.preventDefault();
@@ -938,14 +1013,10 @@ function handleEnter(e, body, chId) {
   return false;
 }
 
-// Read a body's HTML for saving, minus transient editing classes
+// Read a body's HTML for saving — the single capture point, should transient
+// editing classes ever need stripping again.
 function captureBody(body) {
-  const clone = body.cloneNode(true);
-  clone.querySelectorAll('.cap-off').forEach((p) => {
-    p.classList.remove('cap-off');
-    if (!p.className) p.removeAttribute('class');
-  });
-  return clone.innerHTML;
+  return body.innerHTML;
 }
 
 function syncChapter(body, chId) {
@@ -956,24 +1027,26 @@ function syncChapter(body, chId) {
   scheduleNavRefresh();
 }
 
-// Suspend the drop cap while the caret is inside the opening paragraph
+// Heal text-node fragmentation in each paragraph as the caret leaves it
+// (smart-typography insertions split text nodes; Chromium's editor can
+// duplicate characters at those seams — merging them removes the hazard).
+let lastCaretPara = null;
 document.addEventListener('selectionchange', () => {
   if (!book || currentTab !== 'manuscript') return;
   const sel = window.getSelection();
-  let capPara = null;
+  let caretP = null;
   if (sel && sel.rangeCount) {
     let el = sel.anchorNode;
     if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
     const p = el && el.closest ? el.closest('p') : null;
-    if (p && p.parentElement && p.parentElement.classList.contains('chapter-body') &&
-        p.matches('p:first-of-type') && !p.classList.contains('scene-break')) {
-      capPara = p;
-    }
+    if (p && p.parentElement && p.parentElement.classList.contains('chapter-body')) caretP = p;
   }
-  document.querySelectorAll('.chapter-body p.cap-off').forEach((p) => {
-    if (p !== capPara) p.classList.remove('cap-off');
-  });
-  if (capPara) capPara.classList.add('cap-off');
+  if (caretP !== lastCaretPara) {
+    if (lastCaretPara && lastCaretPara.isConnected) {
+      try { lastCaretPara.normalize(); } catch { /* fine */ }
+    }
+    lastCaretPara = caretP;
+  }
 });
 
 // Reduce pasted HTML to what a manuscript is made of: paragraphs, bold, italic.
@@ -1450,9 +1523,8 @@ darlingsTab.addEventListener('drop', async (e) => {
   await moveSelectionToDarlings(html, text);
 });
 
-// ---- text-position helpers: how darlings remember home without leaving
-// anything behind in the manuscript (invisible marker elements corrupted
-// Chromium's delete behavior — never again) ----
+// ---- text-position helpers: darlings remember home by their surrounding
+// text, so nothing foreign is ever left inside the manuscript ----
 
 function bodyPlainText(body) {
   let t = '';
@@ -1554,10 +1626,10 @@ async function moveSelectionToDarlings(html, text) {
   toast(`Saved to Darlings — kill without remorse (${KZ} to undo)`);
 }
 
-// Older versions of NEO planted invisible marker spans at darling cut points.
-// Chromium's delete handling duplicates characters next to such markers, so on
-// open we convert each one into a remembered-context position and remove it —
-// same restore precision, no more haunted commas.
+// Older versions of NEO planted invisible marker spans at darling cut points,
+// which interfered with Chromium's delete handling. On open, convert each one
+// into a remembered-context position and remove it — same restore precision,
+// nothing left behind in the prose.
 async function migrateDarlingAnchors() {
   const spans = [...document.querySelectorAll('.darling-anchor')];
   if (!spans.length) return;
@@ -2375,8 +2447,12 @@ async function addImportedBooks(results, shelf) {
   let ok = 0;
   for (const r of results) {
     if (r.error) { toast(`Couldn't import ${r.name}: ${r.error}`, 6000); continue; }
-    // title/byline harvested from the document beat the filename
-    const meta = await window.neo.createBook({ author: r.author || displayAuthor() });
+    // title/byline harvested from the document beat the filename;
+    // passing the title in gives the book folder a readable name too
+    const meta = await window.neo.createBook({
+      author: r.author || displayAuthor(),
+      title: r.title || r.name
+    });
     meta.title = r.title || r.name;
     meta.tabNames = {
       notes: (library.tabDefaults && library.tabDefaults.notes) || 'Notes',

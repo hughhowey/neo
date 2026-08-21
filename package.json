@@ -1,7 +1,7 @@
 {
   "name": "neo",
   "productName": "NEO",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "A word processor for authors. Distraction-free by default.",
   "main": "main.js",
   "scripts": {

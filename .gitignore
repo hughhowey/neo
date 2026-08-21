@@ -9,3 +9,7 @@ dist/
 
 # logs
 *.log
+
+# personal maintainer notes — not part of the public repo
+RELEASING.md
+GITHUB-SETUP.md

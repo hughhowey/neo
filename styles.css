@@ -309,13 +309,6 @@ body.night .ol-hint { color: #5f5b52; }
   font-size: 3.4em; float: left; line-height: 0.8;
   padding: 4px 8px 0 0; font-family: var(--dropcap-font);
 }
-/* The cap lies flat while the caret is inside its paragraph: Chromium's
-   floated ::first-letter corrupts deletions in editable text (duplicated
-   characters). Reading gets the drop cap; editing gets plain, safe text. */
-.chapter-body p.cap-off::first-letter {
-  font-size: inherit; float: none; padding: 0;
-  font-family: inherit; line-height: inherit;
-}
 /* Section breaks: Enter twice for ***, three times for a new chapter */
 .chapter-body p.scene-break {
   text-align: center; text-indent: 0 !important;
