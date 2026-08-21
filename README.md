@@ -15,27 +15,49 @@ Get the latest installer from the **[Releases page](../../releases)**:
 
 ## Why NEO?
 
-**The bookshelf** Your library looks like a bookshelf, not a file list. Labeled shelves you organize however you like — by series, by status, by pen name. Progress bars on the covers show how far you are from your word goals. You can drag-and-drop books anywhere. You can also drag shelves around and put cover art on your titles.
+**The bookshelf** 
 
-**Just a blank page** There's a white page by default or a dark mode (which I now prefer!). Controls fade until you mouse over them. Chapters number and renumber themselves automatically. Drop caps mark chapter openings, because I'm a sucker for drop-caps. Em dashes, true ellipses, and curly quotes sort themselves out as you type. Spellcheck exists only when you invoke it — no more red squiggles mid-sentence triggering your imposter syndrome.
+Your library looks like a bookshelf, not a file list. Labeled shelves you organize however you like — by series, by status, by pen name. Progress bars on the covers show how far you are from your word goals. You can drag-and-drop books anywhere. You can also drag shelves around and put cover art on your titles.
 
-**Enter, Enter, Enter** One Enter: new paragraph. Two: a `***` section break. Three: a new chapter. The goal is to KEEP WRITING.
+**Just a blank page** 
 
-**Darlings** The writing advice is "kill your darlings" — but I say: *keep the bodies*. Drag any beautiful-but-in-the-way passage onto the Darlings tab. It leaves your manuscript but isn't lost. Darlings restore to the exact spot it came from. More like zombies than darlings.
+There's a white page by default or a dark mode (which I now prefer!). Controls fade until you mouse over them. Chapters number and renumber themselves automatically. Drop caps mark chapter openings, because I'm a sucker for drop-caps. Em dashes, true ellipses, and curly quotes sort themselves out as you type. Spellcheck exists only when you invoke it — no more red squiggles mid-sentence triggering your imposter syndrome.
 
-**Placeholders** Mid-flow and need a name, a fact, a date? ⌘⇧X drops a mark and a sticky note. The left panel shows a red dot on every chapter that you need to get back to. The right panel will list all these to-do items.
+**Enter, Enter, Enter** 
 
-**Outlining for plotters** Outline chapters and sections in the Outline tab; section notes appear in the manuscript as gray ghost paragraphs, ready to be overwritten. Pantsers can ignore all of it or learn to draw a freakin' map for the first time. Try it. You might like it!
+One Enter: new paragraph. Two: a `***` section break. Three: a new chapter. The goal is to KEEP WRITING.
 
-**Cover Art** Whether you already have a cover in mind, want to whip up something in Canva or Photoshop, or are okay with using AI art either as placeholder or final file, NEO is happy to accept it. Drag your 2:3 ratio art right on the book in your bookshelf. I've always done this as a habit, having the cover art early. Seeing the book inspires me to work on it daily and make it better!
+**Darlings** 
 
-**Goals and momentum** Daily word goals, word sprints, and a NaNoWriMo-style progress chart. Needs more testing, but I think it works okay!
+The writing advice is "kill your darlings" — but I say: *keep the bodies*. Drag any beautiful-but-in-the-way passage onto the Darlings tab. It leaves your manuscript but isn't lost. Darlings restore to the exact spot it came from. More like zombies than darlings.
 
-**Exports** EPUB 3 with a proper table of contents built to KDP's guidelines, Word .docx, PDF, HTML, markdown, and plain text. Email a timestamped PDF snapshot to yourself with a SHA-256 fingerprint of the text in the body. Might come in handy someday.
+**Placeholders** 
 
-**Import** Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks are detected automatically. This is still a bit rough and might require you to tweak things. It will try to grab your title and remove that from the body, and it seems to be working okay.
+Mid-flow and need a name, a fact, a date? ⌘⇧X drops a mark and a sticky note. The left panel shows a red dot on every chapter that you need to get back to. The right panel will list all these to-do items.
 
-**Backups** Continuous autosave, daily zip backups kept for two weeks, everything stored as plain files. Set up your NEO library folder on your iCloud if you want for extra safety. You can also email copies of your WIP to yourself with a keystroke: ⌘E.
+**Outlining for plotters** 
+
+Outline chapters and sections in the Outline tab; section notes appear in the manuscript as gray ghost paragraphs, ready to be overwritten. Pantsers can ignore all of it or learn to draw a freakin' map for the first time. Try it. You might like it!
+
+**Cover Art** 
+
+Whether you already have a cover in mind, want to whip up something in Canva or Photoshop, or are okay with using AI art either as placeholder or final file, NEO is happy to accept it. Drag your 2:3 ratio art right on the book in your bookshelf. I've always done this as a habit, having the cover art early. Seeing the book inspires me to work on it daily and make it better!
+
+**Goals and momentum** 
+
+Daily word goals, word sprints, and a NaNoWriMo-style progress chart. Needs more testing, but I think it works okay!
+
+**Exports** 
+
+EPUB 3 with a proper table of contents built to KDP's guidelines, Word .docx, PDF, HTML, markdown, and plain text. Email a timestamped PDF snapshot to yourself with a SHA-256 fingerprint of the text in the body. Might come in handy someday.
+
+**Import** 
+
+Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks are detected automatically. This is still a bit rough and might require you to tweak things. It will try to grab your title and remove that from the body, and it seems to be working okay.
+
+**Backups** 
+
+Continuous autosave, daily zip backups kept for two weeks, everything stored as plain files. Set up your NEO library folder on your iCloud if you want for extra safety. You can also email copies of your WIP to yourself with a keystroke: ⌘E.
 
 ## Your files
 
