@@ -1,18 +1,16 @@
 # Getting Started with NEO
 
-Warning! This tutorial is a very rough draft!
-
 **Installing**
 
-Mac: open the .dmg, drag NEO into Applications. PC: run the installer. For PC, you might get a warning. I haven't tested the .exe version very much, so beware!
+Mac: open the .dmg, drag NEO into Applications. PC: run the installer or the standalone .exe.
 
-NEO will ask you two things when it opens: your name (this goes on your title pages, and you can leave it blank and be Anonymous), and whether you're a **pantser or a plotter**. If you don't know the difference, pantsers write by the seat of their pants and figure our the story as they go. Plotters outline first. There's no wrong answer, and you can change it later. The difference in NEO is plotters have new books that open in the Outline tab, while pantsers get a blank page. Then NEO asks you to pick a font and a drop cap style, shows you exactly what your page will look like, and never asks you anything again. You can change these options later.
+NEO will ask you two things when it opens: your name (this goes on your title pages, and you can leave it blank and be Anonymous), and whether you're a **pantser or a plotter**. If you don't know the difference, pantsers write by the seat of their pants and figure our the story as they go. Plotters outline first. There's no wrong answer, and you can change it later. The difference in NEO is plotters have new books that open in the Outline tab, while pantsers get a blank page. Then NEO asks you to pick a font and a drop cap style and shows you exactly what your page will look like. You can change these options later.
 
 **Your bookshelf**
 
 NEO opens on a bookshelf because you're a novelist, and novelists write books. (Or short stories; I won't judge). Click the dashed rectangle with the + in it and you've started your first story. That's it. And guess what? It already looks like a book!
 
-You can add more shelves (button in the top right corner), rename any shelf by clicking its label, and drag books around like you're rearranging a real bookshelf. Right-click a book to set a word count goal (this puts a subtle progress bar on the cover. You have to write to see it!). You can also right-click to remove a book. Each book gets its own colored cover; hover over one and click the little ↻ refresh button if you want a new one.
+You can add more shelves (button in the top right corner), rename any shelf by clicking its label, and drag books around like you're rearranging a real bookshelf. Right-click a book to set a word count goal (this puts a subtle progress bar on the cover. You have to write to see it!). You can also right-click to remove a book. Each book gets its own colored cover; hover over one and click the little ↻ refresh button if you want a new one. Or drag 2:3 ratio cover art right on the book to make it extra purty.
 
 **Writing**
 
@@ -20,11 +18,11 @@ Here's everything you need to know about writing in NEO:
 
 Type your title. Hit Enter. Start writing Chapter One.
 
-The first paragraph of every chapter gets a big drop cap, like a real book, because **you are writing a real book** and NEO wants you to feel that every time you start a chapter. The writing should delight you the way it delights your readers!
+The first paragraph of every chapter gets a big drop cap, like a real book, because **you are writing a real book** and NEO wants you to feel that every time you open it up. The writing should delight you the way it delights your readers!
 
-When you finish a scene and want a section break — those little *** dividers — hit **Enter twice**. When you finish a chapter, hit **Enter three times**. A new chapter appears, numbered for you. If you later squeeze a chapter in between two others, every chapter renumbers itself. You will never type the words "Chapter Twelve" again. This alone would've saved me a cumulative month of my life.
+When you finish a scene and want a section break — those little *** dividers — hit **Enter twice**. When you finish a chapter, hit **Enter three times**. A new chapter appears, numbered. If you later squeeze a chapter in between two others, every chapter renumbers itself. You will never type the words "Chapter Twelve" again. This alone would've saved me a cumulative month of my life.
 
-Type two hyphens and get an em dash — like that. The change happens immediately. OWN THOSE EM DASHES! Type three periods and get a real ellipsis… Quotes curl themselves in the right direction.
+Type two hyphens and get an em dash — like that. The change happens immediately. OWN THOSE EM DASHES! Type three periods and get a real ellipsis… Quotes curl themselves in the right direction (imported files might have weird quotes).
 
 Note: **there is no spellcheck while you write.** No red squiggles yelling WRONG at you while you're mid-thought about a made-up city with a made-up name. Your creative brain doesn't need a klaxon. When you're ready to check spelling, hit ⌘; and it'll turn on. Right-click the squiggles for suggestions. Hit ⌘; again to get back into the flow.
 
@@ -36,11 +34,11 @@ I used to type XXX in drafts when I needed to change something later (or look so
 
 Kill your darlings, they say. Well, it never gets easy. You're a writer, and we all secretly believe the last good sentence we wrote is the last good sentence we'll ever write.
 
-Instead of deleting it, select it and drag it down onto the **Darlings** tab at the bottom of the screen. It leaves your manuscript, but it's saved forever. If you change your mind, you can restore what you deleted to the exact spot it came from. Kill without remorse. Dig the bodies up later. :)
+Instead of deleting it, select it and drag it down onto the **Darlings** tab at the bottom of the screen. It leaves your manuscript, but it's saved forever. If you change your mind, you can restore what you deleted to the exact spot it came from. Kill without remorse. You can now resurrect your beloveds.
 
 **The hidden panels**
 
-The screen stays distraction-free until you need something. Roll your mouse to the **left edge** and the chapter list slides out — every chapter, its word count, a note field where you can jot what happens in it. You can outline an entire novel from this panel. Push to the **right edge** for your notes and comments. The little ☉ here pins it open if you're doing a revision pass.
+The screen stays distraction-free until you need something. Roll your mouse to the **left edge** and the chapter list slides out — every chapter, its word count, a note field where you can jot what happens in it. You can outline an entire novel from this panel if you want. Push to the **right edge** for your notes and comments. The little ☉ here pins it open if you're doing a revision pass.
 
 Along the bottom: tabs for your Notes, your Outline, and your Darlings. Plus a word count. Click the word count to toggle between the whole book and just this chapter.
 
