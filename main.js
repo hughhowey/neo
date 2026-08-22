@@ -7,6 +7,10 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// macOS Chromium's "smart delete" also removes whitespace around a deleted
+// selection, and that pass can duplicate characters. Deletes stay literal.
+app.commandLine.appendSwitch('blink-settings', 'smartInsertDeleteEnabled=false');
+
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
 // ---------------------------------------------------------------------------
@@ -22,6 +26,7 @@ function ensureLibrary() {
       authorName: '',
       penNames: [],
       firstRunDone: false,
+      pageTheme: 'night',
       shelves: [{ id: 'shelf-1', name: 'Works in Progress', bookIds: [] }]
     };
     fs.writeFileSync(LIBRARY_FILE, JSON.stringify(seed, null, 2));
@@ -182,11 +187,11 @@ ipcMain.handle('book:delete', async (_e, bookId, title) => {
   const win = BrowserWindow.getFocusedWindow();
   const { response } = await dialog.showMessageBox(win, {
     type: 'warning',
-    buttons: ['Cancel', 'Move to Trash'],
+    buttons: ['Cancel', process.platform === 'win32' ? 'Move to Recycle Bin' : 'Move to Trash'],
     defaultId: 0,
     cancelId: 0,
-    message: `Move “${title}” to the Trash?`,
-    detail: 'The book folder will go to your Mac Trash, so you can recover it.'
+    message: `Move “${title}” to the ${process.platform === 'win32' ? 'Recycle Bin' : 'Trash'}?`,
+    detail: 'The book folder goes to your system trash, so you can recover it.'
   });
   if (response === 1) {
     const { shell } = require('electron');
@@ -253,6 +258,13 @@ ipcMain.handle('cover:read', (_e, bookId, fname) => {
 // ---------------------------------------------------------------------------
 // Fullscreen
 // ---------------------------------------------------------------------------
+
+// ⌘Enter / Ctrl+Enter toggles fullscreen
+ipcMain.handle('fullscreen:toggle', (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win) win.setFullScreen(!win.isFullScreen());
+  return true;
+});
 
 // Regular fullscreen: Esc walks you out like any civilized app
 ipcMain.handle('fullscreen:escape', (e) => {
@@ -686,18 +698,12 @@ function buildMenu() {
           ]
         },
         {
-          label: 'Page',
-          submenu: [
-            { label: 'Paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) },
-            { label: 'Night', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) }
-          ]
-        },
-        {
           label: 'Align Paragraph',
           submenu: [
             { label: 'Left', click: () => sendToWindow({ type: 'align', value: 'left' }) },
             { label: 'Center', click: () => sendToWindow({ type: 'align', value: 'center' }) },
-            { label: 'Right', click: () => sendToWindow({ type: 'align', value: 'right' }) }
+            { label: 'Right', click: () => sendToWindow({ type: 'align', value: 'right' }) },
+            { label: 'Justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
         { type: 'separator' },
@@ -724,6 +730,13 @@ function buildMenu() {
           }
         },
         { type: 'separator' },
+        {
+          label: 'Page',
+          submenu: [
+            { label: 'Night', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
+            { label: 'Paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) }
+          ]
+        },
         {
           label: 'Brighter Interface',
           click: () => sendToWindow({ type: 'uiBright' })

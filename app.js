@@ -1,5 +1,4 @@
 /* =============================== NEO =============================== */
-/* Renderer logic. Talks to disk only through window.neo (preload).   */
 
 'use strict';
 
@@ -13,7 +12,6 @@ let currentTab = 'manuscript';
 let currentChapterId = null; // chapter the caret/scroll is in
 let wordMode = 'book';       // 'book' | 'chapter'
 let saveTimers = {};
-let hintShown = false;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -26,7 +24,6 @@ const KPH = K('⌘⇧X', 'Ctrl+Shift+X');
 const KDA = K('⌘⇧D', 'Ctrl+Shift+D');
 const KHELP = K('⌘/', 'Ctrl+/');
 
-// ---------- tiny modal helper (Electron has no window.prompt) ----------
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
     const bd = document.createElement('div');
@@ -55,7 +52,7 @@ function askInput(title, placeholder, value = '') {
   });
 }
 
-// A list of choices, one click. Resolves the chosen value, or null on cancel.
+// A list of choices, null on cancel.
 function optionModal(title, message, options) {
   return new Promise((resolve) => {
     const bd = document.createElement('div');
@@ -94,7 +91,6 @@ function toast(msg, ms = 4000) {
 
 const countWords = (text) => (text.trim().match(/\S+/g) || []).length;
 
-// Clean copy of a chapter: no darling anchors, no placeholder marks, no ghost outlines
 function cleanChapterEl(id) {
   const el = document.querySelector(`.chapter[data-id="${id}"] .chapter-body`);
   const holder = document.createElement('div');
@@ -104,8 +100,7 @@ function cleanChapterEl(id) {
 }
 const chapterText = (id) => cleanChapterEl(id).innerText;
 
-// Word counts are cached per chapter and only recomputed for the chapter
-// being edited — so a 200k-word epic types as fast as a short story.
+// Word counts are cached per chapter and only recomputed for the chapter being edited.
 let wordCache = {};
 function chapterWords(chId) {
   if (wordCache[chId] == null) wordCache[chId] = countWords(chapterText(chId));
@@ -150,7 +145,7 @@ function showFirstRun() {
     };
   });
 
-  // Step 2: fonts, with a live sample
+  // Step 2: fonts, with a WYSIWYG sample
   function preview() {
     document.documentElement.style.setProperty('--body-font', BODY_FONTS[picked.body]);
     document.documentElement.style.setProperty('--dropcap-font', DROPCAP_FONTS[picked.dropcap]);
@@ -209,8 +204,7 @@ async function renderShelves() {
   $('#author-chip').textContent = displayAuthor();
   const wrap = $('#shelves');
   wrap.innerHTML = '';
-  // shelves drag by their grip to reorder, with a gold bar showing the landing
-  // spot (wired once — renderShelves runs often, listeners must not stack)
+  // shelves drag by their grip to reorder, with a gold bar showing the drop spot
   if (!wrap.dataset.dndWired) {
     wrap.dataset.dndWired = '1';
     wrap.addEventListener('dragover', (e) => {
@@ -280,6 +274,7 @@ async function renderShelves() {
     label.contentEditable = 'true';
     label.spellcheck = false;
     label.textContent = shelf.name;
+    label.title = 'Click to rename · right-click to export or delete';
     label.addEventListener('blur', async () => {
       shelf.name = label.textContent.trim() || shelf.name;
       label.textContent = shelf.name;
@@ -320,7 +315,7 @@ async function renderShelves() {
     row.dataset.shelfId = shelf.id;
 
     // drag targets: reorder within a shelf, move between shelves, or drop
-    // manuscript files straight from Finder — the shelf takes them all
+    // manuscript files straight from Finder
     row.addEventListener('dragover', (e) => {
       if (e.dataTransfer.types.includes('Files')) {
         e.preventDefault();
@@ -445,7 +440,7 @@ function bookTile(meta) {
   } else {
     el.style.background = coverGradient(meta);
   }
-  // ALL CAPS, with each word's initial slightly larger — classic jacket typography
+  // ALL CAPS, with each word's initial slightly larger
   const titleEl = el.querySelector('.b-title');
   const inner = document.createElement('span');
   inner.className = 'b-tt';
@@ -668,8 +663,10 @@ async function openBook(bookId) {
     }
   }
 
-  if (!hintShown) {
-    hintShown = true;
+  // the Enter hint shows once per library, ever
+  if (!library.hintShown) {
+    library.hintShown = true;
+    window.neo.writeLibrary(library);
     setTimeout(() => toast(`Enter twice = section break · three times = new chapter · ${KHELP} shows everything else`, 7000), 800);
   }
 }
@@ -680,7 +677,7 @@ function renderChapters() {
   wordCache = {};
   book.chapterTitles = book.chapterTitles || {};
   // a lone chapter is just "the story" — no heading until a second one exists,
-  // at which point both appear, numbered (shorts stay clean, novels stay novels)
+  // at which point both appear, numbered in retrospect
   const solo = book.chapterOrder.length === 1;
   book.chapterOrder.forEach((chId, i) => {
     const sec = document.createElement('section');
@@ -778,8 +775,7 @@ function wireChapterBody(body, chId) {
     updateCounters();
     scheduleNavRefresh();
   });
-  // paste arrives as clean prose: paragraphs, bold, italic — nothing else.
-  // Word/web formatting (fonts, colors, spans) never touches the manuscript.
+  // paste without formatting
   body.addEventListener('paste', (e) => {
     e.preventDefault();
     const html = e.clipboardData.getData('text/html');
@@ -794,9 +790,7 @@ function wireChapterBody(body, chId) {
       });
     }
   });
-  // While macOS composes input (dead keys, dictation, some international
-  // layouts), our shortcuts stand down completely — intercepting mid-composition
-  // keystrokes is how phantom characters get born.
+  // While macOS composes input, shortcuts stand down completely.
   let composing = false;
   body.addEventListener('compositionstart', () => { composing = true; });
   body.addEventListener('compositionend', () => { composing = false; });
@@ -804,13 +798,14 @@ function wireChapterBody(body, chId) {
     if (composing || e.isComposing || e.keyCode === 229) return;
     // Chromium's selection-delete can duplicate a neighboring character when
     // the selection spans fragmented text nodes. Merging the fragments right
-    // before any destructive keystroke removes the hazard entirely.
+    // before any destructive keystroke.
     if (!e.metaKey && !e.ctrlKey && !e.altKey) {
       const s = window.getSelection();
       const destructive = e.key === 'Backspace' || e.key === 'Delete' ||
         (s && !s.isCollapsed && (e.key.length === 1 || e.key === 'Enter'));
       if (destructive) healSelectionSeams(body);
     }
+    if (spaceSafeDelete(e, body, chId)) return;
     if (emptyChapterBackspace(e, body, chId)) return;
     if (guardMarkerDelete(e, body, chId)) return;
     if (handleEnter(e, body, chId)) return;
@@ -834,7 +829,7 @@ function wireChapterBody(body, chId) {
       s.addRange(r);
     }
   });
-  // the moment real typing hits a ghost, it becomes prose
+  // the moment writing hits a ghost, it becomes prose
   // (it keeps its data-sec-id so the outline knows it's been written)
   body.addEventListener('beforeinput', () => {
     const sel = window.getSelection();
@@ -848,9 +843,7 @@ function wireChapterBody(body, chId) {
   });
 }
 
-// Backspace in an empty chapter dissolves it: the chapter disappears and the
-// caret lands at the end of the previous one. The natural undo for an
-// accidental Enter ×3.
+// Backspace in an empty chapter deletes it:
 function emptyChapterBackspace(e, body, chId) {
   if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
   if (body.innerText.trim() !== '') return false; // ghosts count as content
@@ -863,8 +856,7 @@ function emptyChapterBackspace(e, body, chId) {
   return true;
 }
 
-// Tab means spacing, not "hurl my cursor into the interface":
-// each press indents with an em-space pair; Shift+Tab walks it back.
+// Tab for spacing:
 function handleTabSpacing(e) {
   if (e.key !== 'Tab' || e.metaKey || e.ctrlKey || e.altKey) return false;
   e.preventDefault();
@@ -892,6 +884,82 @@ function handleTabSpacing(e) {
   return true;
 }
 
+function flatOffset(p, container, offset) {
+  // flatten any (container, offset) pair to a character offset in p.textContent
+  let n;
+  if (container.nodeType !== Node.TEXT_NODE) {
+    if (!p.contains(container) && container !== p) return -99;
+    let acc = 0;
+    for (let i = 0; i < offset && i < container.childNodes.length; i++) {
+      acc += container.childNodes[i].textContent.length;
+    }
+    let before = 0;
+    const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    while ((n = w.nextNode())) {
+      if (container === p || container.contains(n)) break;
+      before += n.textContent.length;
+    }
+    return (container === p ? 0 : before) + acc;
+  }
+  let pos = 0;
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  while ((n = walker.nextNode())) {
+    if (n === container) return pos + offset;
+    pos += n.textContent.length;
+  }
+  return -1;
+}
+
+function flatPoint(p, off) {
+  const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  let pos = 0, n;
+  while ((n = w.nextNode())) {
+    const len = n.textContent.length;
+    if (off <= pos + len) return [n, off - pos];
+    pos += len;
+  }
+  return null;
+}
+
+// A delete that leaves two plain spaces touching triggers the engine's broken
+// whitespace repair, which duplicates a neighboring character. When that exact
+// hazard is about to happen, take the right-hand space along with the deletion,
+// leaving one clean space. All other deletes stay native.
+function spaceSafeDelete(e, body, chId) {
+  if (e.key !== 'Backspace' && e.key !== 'Delete') return false;
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return false;
+  const r = sel.getRangeAt(0);
+  const elOf = (n) => (n.nodeType === Node.TEXT_NODE ? n.parentElement : n);
+  const pA = elOf(r.startContainer)?.closest?.('p');
+  const pB = elOf(r.endContainer)?.closest?.('p');
+  if (!pA || pA !== pB || !body.contains(pA)) return false;
+  const t = pA.textContent;
+  let from, to;
+  if (sel.isCollapsed) {
+    const at = flatOffset(pA, r.startContainer, r.startOffset);
+    if (at < 0) return false;
+    if (e.key === 'Backspace') { from = at - 1; to = at; } else { from = at; to = at + 1; }
+    if (from < 0 || to > t.length) return false;
+  } else {
+    from = flatOffset(pA, r.startContainer, r.startOffset);
+    to = flatOffset(pA, r.endContainer, r.endOffset);
+    if (from < 0 || to <= from) return false;
+  }
+  if (t[from - 1] !== ' ' || t[to] !== ' ') return false;
+  let end = to;
+  while (t[end] === ' ') end++;
+  const a = flatPoint(pA, from), b = flatPoint(pA, end);
+  if (!a || !b) return false;
+  e.preventDefault();
+  const nr = document.createRange();
+  nr.setStart(a[0], a[1]); nr.setEnd(b[0], b[1]);
+  sel.removeAllRanges(); sel.addRange(nr);
+  document.execCommand('insertText', false, '');
+  return true;
+}
+
 // Merge fragmented text nodes in the paragraph(s) the selection touches,
 // so native editing operates on whole text instead of seams.
 function healSelectionSeams(body) {
@@ -908,10 +976,7 @@ function healSelectionSeams(body) {
   try { if (b && b !== a && body.contains(b)) b.normalize(); } catch { /* fine */ }
 }
 
-// Chromium mangles Backspace/Delete beside non-editable inline elements
-// (our ? placeholder marks): it can duplicate a neighboring character.
-// When a deletion happens adjacent to a mark, do it by hand with a clean
-// Range operation instead of trusting the engine.
+// Chromium mangles Backspace/Delete beside non-editable inline elements:
 function guardMarkerDelete(e, body, chId) {
   if (e.key !== 'Backspace' && e.key !== 'Delete') return false;
   if (e.metaKey || e.ctrlKey || e.altKey) return false;
@@ -943,8 +1008,7 @@ function guardMarkerDelete(e, body, chId) {
     return true;
   }
 
-  // Case 2: deleting a character inside a text node that TOUCHES a marker —
-  // do the surgery by hand so Chromium's merge logic never runs.
+  // Case 2: deleting a character inside a text node that TOUCHES a marker:
   if (node.nodeType !== Node.TEXT_NODE) return false;
   if (back ? r.startOffset === 0 : r.startOffset >= node.textContent.length) return false;
   if (!isMark(node.previousSibling) && !isMark(node.nextSibling)) return false;
@@ -969,7 +1033,7 @@ function guardMarkerDelete(e, body, chId) {
 }
 
 // Enter once: new paragraph. Enter twice: *** section break.
-// Enter three times: new chapter, numbered and drop-capped for you.
+// Enter three times: new chapter.
 function handleEnter(e, body, chId) {
   if (e.key !== 'Enter' || e.shiftKey) return false;
   const sel = window.getSelection();
@@ -1013,8 +1077,7 @@ function handleEnter(e, body, chId) {
   return false;
 }
 
-// Read a body's HTML for saving — the single capture point, should transient
-// editing classes ever need stripping again.
+// Read a body's HTML for saving:
 function captureBody(body) {
   return body.innerHTML;
 }
@@ -1027,10 +1090,9 @@ function syncChapter(body, chId) {
   scheduleNavRefresh();
 }
 
-// Heal text-node fragmentation in each paragraph as the caret leaves it
-// (smart-typography insertions split text nodes; Chromium's editor can
-// duplicate characters at those seams — merging them removes the hazard).
+// Heal text-node fragmentation in each paragraph as the caret leaves it:
 let lastCaretPara = null;
+let capOffBody = null;
 document.addEventListener('selectionchange', () => {
   if (!book || currentTab !== 'manuscript') return;
   const sel = window.getSelection();
@@ -1046,6 +1108,15 @@ document.addEventListener('selectionchange', () => {
       try { lastCaretPara.normalize(); } catch { /* fine */ }
     }
     lastCaretPara = caretP;
+  }
+  // the drop cap steps aside while the caret is in the first paragraph
+  const inFirst = caretP && caretP.parentElement &&
+    caretP === caretP.parentElement.querySelector('p');
+  const capBody = inFirst ? caretP.parentElement : null;
+  if (capBody !== capOffBody) {
+    if (capOffBody && capOffBody.isConnected) capOffBody.classList.remove('cap-off');
+    if (capBody) capBody.classList.add('cap-off');
+    capOffBody = capBody;
   }
 });
 
@@ -1070,7 +1141,7 @@ function cleanPasteHtml(html) {
   return out.join('');
 }
 
-// Em dash, ellipsis, smart quotes — without ever leaving the keyboard.
+// Em dash, ellipsis, smart quotes:
 function smartKeys(e, body) {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.isComposing || e.keyCode === 229) return;
@@ -1157,6 +1228,14 @@ document.addEventListener('keydown', (e) => {
   window.neo.fullscreenEscape();
 });
 
+// ⌘Enter (Ctrl+Enter): toggle fullscreen from anywhere
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+  if (document.querySelector('.modal-backdrop:not([hidden])')) return;
+  e.preventDefault();
+  window.neo.fullscreenToggle();
+});
+
 function createChapterAt(idx) {
   const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
   book.chapterOrder.splice(idx, 0, chId);
@@ -1211,7 +1290,7 @@ function focusChapter(chId) {
 function insertPlaceholder() {
   const sel = window.getSelection();
   if (!sel.rangeCount) return;
-  // derive the chapter from where the caret actually is — never from stale state
+  // derive the chapter from where the caret actually is:
   let el = sel.anchorNode;
   if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const bodyEl = el && el.closest ? el.closest('.chapter-body') : null;
@@ -1335,7 +1414,7 @@ function renderNav() {
       if (ind) ind.remove();
     });
 
-    // outline your whole book from this panel: a note per chapter
+    // outline your whole book from this panel:
     const note = document.createElement('div');
     note.className = 'nav-note';
     note.contentEditable = 'true';
@@ -1431,8 +1510,7 @@ function scheduleNavRefresh() {
   saveTimers.nav = setTimeout(renderNav, 1200);
 }
 
-// Hover behavior for both panes: instant open (the scrollbar lives beside
-// the page now, nowhere near these edges), but never mid-drag.
+// Hover behavior for both side panes:
 function wireHoverPane(hotzone, pane, isPinnable) {
   const pinned = () => isPinnable && pane.dataset.pinned === '1';
   hotzone.addEventListener('mouseenter', (e) => {
@@ -1464,6 +1542,7 @@ window.addEventListener('blur', closeUnpinnedPanes);
 // dark margins beside the (narrower) page column
 $('#editor-view').addEventListener('wheel', (e) => {
   const scroller = $('#paper-scroll');
+  if (e.ctrlKey) return; // pinch-zoom gesture, not a scroll
   if (scroller.contains(e.target)) return; // native scrolling handles it
   if ($('#nav-pane').contains(e.target) || $('#side-pane').contains(e.target)) return;
   scroller.scrollTop += e.deltaY;
@@ -1474,7 +1553,6 @@ $('#side-pin').onclick = () => {
   const pinned = pane.dataset.pinned === '1';
   pane.dataset.pinned = pinned ? '0' : '1';
   $('#side-pin').classList.toggle('pinned', !pinned);
-  // pinned: the page steps aside so the scrollbar stays reachable
   $('#editor-view').classList.toggle('side-pinned', !pinned);
   if (!pinned) pane.classList.add('open');
 };
@@ -1493,7 +1571,7 @@ $$('.tab').forEach((tab) => {
     book.tabNames[kind] = name;
     tab.textContent = name;
     saveMeta();
-    // NEO listens: renamed tabs become the default for future books
+    // Renamed tabs become the default for future books
     library.tabDefaults = library.tabDefaults || {};
     library.tabDefaults[kind] = name;
     window.neo.writeLibrary(library);
@@ -1524,7 +1602,7 @@ darlingsTab.addEventListener('drop', async (e) => {
 });
 
 // ---- text-position helpers: darlings remember home by their surrounding
-// text, so nothing foreign is ever left inside the manuscript ----
+// text, so nothing foreign is left inside the manuscript ----
 
 function bodyPlainText(body) {
   let t = '';
@@ -1550,8 +1628,7 @@ function textPosToRange(body, pos) {
   return null;
 }
 
-// Where in the chapter does this darling belong? Search for its remembered
-// surroundings; degrade gracefully as the prose around it changes.
+// Where in the chapter does this darling belong?
 function findDarlingPosition(body, d) {
   if (d.anchorPrefix == null && d.anchorSuffix == null) return -1;
   const text = bodyPlainText(body);
@@ -1570,9 +1647,8 @@ function findDarlingPosition(body, d) {
   return -1;
 }
 
-// The one move shared by drag-to-tab and ⌘⇧D: words leave the manuscript
-// but are never lost, and the cut point is remembered by its surroundings —
-// no markers planted in the prose.
+// The one move shared by drag-to-tab and ⌘⇧D: the cut point is remembered by its surroundings —
+// no markers in the WIP itself.
 async function moveSelectionToDarlings(html, text) {
   if (!text || !text.trim() || !book) return;
   const sel = window.getSelection();
@@ -1628,8 +1704,7 @@ async function moveSelectionToDarlings(html, text) {
 
 // Older versions of NEO planted invisible marker spans at darling cut points,
 // which interfered with Chromium's delete handling. On open, convert each one
-// into a remembered-context position and remove it — same restore precision,
-// nothing left behind in the prose.
+// into a remembered-context position and remove it:
 async function migrateDarlingAnchors() {
   const spans = [...document.querySelectorAll('.darling-anchor')];
   if (!spans.length) return;
@@ -1659,7 +1734,7 @@ async function migrateDarlingAnchors() {
   if (changed) await window.neo.writeJSON(book.id, 'darlings', darlings);
 }
 
-// keyboard route: select a passage, ⌘⇧D, keep writing
+// keyboard route: select a passage, ⌘⇧D to move to Darlings
 function darlingFromKeyboard() {
   const sel = window.getSelection();
   if (!sel.rangeCount || sel.isCollapsed) {
@@ -1720,7 +1795,7 @@ function switchTab(name) {
 /* ================================================================== */
 /*  STRUCTURED OUTLINE                                                 */
 /*  Chapter lines are the book's real chapters. Section notes become   */
-/*  grayed "ghost" paragraphs in the manuscript, ready to be replaced. */
+/*  grayed "ghost" paragraphs in the manuscript                       */
 /* ================================================================== */
 
 const secLetter = (i) => String.fromCharCode(65 + (i % 26));
@@ -1894,7 +1969,7 @@ function outlineLine(kind, chId, secId, index, label, text) {
 
 // Push section notes into the manuscript as gray ghost paragraphs,
 // with real *** scene breaks between sections.
-// Once a ghost has been written over, it belongs to the prose and is left alone.
+// Once a ghost has been written over, it goes away.
 function syncGhosts(chId) {
   const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
   if (!body) return;
@@ -1921,11 +1996,11 @@ function syncGhosts(chId) {
     p.remove();
   }
   for (const sec of list) {
-    // written over already? it lives in the prose now — leave it be
+    // written over already? Leave it alone
     const written = body.querySelector(`p[data-sec-id="${sec.id}"]:not(.ghost)`);
     if (written) continue;
     if (!sec.text) continue;
-    // a real section boundary: *** between this ghost and whatever comes before it
+    // *** between this ghost and whatever comes before it
     const hasContent = body.innerText.trim() !== '';
     if (hasContent && !(body.lastElementChild && body.lastElementChild.classList.contains('scene-break'))) {
       const brk = document.createElement('p');
@@ -1945,6 +2020,14 @@ function syncGhosts(chId) {
 
 let auxDirty = false;
 $('#aux-editor').addEventListener('input', () => { auxDirty = true; scheduleAuxSave(); });
+// notes paste arrives clean, same as the manuscript
+$('#aux-editor').addEventListener('paste', (e) => {
+  e.preventDefault();
+  const html = e.clipboardData.getData('text/html');
+  const text = e.clipboardData.getData('text/plain');
+  if (html) document.execCommand('insertHTML', false, cleanPasteHtml(html));
+  else if (text) document.execCommand('insertText', false, text.replace(/\r/g, ''));
+});
 function scheduleAuxSave() {
   clearTimeout(saveTimers.aux);
   saveTimers.aux = setTimeout(flushAux, 800);
@@ -1977,7 +2060,7 @@ function renderDarlings() {
     meta.querySelector('.d-restore').onclick = () => restoreDarling(d.id);
     meta.querySelector('.d-del').onclick = async () => {
       snapshotStructure('darling delete');
-      // tidy up the invisible anchor this darling left behind
+      // tidy up the invisible anchor the darling left behind
       const anchor = document.querySelector(`.darling-anchor[data-did="${d.id}"]`);
       if (anchor) {
         const body = anchor.closest('.chapter-body');
@@ -2116,7 +2199,7 @@ $('#word-counter').onclick = () => {
   updateCounters();
 };
 
-// select a passage → the counter quietly reports its size
+// select a passage → the counter reports its size
 document.addEventListener('selectionchange', () => {
   if (!book || currentTab !== 'manuscript') return;
   const sel = window.getSelection();
@@ -2173,7 +2256,7 @@ async function saveMeta() {
 
 function flushAllSaves() {
   if (!book) return;
-  // remember where the writer was for next time
+  // remember where you were for next session
   book.lastPosition = {
     chapterId: currentChapterId,
     scroll: $('#paper-scroll').scrollTop
@@ -2188,7 +2271,7 @@ function flushAllSaves() {
 }
 
 window.addEventListener('beforeunload', flushAllSaves);
-// belt and suspenders: flush whenever focus leaves NEO, and every 20 seconds
+// flush whenever focus leaves NEO, and every 20 seconds
 window.addEventListener('blur', () => { if (book) flushAllSaves(); });
 setInterval(() => { if (book) flushAllSaves(); }, 20000);
 
@@ -2207,7 +2290,7 @@ $('#back-to-shelf').onclick = backToShelf;
 /*  STRUCTURAL UNDO                                                    */
 /*  Typing has the native ⌘Z. This covers the big moves — chapter      */
 /*  deletes, replace-all, darlings — with snapshots of the whole       */
-/*  structure, restored in one keystroke.                              */
+/*  structure.                                                         */
 /* ================================================================== */
 
 let undoStack = [];
@@ -2303,7 +2386,7 @@ function paintHighlights() {
 }
 
 // Scan the WHOLE book, first chapter to last, every time.
-// The caret never leaves the search box — matches are painted, not selected.
+// Matches are highlighted, not selected.
 function runSearch() {
   const q = $('#search-input').value;
   searchState = { matches: [], idx: -1, query: q };
@@ -2335,7 +2418,7 @@ function runSearch() {
   paintHighlights();
 }
 
-// only runs when the user asks (Enter / arrows) — never while typing
+// only runs when the user asks (Enter / arrows)
 function gotoMatch(i) {
   const m = searchState.matches;
   if (!m.length) return;
@@ -2373,7 +2456,7 @@ function replaceCurrent() {
   if (searchState.matches.length) gotoMatch(Math.min(oldIdx, searchState.matches.length - 1));
 }
 
-// Every chapter, front to back — position in the book is irrelevant.
+// Every chapter, front to back
 function replaceAllMatches() {
   const q = $('#search-input').value;
   if (!q) return;
@@ -2410,7 +2493,6 @@ $('#search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); freshSearchIfStale(); gotoMatch(searchState.idx + (e.shiftKey ? -1 : 1)); }
   if (e.key === 'Escape') { e.stopPropagation(); closeSearch(); }
   if (e.key === 'Tab' && !e.shiftKey) {
-    // Tab is the deliberate hand-off: place the caret at the current match
     const m = searchState.matches[Math.max(0, searchState.idx)];
     if (m) {
       e.preventDefault();
@@ -2680,7 +2762,24 @@ function applyFonts() {
   document.body.classList.toggle('bright', !!library.uiBright);
   const size = Math.min(22, Math.max(14, library.editorFontSize || 17));
   document.documentElement.style.setProperty('--editor-size', size + 'px');
+  const zoom = Math.min(1.6, Math.max(0.75, library.pageZoom || 1));
+  document.documentElement.style.setProperty('--page-zoom', zoom);
 }
+
+// Pinch (trackpad) or Ctrl+scroll: page and text zoom together.
+// A pinch arrives as a wheel event with ctrlKey set.
+let zoomSaveTimer = null;
+$('#editor-view').addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  const cur = library.pageZoom || 1;
+  const next = Math.min(1.6, Math.max(0.75, cur * Math.exp(-e.deltaY * 0.005)));
+  if (next === cur) return;
+  library.pageZoom = next;
+  document.documentElement.style.setProperty('--page-zoom', next);
+  clearTimeout(zoomSaveTimer);
+  zoomSaveTimer = setTimeout(() => { window.neo.writeLibrary(library); }, 600);
+}, { passive: false });
 
 // Format → Align Paragraph: applies to every paragraph the selection touches
 function applyAlign(value) {
@@ -2716,7 +2815,7 @@ function showHelp() {
       <div class="help-grid">
         ${row('Enter ×2', 'Section break (***)')}
         ${row('Enter ×3', 'New chapter, auto-numbered')}
-        ${row(KPH, 'Placeholder note — mark it, keep writing')}
+        ${row(KPH, 'Placeholder note')}
         ${row(KDA, 'Send the selected passage to Darlings')}
         ${row(KZ, 'Undo big moves (chapter deletes, replace-all, darlings) when not mid-typing')}
         ${row('-- and ...', 'Become an em dash — and a true ellipsis …')}
@@ -2746,11 +2845,12 @@ function showHelp() {
 
       <div class="help-sec">Mouse</div>
       <div class="help-grid">
-        ${row('Drag text', 'Onto the Darlings tab — saved, never lost')}
+        ${row('Drag text', 'Onto the Darlings tab')}
         ${row('Right-click', 'Books, shelf names, chapter headings, outline lines')}
         ${row('Drag chapters', 'In the left panel, to reorder — everything renumbers')}
         ${row('Double-click', 'A tab, to rename it')}
         ${row('Click counters', 'Cycle word counts · open goals &amp; sprints')}
+        ${row(K('Pinch', 'Ctrl+Scroll'), 'Zoom the page — text and column together (' + K('⌘0', 'Ctrl+0') + ' resets)')}
       </div>
 
       <div style="text-align:right;margin-top:18px">
@@ -2772,7 +2872,6 @@ function safeName(s) {
   return (s || 'Untitled').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 }
 
-// Clean paragraphs from any chapter HTML string — export-ready
 function parasFromHtml(html) {
   const holder = document.createElement('div');
   holder.innerHTML = html || '';
@@ -2791,7 +2890,7 @@ function exportChapters() {
     const el = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
     const paras = parasFromHtml(el ? el.innerHTML : (chapterHTML[chId] || ''));
     const t = (book.chapterTitles || {})[chId];
-    // chapterless stories export as continuous text: no heading at all
+    // chapterless stories export as continuous text
     const heading = book.chapterOrder.length === 1
       ? ''
       : 'Chapter ' + (i + 1) + (t ? ' — ' + t : '');
@@ -2800,7 +2899,7 @@ function exportChapters() {
 }
 
 // The open book, packaged for the builders. Every builder takes an optional
-// data object in this shape, which is how a shelf becomes an anthology.
+// data object in this shape, good for anthologies.
 function bookExportData() {
   return {
     id: book.id,
@@ -3224,7 +3323,7 @@ async function doExport(format) {
 }
 
 function chooseEmailMethod() {
-  // Apple Mail only exists on Macs; elsewhere Gmail is the only offer
+  // Apple Mail only exists on Macs; elsewhere Gmail
   if (!navigator.platform.toLowerCase().includes('mac')) return Promise.resolve('gmail');
   return new Promise((resolve) => {
     const bd = document.createElement('div');
@@ -3311,7 +3410,6 @@ window.neo.onMenu(async (msg) => {
     applyAlign(msg.value);
   }
   if (msg.type === 'uiBright') {
-    // no toast — the change announces itself
     library.uiBright = !library.uiBright;
     await window.neo.writeLibrary(library);
     applyFonts();
@@ -3320,11 +3418,11 @@ window.neo.onMenu(async (msg) => {
     library.pageTheme = msg.value;
     await window.neo.writeLibrary(library);
     applyFonts();
-    toast(msg.value === 'night' ? 'Night page — easy on midnight eyes' : 'Paper page');
   }
   if (msg.type === 'fontSize') {
     const cur = library.editorFontSize || 17;
     library.editorFontSize = msg.value === 0 ? 17 : Math.min(22, Math.max(14, cur + msg.value));
+    if (msg.value === 0) library.pageZoom = 1; // ⌘0 resets pinch zoom too
     await window.neo.writeLibrary(library);
     applyFonts();
   }

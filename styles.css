@@ -219,6 +219,8 @@ body.night .ol-num { color: #7d7768; }
 body.night .ol-chapter .ol-num { color: #918b7d; }
 body.night .ol-text:focus { border-bottom-color: #4a4742; }
 body.night .ol-hint { color: #5f5b52; }
+/* notes pasted before paste-cleaning existed may carry their own colors */
+body.night #aux-editor * { color: inherit; }
 
 /* The scroller is a centered column barely wider than the page, so the
    scrollbar lives right beside the manuscript — nowhere near the hover
@@ -226,7 +228,7 @@ body.night .ol-hint { color: #5f5b52; }
 #paper-scroll {
   position: absolute; top: 0; bottom: 40px;
   left: 50%; transform: translateX(-50%);
-  width: min(760px, 94%);
+  width: min(calc(760px * var(--page-zoom, 1)), 94%);
   overflow-y: auto;
 }
 
@@ -236,7 +238,7 @@ body.night .ol-hint { color: #5f5b52; }
 
 /* Each page of the book is its own sheet of paper */
 #paper {
-  width: 680px; max-width: 92%;
+  width: calc(680px * var(--page-zoom, 1)); max-width: 92%;
   margin: 40px auto 120px;
 }
 .sheet {
@@ -247,7 +249,7 @@ body.night .ol-hint { color: #5f5b52; }
   margin-bottom: 44px;
 }
 #aux-paper {
-  width: 680px; max-width: 92%;
+  width: calc(680px * var(--page-zoom, 1)); max-width: 92%;
   background: var(--paper); color: var(--ink);
   margin: 40px auto 120px;
   padding: 70px 72px 90px;
@@ -261,7 +263,7 @@ body.night .ol-hint { color: #5f5b52; }
   display: flex; flex-direction: column; justify-content: center;
 }
 #tp-title {
-  font-family: Georgia, serif; font-size: 34px; font-weight: 700;
+  font-family: Georgia, serif; font-size: calc(34px * var(--page-zoom, 1)); font-weight: 700;
   outline: none; min-height: 44px;
 }
 #tp-subtitle {
@@ -279,7 +281,7 @@ body.night .ol-hint { color: #5f5b52; }
 /* --- Chapters: each starts on a fresh sheet --- */
 .chapter-head {
   text-align: center; font-family: Georgia, serif;
-  font-size: 15px; letter-spacing: 4px; text-transform: uppercase;
+  font-size: calc(15px * var(--page-zoom, 1)); letter-spacing: 4px; text-transform: uppercase;
   color: #555; margin-bottom: 44px;
   user-select: none;
 }
@@ -298,14 +300,20 @@ body.night .ol-hint { color: #5f5b52; }
 .chapter-head:hover .ch-title:empty::before { opacity: 1; }
 .chapter-body {
   font-family: var(--body-font);
-  font-size: var(--editor-size, 17px); line-height: 1.75;
+  font-size: calc(var(--editor-size, 17px) * var(--page-zoom, 1)); line-height: 1.75;
   outline: none;
   min-height: 60px;
 }
 .sheet ::selection, #aux-paper ::selection { background: rgba(201, 168, 106, 0.35); }
-.chapter-body p { text-indent: 2em; margin: 0; }
+/* pre-wrap keeps spaces literal, so the engine's space-collapsing repair
+   pass (the source of duplicated characters on delete) never runs */
+.chapter-body p { text-indent: 2em; margin: 0; white-space: pre-wrap; }
+#aux-editor p { white-space: pre-wrap; }
 .chapter-body p:first-of-type { text-indent: 0; }
-.chapter-body p:first-of-type::first-letter {
+/* cap-off while the caret is in the first paragraph: the rule must stop
+   MATCHING entirely — a matching first-letter rule, even styled to nothing,
+   makes the engine split the text internally, which corrupts deletes */
+.chapter-body:not(.cap-off) p:first-of-type::first-letter {
   font-size: 3.4em; float: left; line-height: 0.8;
   padding: 4px 8px 0 0; font-family: var(--dropcap-font);
 }
@@ -316,8 +324,8 @@ body.night .ol-hint { color: #5f5b52; }
   margin: 1.6em 0; user-select: none;
 }
 .chapter-body p.scene-break + p { text-indent: 0; }
-/* aligned paragraphs drop the first-line indent */
-.chapter-body p[style*="text-align"] { text-indent: 0; }
+/* centered/right paragraphs drop the first-line indent; justified keep it */
+.chapter-body p[style*="text-align"]:not([style*="justify"]) { text-indent: 0; }
 /* Invisible anchors marking where a darling was cut from */
 .darling-anchor {
   display: inline-block; width: 0; height: 0; overflow: hidden;
@@ -335,7 +343,7 @@ body.night .ol-hint { color: #5f5b52; }
   text-align: center; margin-bottom: 40px;
 }
 #aux-editor {
-  font-family: Georgia, serif; font-size: var(--editor-size, 16px); line-height: 1.7; outline: none;
+  font-family: Georgia, serif; font-size: calc(var(--editor-size, 16px) * var(--page-zoom, 1)); line-height: 1.7; outline: none;
   min-height: 50vh;
 }
 #aux-editor:empty::before { content: 'Write freely…'; color: #b9b4a8; font-style: italic; }

@@ -1,7 +1,7 @@
 {
   "name": "neo",
   "productName": "NEO",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "description": "A word processor for authors. Distraction-free by default.",
   "main": "main.js",
   "scripts": {
@@ -78,7 +78,7 @@
   "author": "Hugh Howey",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^33.0.0",
+    "electron": "^43.0.0",
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
