@@ -2764,21 +2764,38 @@ function applyFonts() {
   document.documentElement.style.setProperty('--editor-size', size + 'px');
   const zoom = Math.min(1.6, Math.max(0.75, library.pageZoom || 1));
   document.documentElement.style.setProperty('--page-zoom', zoom);
+  updateZoomDisplay();
 }
 
 // Pinch (trackpad) or Ctrl+scroll: page and text zoom together.
 // A pinch arrives as a wheel event with ctrlKey set.
 let zoomSaveTimer = null;
+function updateZoomDisplay() {
+  const el = $('#zoom-level');
+  if (el) el.textContent = Math.round((library.pageZoom || 1) * 100) + '%';
+}
+function setPageZoom(next) {
+  next = Math.min(1.6, Math.max(0.75, next));
+  if (next === (library.pageZoom || 1)) return;
+  library.pageZoom = next;
+  document.documentElement.style.setProperty('--page-zoom', next);
+  updateZoomDisplay();
+  clearTimeout(zoomSaveTimer);
+  zoomSaveTimer = setTimeout(() => { window.neo.writeLibrary(library); }, 600);
+}
 $('#editor-view').addEventListener('wheel', (e) => {
   if (!e.ctrlKey) return;
   e.preventDefault();
-  const cur = library.pageZoom || 1;
-  const next = Math.min(1.6, Math.max(0.75, cur * Math.exp(-e.deltaY * 0.005)));
-  if (next === cur) return;
-  library.pageZoom = next;
-  document.documentElement.style.setProperty('--page-zoom', next);
-  clearTimeout(zoomSaveTimer);
-  zoomSaveTimer = setTimeout(() => { window.neo.writeLibrary(library); }, 600);
+  setPageZoom((library.pageZoom || 1) * Math.exp(-e.deltaY * 0.005));
+}, { passive: false });
+
+// Word-style zoom control in the bottom bar: buttons, click-to-reset, and scroll.
+$('#zoom-in').onclick = () => setPageZoom((library.pageZoom || 1) + 0.1);
+$('#zoom-out').onclick = () => setPageZoom((library.pageZoom || 1) - 0.1);
+$('#zoom-level').onclick = () => setPageZoom(1);
+$('#zoom-control').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  setPageZoom((library.pageZoom || 1) * Math.exp(-e.deltaY * 0.002));
 }, { passive: false });
 
 // Format → Align Paragraph: applies to every paragraph the selection touches
@@ -2850,6 +2867,7 @@ function showHelp() {
         ${row('Drag chapters', 'In the left panel, to reorder — everything renumbers')}
         ${row('Double-click', 'A tab, to rename it')}
         ${row('Click counters', 'Cycle word counts · open goals &amp; sprints')}
+        ${row('Zoom control', 'Bottom-right corner — +/− buttons, scroll, or click the % to reset')}
         ${row(K('Pinch', 'Ctrl+Scroll'), 'Zoom the page — text and column together (' + K('⌘0', 'Ctrl+0') + ' resets)')}
       </div>
 
