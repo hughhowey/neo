@@ -502,6 +502,15 @@ body.night #aux-editor * { color: inherit; }
 #counters span { cursor: pointer; user-select: none; }
 #counters span:hover { color: #ddd; }
 
+#zoom-control { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+#zoom-control button {
+  background: none; border: none; color: var(--muted); font-size: 13px; width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center; line-height: 1; border-radius: 3px; padding: 0;
+}
+#zoom-control button:hover { color: var(--accent); background: #262626; }
+#zoom-level { cursor: pointer; user-select: none; min-width: 36px; text-align: center; }
+#zoom-level:hover { color: #ddd; }
+
 /* --- Find & replace bar --- */
 #searchbar {
   position: fixed; top: 34px; left: 50%; transform: translateX(-50%);
