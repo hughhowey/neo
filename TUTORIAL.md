@@ -2,7 +2,8 @@
 
 **Installing**
 
-Mac: open the .dmg, drag NEO into Applications. PC: run the installer or the standalone .exe.
+Mac: open the .dmg for older Intel macs ... or the arm64.dmg for Apple silicon machines. Drag NEO into Applications. 
+PC: run the installer or the standalone .exe.
 
 NEO will ask you two things when it opens: your name (this goes on your title pages, and you can leave it blank and be Anonymous), and whether you're a **pantser or a plotter**. If you don't know the difference, pantsers write by the seat of their pants and figure our the story as they go. Plotters outline first. There's no wrong answer, and you can change it later. The difference in NEO is plotters have new books that open in the Outline tab, while pantsers get a blank page. Then NEO asks you to pick a font and a drop cap style and shows you exactly what your page will look like. You can change these options later.
 
