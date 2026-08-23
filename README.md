@@ -10,7 +10,7 @@ NEO runs locally. WIPs are saved in plain files on your disk. No accounts or sub
 
 Get the latest installer from the **[Releases page](../../releases)**:
 
-- **macOS** — download the `.dmg`, open it, drag NEO to Applications.
+- **macOS** — download the `.dmg` for older Intel machines or the arm64 file for Mac silicon. Open it and drag NEO to Applications.
 - **Windows** — download the `.exe` and run it. Or get the setup installer and run that.
 
 ## Why NEO?
