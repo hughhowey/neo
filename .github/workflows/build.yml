@@ -1,10 +1,5 @@
-# Builds NEO on real Windows, Linux, and macOS machines whenever a version
-# tag is pushed (e.g. git tag v0.4.0 && git push --tags), and attaches the
-# installers to a draft GitHub release. The Mac build signs and notarizes
-# using credentials stored in the repo's encrypted Actions secrets.
-#
-# Why this exists: cross-building invites subtle breakage no one can test,
-# and notarization uploads want datacenter bandwidth, not boat Wi-Fi.
+# Builds NEO on remote Windows, Linux, and macOS machines whenever a version
+# tag is pushed, and attaches the installers to a draft GitHub release. 
 
 name: Build NEO
 
@@ -14,7 +9,6 @@ on:
       - 'v*'
   workflow_dispatch: {}
 
-# the robots need write access to create/attach to draft releases
 permissions:
   contents: write
 
