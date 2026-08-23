@@ -1,10 +1,10 @@
-# Builds NEO on real Windows and Linux machines whenever a version tag is
-# pushed (e.g. git tag v0.3.0 && git push --tags), and attaches the installers
-# to a draft GitHub release. The Mac build stays on Hugh's laptop, where the
-# signing certificate lives.
+# Builds NEO on real Windows, Linux, and macOS machines whenever a version
+# tag is pushed (e.g. git tag v0.4.0 && git push --tags), and attaches the
+# installers to a draft GitHub release. The Mac build signs and notarizes
+# using credentials stored in the repo's encrypted Actions secrets.
 #
-# Why this exists: cross-building Windows apps from a Mac invites subtle
-# breakage that no one can test. These builds come from the real thing.
+# Why this exists: cross-building invites subtle breakage no one can test,
+# and notarization uploads want datacenter bandwidth, not boat Wi-Fi.
 
 name: Build NEO
 
@@ -59,6 +59,42 @@ jobs:
           files: |
             dist/*.exe
             dist/latest.yml
+            dist/*.blockmap
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm install electron-builder --save-dev
+      - name: Build, sign, and notarize
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: |
+            dist/*.dmg
+            dist/*-mac.zip
+            dist/latest-mac.yml
+            dist/*.blockmap
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/*.dmg
+            dist/*-mac.zip
+            dist/latest-mac.yml
             dist/*.blockmap
 
   linux:

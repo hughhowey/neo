@@ -1,7 +1,7 @@
 {
   "name": "neo",
   "productName": "NEO",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A word processor for authors. Distraction-free by default.",
   "main": "main.js",
   "scripts": {
@@ -25,13 +25,15 @@
         {
           "target": "dmg",
           "arch": [
-            "universal"
+            "arm64",
+            "x64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "universal"
+            "arm64",
+            "x64"
           ]
         }
       ],

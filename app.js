@@ -329,7 +329,8 @@ async function renderShelves() {
       let placed = false;
       for (const t of row.querySelectorAll('.book:not(.dragging)')) {
         const r = t.getBoundingClientRect();
-        if (e.clientX < r.left + r.width / 2) {
+        // cursor above this book's row, or on its row and left of center
+        if (e.clientY < r.top || (e.clientY < r.bottom && e.clientX < r.left + r.width / 2)) {
           row.insertBefore(ind, t);
           placed = true;
           break;
