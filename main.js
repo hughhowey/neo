@@ -417,7 +417,7 @@ async function importFile(fp) {
     (/^(chapter|prologue|epilogue|part)\b/i.test(t) && t.length < 60) ||
     (numeralMode && isNumeralish(t))
   );
-  const isBreak = (t) => /^([*#•~]\s*){1,7}$/.test(t);
+  const isBreak = (t) => /^\s*([*#•~⁂—–-]\s*){1,7}$/.test(t || '');
 
   const chapterize = (usePageBreaks) => {
     const chapters = [];

@@ -196,8 +196,26 @@ function showFirstRun() {
   };
 }
 
+// Pen names: each author owns a set of shelves. Books all live in the one
+// NEO Library folder on disk regardless of name — switching or deleting a
+// pen name never touches files.
+function currentAuthor() {
+  if (!library.authors || !library.authors.length) {
+    library.authors = [{
+      id: 'a1',
+      name: library.authorName || (library.penNames && library.penNames[0]) || 'Anonymous'
+    }];
+  }
+  return library.authors.find((a) => a.id === library.currentAuthorId) || library.authors[0];
+}
+
+function shelvesFor(authorId) {
+  const homeId = library.authors[0].id;
+  return library.shelves.filter((s) => (s.authorId || homeId) === authorId);
+}
+
 function displayAuthor() {
-  return (library.penNames && library.penNames[0]) || library.authorName || 'Anonymous';
+  return currentAuthor().name || 'Anonymous';
 }
 
 async function renderShelves() {
@@ -249,7 +267,7 @@ async function renderShelves() {
     });
   }
 
-  for (const shelf of library.shelves) {
+  for (const shelf of shelvesFor(currentAuthor().id)) {
     const sec = document.createElement('section');
     sec.className = 'shelf';
 
@@ -297,11 +315,12 @@ async function renderShelves() {
       if (choice === 'anthology') {
         await exportShelfAnthology(shelf);
       } else if (choice === 'del') {
-        if (library.shelves.length === 1) {
+        const mine = shelvesFor(currentAuthor().id);
+        if (mine.length === 1) {
           toast('This is your only shelf — add another before deleting this one');
           return;
         }
-        const other = library.shelves.find((s) => s.id !== shelf.id);
+        const other = mine.find((s) => s.id !== shelf.id);
         for (const id of shelf.bookIds) {
           if (!other.bookIds.includes(id)) other.bookIds.push(id);
         }
@@ -599,16 +618,60 @@ $('#add-shelf-btn').onclick = async () => {
   library.shelves.push({
     id: 'shelf-' + Date.now().toString(36),
     name: 'New Shelf',
-    bookIds: []
+    bookIds: [],
+    authorId: currentAuthor().id
   });
   await window.neo.writeLibrary(library);
   renderShelves();
 };
 
 $('#author-chip').onclick = async () => {
-  const name = await askInput('Author name', 'Shown on your title pages', displayAuthor());
-  if (name === null) return;
-  library.authorName = name || '';
+  const cur = currentAuthor();
+  const opts = [];
+  for (const a of library.authors) {
+    if (a.id !== cur.id) {
+      opts.push({ label: 'Write as ' + a.name, desc: 'Switch to this name’s shelves', value: 'sw:' + a.id });
+    }
+  }
+  opts.push({ label: 'Rename ' + cur.name, value: 'rename' });
+  opts.push({ label: 'Add a pen name…', desc: 'A separate set of shelves under another name', value: 'add' });
+  if (library.authors.length > 1) {
+    opts.push({
+      label: 'Remove ' + cur.name,
+      desc: 'These shelves and books move to your other name. Nothing is deleted from disk.',
+      danger: true, value: 'del'
+    });
+  }
+  const pick = await optionModal('Writing as ' + cur.name, null, opts);
+  if (!pick) return;
+  if (pick.startsWith('sw:')) {
+    library.currentAuthorId = pick.slice(3);
+  } else if (pick === 'rename') {
+    const name = await askInput('Author name', 'Shown on your title pages', cur.name);
+    if (name === null) return;
+    cur.name = name || cur.name;
+    library.authorName = library.authors[0].name; // legacy field follows the first name
+  } else if (pick === 'add') {
+    const name = await askInput('New pen name', 'Shown on that name’s title pages', '');
+    if (!name) return;
+    const a = { id: 'a-' + Date.now().toString(36), name };
+    library.authors.push(a);
+    library.currentAuthorId = a.id;
+    library.shelves.push({
+      id: 'shelf-' + Date.now().toString(36),
+      name: 'Works in Progress', bookIds: [], authorId: a.id
+    });
+  } else if (pick === 'del') {
+    const homeId = library.authors[0].id;
+    const rest = library.authors.filter((a) => a.id !== cur.id);
+    const target = rest[0];
+    for (const s of library.shelves) {
+      if ((s.authorId || homeId) === cur.id) s.authorId = target.id;
+    }
+    library.authors = rest;
+    library.currentAuthorId = target.id;
+    library.authorName = library.authors[0].name;
+  }
   await window.neo.writeLibrary(library);
   renderShelves();
 };
@@ -723,6 +786,8 @@ function renderChapters() {
     body.contentEditable = 'true';
     body.spellcheck = spellOn;
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
+    // older marks used a "?" that read as a broken image — normalize to the flag
+    body.querySelectorAll('.ph-mark').forEach((m) => { m.textContent = '⚑'; });
     wireChapterBody(body, chId);
     sec.appendChild(head);
     sec.appendChild(body);
@@ -1202,6 +1267,11 @@ $('#tp-subtitle').addEventListener('input', () => {
   book.subtitle = $('#tp-subtitle').textContent.trim();
   scheduleMetaSave();
 });
+// each book can carry its own pen name
+$('#tp-author').addEventListener('input', () => {
+  book.author = $('#tp-author').textContent.trim();
+  scheduleMetaSave();
+});
 
 // Global editor shortcuts
 document.addEventListener('keydown', (e) => {
@@ -1305,7 +1375,7 @@ function insertPlaceholder() {
   span.className = 'ph-mark';
   span.dataset.sid = sid;
   span.contentEditable = 'false';
-  span.textContent = '?';
+  span.textContent = '⚑';
   const range = sel.getRangeAt(0);
   range.collapse(false);
   range.insertNode(span);
@@ -1884,6 +1954,19 @@ function outlineLine(kind, chId, secId, index, label, text) {
         scheduleMetaSave();
         syncGhosts(chId);
         renderOutline({ secId: newSec.id });
+      }
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const lines = [...document.querySelectorAll('.ol-line .ol-text')];
+      const next = lines[lines.indexOf(txt) + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (next) {
+        next.focus();
+        const r = document.createRange();
+        r.selectNodeContents(next);
+        r.collapse(false);
+        const s = window.getSelection();
+        s.removeAllRanges(); s.addRange(r);
       }
     }
     if (e.key === 'Tab' && !e.shiftKey) {
@@ -2526,7 +2609,7 @@ const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 // Turn parsed manuscripts into books on a shelf — used by the file picker
 // and by dropping files from Finder straight onto a shelf.
 async function addImportedBooks(results, shelf) {
-  shelf = shelf || library.shelves[0];
+  shelf = shelf || shelvesFor(currentAuthor().id)[0] || library.shelves[0];
   let ok = 0;
   for (const r of results) {
     if (r.error) { toast(`Couldn't import ${r.name}: ${r.error}`, 6000); continue; }
@@ -2563,7 +2646,7 @@ async function addImportedBooks(results, shelf) {
 
 async function importBooks() {
   const results = await window.neo.importPick();
-  if (results.length) await addImportedBooks(results, library.shelves[0]);
+  if (results.length) await addImportedBooks(results, shelvesFor(currentAuthor().id)[0] || library.shelves[0]);
 }
 
 $('#import-btn').onclick = importBooks;
@@ -2946,7 +3029,16 @@ function buildHtml(data) {
     let first = true;
     const paras = ch.paras.map((p) => {
       if (p.sceneBreak) { first = true; return '<p class="brk">***</p>'; }
-      const html = (first && !p.html.includes('class=')) ? p.html.replace('<p', '<p class="first"') : p.html;
+      let html = p.html;
+      if (first) {
+        // mark section openers via the DOM so existing classes/styles survive
+        const h = document.createElement('div');
+        h.innerHTML = html;
+        if (h.firstElementChild) {
+          h.firstElementChild.classList.add('first');
+          html = h.innerHTML;
+        }
+      }
       first = false;
       return html;
     }).join('\n');
@@ -2969,7 +3061,7 @@ function buildHtml(data) {
   .chapter p { text-indent: 2em; margin: 0; }
   .chapter h2 + p, .brk + p, .chapter p.first { text-indent: 0; }
   .chapter h2 + p::first-letter, .chapter p.first::first-letter { font-size: 3em; float: left; line-height: 0.8; padding: 3px 6px 0 0; }
-  .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 1.5em 0; }
+  .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .prov { margin-top: 80px; text-align: center; color: #999; font-size: 9pt; }
 </style></head><body>
 <div class="titlepage"><h1>${d.title}</h1>
@@ -3228,7 +3320,7 @@ p { text-indent: 1.2em; margin: 0; }
 p.first, p.brk + p { text-indent: 0; }
 p.center { text-align: center; text-indent: 0; }
 p.right { text-align: right; text-indent: 0; }
-p.brk { text-align: center; text-indent: 0; margin: 1.5em 0; letter-spacing: 0.5em; }
+p.brk { text-align: center; text-indent: 0; margin: 2.5em 0; letter-spacing: 0.5em; }
 .titlepage { text-align: center; margin-top: 30%; }
 .titlepage h2 { font-size: 2em; margin: 0; }
 .titlepage .sub { font-style: italic; }
