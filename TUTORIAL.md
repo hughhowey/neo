@@ -13,17 +13,21 @@ NEO opens on a bookshelf because you're a novelist, and novelists write books. (
 
 You can add more shelves (button in the top right corner), rename any shelf by clicking its label, and drag books around like you're rearranging a real bookshelf. Right-click a book to set a word count goal (this puts a subtle progress bar on the cover. You have to write to see it!). You can also right-click to remove a book. Each book gets its own colored cover; hover over one and click the little ↻ refresh button if you want a new one. Or drag 2:3 ratio cover art right on the book to make it extra purty.
 
+**Author(s)**
+
+New in v0.4.2 is the ability to have bookshelves for each of your pen names. Just click the author name you already have, and here you can rename that author or "Add a Pen Name..." Click that and create a new set of shelves under a different name. Title pages are adorned appropriately, and with two clicks you can switch to a different author. If you delete an author, their shelves will move to another author's shelves, to create a safety valve (all books are kept in the same Library folder anyway).
+
 **Writing**
 
 Here's everything you need to know about writing in NEO:
 
-Type your title. Hit Enter. Start writing Chapter One.
+Type your title. Hit Enter. Start writing.
 
 The first paragraph of every chapter gets a big drop cap, like a real book, because **you are writing a real book** and NEO wants you to feel that every time you open it up. The writing should delight you the way it delights your readers!
 
-When you finish a scene and want a section break — those little *** dividers — hit **Enter twice**. When you finish a chapter, hit **Enter three times**. A new chapter appears, numbered. If you later squeeze a chapter in between two others, every chapter renumbers itself. You will never type the words "Chapter Twelve" again. This alone would've saved me a cumulative month of my life.
+When you finish a scene and want a section break — those little *** dividers — hit **Enter twice**. When you finish a chapter, hit **Enter three times**. A new chapter appears, numbered. If this is the first time you've created a new chapter, it will be Chapter 2 and NEO will label your first section Chapter 1 (this way short stories are exported without chapters at all). If you later squeeze a chapter in between two others, every chapter renumbers itself.
 
-Type two hyphens and get an em dash — like that. The change happens immediately. OWN THOSE EM DASHES! Type three periods and get a real ellipsis… Quotes curl themselves in the right direction (imported files might have weird quotes).
+Type two hyphens and get an em dash — like that. The change happens immediately. Type three periods and get a real ellipsis… Quotes curl themselves in the right direction (imported files might have weird quotes; working on this).
 
 Note: **there is no spellcheck while you write.** No red squiggles yelling WRONG at you while you're mid-thought about a made-up city with a made-up name. Your creative brain doesn't need a klaxon. When you're ready to check spelling, hit ⌘; and it'll turn on. Right-click the squiggles for suggestions. Hit ⌘; again to get back into the flow.
 
