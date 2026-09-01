@@ -705,6 +705,7 @@ async function openBook(bookId) {
   renderChapters();
   renderStickies();
   migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
+  reconcileMarks();        // re-adopt any note marks orphaned by cut/paste
   updateCounters();
 
   // Plotters land in the outline for a brand-new book
@@ -848,6 +849,7 @@ function wireChapterBody(body, chId) {
     const text = e.clipboardData.getData('text/plain');
     if (html) {
       document.execCommand('insertHTML', false, cleanPasteHtml(html));
+      reconcileMarks();
     } else if (text) {
       const parts = text.replace(/\r/g, '').split(/\n+/).filter((p) => p.trim());
       parts.forEach((p, i) => {
@@ -1195,6 +1197,13 @@ function cleanPasteHtml(html) {
   if (!blocks.length) blocks = [holder]; // inline-only clipboard
   const out = blocks.map((b) => {
     const inner = paraRuns(b.innerHTML).map((r) => {
+      if (r.mark !== undefined) {
+        // placeholder marks travel with their text; reconcileMarks pairs
+        // each one back up with a note after the paste lands
+        return r.mark
+          ? `<span class="ph-mark" data-sid="${escHtml(r.mark)}" contenteditable="false">⚑</span>`
+          : '';
+      }
       let t = escHtml(r.text);
       if (r.i) t = '<i>' + t + '</i>';
       if (r.b) t = '<b>' + t + '</b>';
@@ -1428,6 +1437,43 @@ function renderStickies() {
     };
     el.querySelector('.s-done').onclick = () => resolveSticky(s.id);
     wrap.appendChild(el);
+  }
+}
+
+// Pair every mark in the manuscript with a note: pasted duplicates get their
+// own copy of the note, marks that moved chapters update their red dot, and
+// marks orphaned by older versions get a fresh (empty) note instead of dying.
+function reconcileMarks() {
+  if (!book) return;
+  const seen = new Set();
+  let changed = false;
+  for (const m of document.querySelectorAll('.chapter-body .ph-mark')) {
+    let sid = m.dataset.sid;
+    if (!sid) continue;
+    const chEl = m.closest('.chapter');
+    const chId = chEl ? chEl.dataset.id : null;
+    const existing = stickies.find((s) => s.id === sid);
+    if (seen.has(sid)) {
+      const nid = 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 5);
+      m.dataset.sid = nid;
+      stickies.push({ id: nid, chapterId: chId, text: existing ? existing.text : '', resolved: false });
+      seen.add(nid);
+      changed = true;
+      continue;
+    }
+    if (!existing) {
+      stickies.push({ id: sid, chapterId: chId, text: '', resolved: false });
+      changed = true;
+    } else if (existing.chapterId !== chId) {
+      existing.chapterId = chId;
+      changed = true;
+    }
+    seen.add(sid);
+  }
+  if (changed) {
+    window.neo.writeJSON(book.id, 'stickies', stickies);
+    renderStickies();
+    renderNav();
   }
 }
 
@@ -3088,6 +3134,10 @@ function paraRuns(pHtml) {
       if (child.nodeType === Node.TEXT_NODE) {
         if (child.textContent) runs.push({ text: child.textContent, b, i });
       } else if (child.nodeType === Node.ELEMENT_NODE) {
+        if (child.classList && child.classList.contains('ph-mark')) {
+          runs.push({ mark: child.dataset.sid || '' });
+          continue;
+        }
         const tag = child.tagName;
         walk(child, b || tag === 'B' || tag === 'STRONG', i || tag === 'I' || tag === 'EM');
       }
