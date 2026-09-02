@@ -263,11 +263,11 @@ body.night #aux-editor * { color: inherit; }
   display: flex; flex-direction: column; justify-content: center;
 }
 #tp-title {
-  font-family: Georgia, serif; font-size: calc(34px * var(--page-zoom, 1)); font-weight: 700;
+  font-family: var(--body-font); font-size: calc(34px * var(--page-zoom, 1)); font-weight: 700;
   outline: none; min-height: 44px;
 }
 #tp-subtitle {
-  font-family: Georgia, serif; font-size: 17px; font-style: italic;
+  font-family: var(--body-font); font-size: 17px; font-style: italic;
   color: #555; margin-top: 14px; outline: none; min-height: 24px;
 }
 #tp-author {
@@ -280,7 +280,7 @@ body.night #aux-editor * { color: inherit; }
 
 /* --- Chapters: each starts on a fresh sheet --- */
 .chapter-head {
-  text-align: center; font-family: Georgia, serif;
+  text-align: center; font-family: var(--body-font);
   font-size: calc(15px * var(--page-zoom, 1)); letter-spacing: 4px; text-transform: uppercase;
   color: #555; margin-bottom: 44px;
   user-select: none;
@@ -293,7 +293,7 @@ body.night #aux-editor * { color: inherit; }
   outline: none; user-select: text; min-width: 10px; display: inline-block;
 }
 .chapter-head .ch-title:empty::before {
-  content: 'add a title'; color: #c4beb0; font-style: italic;
+  content: var(--i18n-add-title, 'add a title'); color: #c4beb0; font-style: italic;
   letter-spacing: 1px; text-transform: none; opacity: 0;
   transition: opacity 0.15s;
 }
@@ -338,33 +338,33 @@ body.night #aux-editor * { color: inherit; }
 
 /* --- Aux paper (Notes / Outline / Darlings) --- */
 #aux-paper h2 {
-  font-family: Georgia, serif; font-weight: 400; letter-spacing: 3px;
+  font-family: var(--body-font); font-weight: 400; letter-spacing: 3px;
   text-transform: uppercase; font-size: 14px; color: #777;
   text-align: center; margin-bottom: 40px;
 }
 #aux-editor {
-  font-family: Georgia, serif; font-size: calc(var(--editor-size, 16px) * var(--page-zoom, 1)); line-height: 1.7; outline: none;
+  font-family: var(--body-font); font-size: calc(var(--editor-size, 16px) * var(--page-zoom, 1)); line-height: 1.7; outline: none;
   min-height: 50vh;
 }
-#aux-editor:empty::before { content: 'Write freely…'; color: #b9b4a8; font-style: italic; }
+#aux-editor:empty::before { content: var(--i18n-write-freely, 'Write freely…'); color: #b9b4a8; font-style: italic; }
 
 /* --- Structured outline tab --- */
 .ol-line { display: flex; gap: 12px; align-items: baseline; padding: 3px 0; }
 .ol-chapter { margin-top: 18px; }
 .ol-section { margin-left: 40px; }
 .ol-num {
-  font-family: Georgia, serif; color: #8d8778; min-width: 24px; text-align: right;
+  font-family: var(--body-font); color: #8d8778; min-width: 24px; text-align: right;
   user-select: none; flex-shrink: 0;
 }
 .ol-chapter .ol-num { font-weight: 700; color: #6b6455; }
 .ol-text {
-  flex: 1; outline: none; font-family: Georgia, serif; font-size: 15px;
+  flex: 1; outline: none; font-family: var(--body-font); font-size: 15px;
   line-height: 1.5; min-height: 20px; border-bottom: 1px dashed transparent;
 }
 .ol-text:focus { border-bottom-color: #d8d2c2; }
 .ol-text:empty::before { color: #b9b4a8; font-style: italic; }
-.ol-chapter .ol-text:empty::before { content: 'What happens in this chapter…'; }
-.ol-section .ol-text:empty::before { content: 'What happens in this section…'; }
+.ol-chapter .ol-text:empty::before { content: var(--i18n-ol-chapter, 'What happens in this chapter…'); }
+.ol-section .ol-text:empty::before { content: var(--i18n-ol-section, 'What happens in this section…'); }
 .ol-hint {
   margin-top: 40px; color: #b9b4a8; font-size: 12.5px; font-style: italic;
   line-height: 1.7; text-align: center;
@@ -379,7 +379,7 @@ body.night #aux-editor * { color: inherit; }
 .darling {
   border: 1px solid #e3ddcf; border-left: 3px solid var(--accent);
   border-radius: 4px; padding: 16px 18px; margin-bottom: 18px;
-  font-family: Georgia, serif; font-size: 15px; line-height: 1.6;
+  font-family: var(--body-font); font-size: 15px; line-height: 1.6;
 }
 .darling .d-meta {
   display: flex; justify-content: space-between; align-items: center;
@@ -431,7 +431,7 @@ body.night #aux-editor * { color: inherit; }
   margin-top: 4px; font-size: 12px; line-height: 1.45; color: #777;
   outline: none; min-height: 15px; cursor: text;
 }
-.nav-note:empty::before { content: 'What happens here…'; color: #4a4a4a; font-style: italic; }
+.nav-note:empty::before { content: var(--i18n-nav-note, 'What happens here…'); color: #4a4a4a; font-style: italic; }
 .nav-note:focus { color: #ccc; }
 #nav-add {
   display: block; width: calc(100% - 36px); margin: 14px 18px 0;
@@ -531,7 +531,7 @@ body.night #aux-editor * { color: inherit; }
 /* --- Stats / goals modal --- */
 .stats-nums { display: flex; gap: 26px; margin: 14px 0 18px; }
 .stats-nums div { text-align: center; }
-.stats-nums .big { font-size: 26px; color: var(--accent); font-family: Georgia, serif; }
+.stats-nums .big { font-size: 26px; color: var(--accent); font-family: var(--body-font); }
 .stats-nums .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
 .stats-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
 .stats-row input {

@@ -14,6 +14,7 @@ Good territory: bug fixes, performance, accessibility, better import/export prec
 - `preload.js` — the bridge. Every capability the UI has is listed here.
 - `app.js` — the entire UI: bookshelf, editor, outline, search, goals.
 - `styles.css` — all styling, with CSS variables at the top.
+- `i18n.js` + `locales/*.json` — UI language. The app picks a catalog from the system locale (`zh*` → Chinese, otherwise English). To add a language, drop `locales/<code>.json` mirroring `en.json`. **Disk data stays English** (`Untitled`, `Works in Progress`, `Notes`, …); only the UI is translated.
 
 Books are folders of plain files in `~/Documents/NEO Library`: `book.json` for metadata, `chapters/*.html` for text, JSON files for darlings/stickies.
 
