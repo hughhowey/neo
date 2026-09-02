@@ -14,9 +14,9 @@
     <header id="shelf-header">
       <h1>NEO</h1>
       <div class="shelf-header-right">
-        <span id="author-chip" title="Click to change your author name"></span>
-        <button id="import-btn" title="Import .docx, .txt, or .md manuscripts">&#8681; Import</button>
-        <button id="add-shelf-btn" title="Add a shelf">+ Shelf</button>
+        <span id="author-chip" data-i18n-title="shelf.authorChipTitle"></span>
+        <button id="import-btn" data-i18n-title="shelf.importTitle">&#8681; <span data-i18n="shelf.import">Import</span></button>
+        <button id="add-shelf-btn" data-i18n-title="shelf.addShelfTitle">+ <span data-i18n="shelf.addShelf">Shelf</span></button>
       </div>
     </header>
     <div id="shelves"></div>
@@ -26,43 +26,43 @@
   <div id="firstrun" class="modal-backdrop" hidden>
     <div class="modal">
       <div id="fr-step1">
-        <h2>Welcome to NEO</h2>
-        <p>NEO knows you're writing books. A few quick questions and it will never ask anything again.</p>
-        <label>Your name <span class="soft">(appears as the author on every document — leave blank for “Anonymous”)</span>
+        <h2 data-i18n="firstRun.welcomeTitle">Welcome to NEO</h2>
+        <p data-i18n="firstRun.welcomeBody">NEO knows you're writing books. A few quick questions and it will never ask anything again.</p>
+        <label><span data-i18n="firstRun.yourName">Your name</span> <span class="soft" data-i18n="firstRun.yourNameHint">(appears as the author on every document — leave blank for “Anonymous”)</span>
           <input id="fr-name" type="text" autocomplete="off" spellcheck="false" />
         </label>
-        <label>Pen name <span class="soft">(optional — used on title pages if set)</span>
+        <label><span data-i18n="firstRun.penName">Pen name</span> <span class="soft" data-i18n="firstRun.penNameHint">(optional — used on title pages if set)</span>
           <input id="fr-pen" type="text" autocomplete="off" spellcheck="false" />
         </label>
         <div class="fr-style">
-          <p>Are you a pantser or a plotter?</p>
+          <p data-i18n="firstRun.pantserOrPlotter">Are you a pantser or a plotter?</p>
           <div class="fr-choices">
             <button class="fr-choice" data-style="pantser">
-              <strong>Pantser</strong>
-              <span>I write by the seat of my pants. New books open on a blank page.</span>
+              <strong data-i18n="firstRun.pantserTitle">Pantser</strong>
+              <span data-i18n="firstRun.pantserDesc">I write by the seat of my pants. New books open on a blank page.</span>
             </button>
             <button class="fr-choice" data-style="plotter">
-              <strong>Plotter</strong>
-              <span>I outline first. New books open in the Outline tab.</span>
+              <strong data-i18n="firstRun.plotterTitle">Plotter</strong>
+              <span data-i18n="firstRun.plotterDesc">I outline first. New books open in the Outline tab.</span>
             </button>
           </div>
         </div>
       </div>
       <div id="fr-step2" hidden>
-        <h2>How should the page look?</h2>
-        <p>Pick a typeface and a drop-cap style. The sample below shows exactly what you'll get. (Changeable anytime in the Format menu.)</p>
+        <h2 data-i18n="firstRun.pageLookTitle">How should the page look?</h2>
+        <p data-i18n="firstRun.pageLookBody">Pick a typeface and a drop-cap style. The sample below shows exactly what you'll get. (Changeable anytime in the Format menu.)</p>
         <div id="fr-sample">
-          <p id="fr-sample-text">It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief…</p>
+          <p id="fr-sample-text" data-i18n="firstRun.sampleText">It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief…</p>
         </div>
-        <p style="margin-bottom:6px">Body typeface</p>
+        <p style="margin-bottom:6px" data-i18n="firstRun.bodyTypeface">Body typeface</p>
         <div id="fr-bodyfonts" class="fr-fontrow"></div>
-        <p style="margin-bottom:6px">Drop cap</p>
+        <p style="margin-bottom:6px" data-i18n="firstRun.dropCap">Drop cap</p>
         <div id="fr-dropcaps" class="fr-fontrow"></div>
         <div style="text-align:right;margin-top:20px">
-          <button id="fr-done" style="background:var(--accent);border:none;border-radius:6px;padding:8px 22px;color:#191919">Start writing</button>
+          <button id="fr-done" style="background:var(--accent);border:none;border-radius:6px;padding:8px 22px;color:#191919" data-i18n="firstRun.startWriting">Start writing</button>
         </div>
       </div>
-      <p class="soft">You can change any of this later. That's it for questions — promise.</p>
+      <p class="soft" data-i18n="firstRun.changeLater">You can change any of this later. That's it for questions — promise.</p>
     </div>
   </div>
 
@@ -73,15 +73,15 @@
     <div id="nav-hotzone"></div>
     <nav id="nav-pane">
       <div id="nav-list"></div>
-      <button id="nav-add" title="Add a chapter at the end">+ Chapter</button>
+      <button id="nav-add" data-i18n-title="editor.navAddTitle">+ <span data-i18n="editor.navAddChapter">Chapter</span></button>
     </nav>
 
     <!-- Right hover zone: notes & comments -->
     <div id="side-hotzone"></div>
     <aside id="side-pane">
       <div id="side-head">
-        <span>Notes &amp; Comments</span>
-        <button id="side-pin" title="Keep this pane open">&#9737;</button>
+        <span data-i18n="editor.sideNotes">Notes &amp; Comments</span>
+        <button id="side-pin" data-i18n-title="editor.sidePinTitle">&#9737;</button>
       </div>
       <div id="sticky-list"></div>
     </aside>
@@ -90,9 +90,9 @@
     <main id="paper-scroll">
       <div id="paper">
         <div id="title-page" class="sheet">
-          <div id="tp-title" contenteditable="true" spellcheck="false" data-ph="Untitled"></div>
-          <div id="tp-subtitle" contenteditable="true" spellcheck="false" data-ph="Subtitle (optional)"></div>
-          <div id="tp-author" contenteditable="true" spellcheck="false" data-ph="Author"></div>
+          <div id="tp-title" contenteditable="true" spellcheck="false" data-ph="Untitled" data-i18n-ph="editor.tpUntitled"></div>
+          <div id="tp-subtitle" contenteditable="true" spellcheck="false" data-ph="Subtitle (optional)" data-i18n-ph="editor.tpSubtitle"></div>
+          <div id="tp-author" contenteditable="true" spellcheck="false" data-ph="Author" data-i18n-ph="editor.tpAuthor"></div>
         </div>
         <div id="chapters"></div>
       </div>
@@ -107,30 +107,30 @@
 
     <!-- Bottom bar: tabs + counters -->
     <footer id="bottombar">
-      <button id="back-to-shelf" title="Back to your bookshelf">&#8676; Shelf</button>
+      <button id="back-to-shelf" data-i18n-title="editor.backShelfTitle">&#8676; <span data-i18n="editor.backShelf">Shelf</span></button>
       <div id="tabs">
-        <div class="tab active" data-tab="manuscript">Manuscript</div>
-        <div class="tab" data-tab="notes">Notes</div>
-        <div class="tab" data-tab="outline">Outline</div>
-        <div class="tab darlings" data-tab="darlings" title="Drag any selection here. It's saved, not gone.">Darlings</div>
+        <div class="tab active" data-tab="manuscript" data-i18n="editor.tabManuscript">Manuscript</div>
+        <div class="tab" data-tab="notes" data-i18n="editor.tabNotes">Notes</div>
+        <div class="tab" data-tab="outline" data-i18n="editor.tabOutline">Outline</div>
+        <div class="tab darlings" data-tab="darlings" data-i18n="editor.tabDarlings" data-i18n-title="editor.tabDarlingsTitle">Darlings</div>
       </div>
       <div id="counters">
-        <span id="goal-counter" title="Today's words — click for goals, sprints, and your progress chart"></span>
+        <span id="goal-counter" data-i18n-title="editor.goalCounterTitle"></span>
         <span id="pos-counter"></span>
-        <span id="word-counter" title="Click to cycle book / chapter word count"></span>
+        <span id="word-counter" data-i18n-title="editor.wordCounterTitle"></span>
       </div>
     </footer>
 
     <!-- Find & replace -->
     <div id="searchbar" hidden>
-      <input id="search-input" placeholder="Find" spellcheck="false" />
+      <input id="search-input" placeholder="Find" spellcheck="false" data-i18n-placeholder="editor.searchFind" />
       <span id="search-count"></span>
-      <button id="search-prev" title="Previous (⇧Enter)">&#8593;</button>
-      <button id="search-next" title="Next (Enter)">&#8595;</button>
-      <input id="replace-input" placeholder="Replace with" spellcheck="false" />
-      <button id="replace-one">Replace</button>
-      <button id="replace-all">All</button>
-      <button id="search-close" title="Close (Esc)">&#10005;</button>
+      <button id="search-prev" data-i18n-title="editor.searchPrev">&#8593;</button>
+      <button id="search-next" data-i18n-title="editor.searchNext">&#8595;</button>
+      <input id="replace-input" placeholder="Replace with" spellcheck="false" data-i18n-placeholder="editor.searchReplaceWith" />
+      <button id="replace-one" data-i18n="editor.searchReplace">Replace</button>
+      <button id="replace-all" data-i18n="editor.searchAll">All</button>
+      <button id="search-close" data-i18n-title="editor.searchClose">&#10005;</button>
     </div>
 
     <!-- Ghost hint, shown once per session -->

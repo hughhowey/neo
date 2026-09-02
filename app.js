@@ -24,6 +24,70 @@ const KPH = K('⌘⇧X', 'Ctrl+Shift+X');
 const KDA = K('⌘⇧D', 'Ctrl+Shift+D');
 const KHELP = K('⌘/', 'Ctrl+/');
 
+const t = (key, vars) => window.neo.t(key, vars);
+const LOCALE = window.neo.locale;
+
+function applyStaticI18n() {
+  document.documentElement.lang = String(LOCALE || '').toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    el.innerHTML = t(el.getAttribute('data-i18n-html'));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.getAttribute('data-i18n-title'));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.setAttribute('data-ph', t(el.getAttribute('data-i18n-ph')));
+  });
+  const root = document.documentElement.style;
+  const q = (key) => '"' + t(key).replace(/"/g, '\\"') + '"';
+  root.setProperty('--i18n-add-title', q('css.addTitle'));
+  root.setProperty('--i18n-write-freely', q('css.writeFreely'));
+  root.setProperty('--i18n-ol-chapter', q('css.olChapter'));
+  root.setProperty('--i18n-ol-section', q('css.olSection'));
+  root.setProperty('--i18n-nav-note', q('css.navNote'));
+}
+
+function isUntitledTitle(title) {
+  // Disk always stores the English sentinel "Untitled".
+  return !title || title === 'Untitled';
+}
+
+/** UI label for a shelf name; canonical English defaults stay on disk. */
+function displayShelfName(name) {
+  if (name === 'Works in Progress') return t('common.worksInProgress');
+  if (name === 'New Shelf') return t('shelf.newShelfName');
+  return name;
+}
+
+/** UI label for default tab names; user renames are stored as-is. */
+function displayTabName(kind, stored) {
+  if (kind === 'notes' && (!stored || stored === 'Notes')) return t('common.notes');
+  if (kind === 'outline' && (!stored || stored === 'Outline')) return t('common.outline');
+  return stored || kind;
+}
+
+function displayAuthorName(name) {
+  if (!name || name === 'Anonymous') return t('common.anonymous');
+  return name;
+}
+
+/** Translate stored darling chapterLabel values for display. */
+function displayChapterLabel(label) {
+  if (!label) return t('common.manuscript');
+  let m = /^Chapter (\d+)$/.exec(label);
+  if (m) return t('editor.chapterN', { n: m[1] });
+  m = /^deleted Chapter (\d+)$/.exec(label);
+  if (m) return t('chapter.deletedLabel', { n: m[1] });
+  if (label === 'Manuscript') return t('common.manuscript');
+  return label;
+}
+
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
     const bd = document.createElement('div');
@@ -33,8 +97,8 @@ function askInput(title, placeholder, value = '') {
         <h2 style="font-size:16px">${title}</h2>
         <input type="text" spellcheck="false" placeholder="${placeholder}" />
         <div style="text-align:right;margin-top:14px">
-          <button class="m-cancel" style="background:none;border:none;color:#888;margin-right:14px">Cancel</button>
-          <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">OK</button>
+          <button class="m-cancel" style="background:none;border:none;color:#888;margin-right:14px">${t('common.cancel')}</button>
+          <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">${t('common.ok')}</button>
         </div>
       </div>`;
     document.body.appendChild(bd);
@@ -68,7 +132,7 @@ function optionModal(title, message, options) {
         ${message ? `<p>${message}</p>` : ''}
         ${buttons}
         <div style="text-align:right;margin-top:6px">
-          <button class="m-cancel" style="background:none;border:none;color:#888">Cancel</button>
+          <button class="m-cancel" style="background:none;border:none;color:#888">${t('common.cancel')}</button>
         </div>
       </div>`;
     document.body.appendChild(bd);
@@ -119,6 +183,7 @@ function coverUrl(meta) {
 }
 
 async function loadLibrary() {
+  applyStaticI18n();
   libraryDirPath = await window.neo.libraryPath();
   library = await window.neo.readLibrary();
   if (!library.firstRunDone) {
@@ -130,7 +195,7 @@ async function loadLibrary() {
 function showFirstRun() {
   const fr = $('#firstrun');
   fr.hidden = false;
-  let picked = { body: 'Georgia', dropcap: 'literary' };
+  let picked = { body: window.neo.defaultBodyFont(), dropcap: 'literary' };
 
   // Step 1: who are you, and how do you write?
   $$('.fr-choice').forEach((btn) => {
@@ -169,7 +234,7 @@ function showFirstRun() {
     }
     const capRow = $('#fr-dropcaps');
     capRow.innerHTML = '';
-    const caps = { literary: 'Literary', fantasy: 'Fantasy', scifi: 'Sci-Fi' };
+    const caps = { literary: t('firstRun.dropcapLiterary'), fantasy: t('firstRun.dropcapFantasy'), scifi: t('firstRun.dropcapScifi') };
     for (const key of Object.keys(caps)) {
       const b = document.createElement('button');
       b.className = 'fr-font' + (picked.dropcap === key ? ' sel' : '');
@@ -215,7 +280,7 @@ function shelvesFor(authorId) {
 }
 
 function displayAuthor() {
-  return currentAuthor().name || 'Anonymous';
+  return displayAuthorName(currentAuthor().name);
 }
 
 async function renderShelves() {
@@ -274,7 +339,7 @@ async function renderShelves() {
     const grip = document.createElement('span');
     grip.className = 'shelf-grip';
     grip.textContent = '⠿';
-    grip.title = 'Drag to reorder shelves';
+    grip.title = t('shelf.dragReorderShelves');
     grip.draggable = true;
     grip.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('application/x-neo-shelf', shelf.id);
@@ -291,11 +356,17 @@ async function renderShelves() {
     label.className = 'shelf-label';
     label.contentEditable = 'true';
     label.spellcheck = false;
-    label.textContent = shelf.name;
-    label.title = 'Click to rename · right-click to export or delete';
+    label.textContent = displayShelfName(shelf.name);
+    label.title = t('shelf.renameOrManageShelf');
     label.addEventListener('blur', async () => {
-      shelf.name = label.textContent.trim() || shelf.name;
-      label.textContent = shelf.name;
+      const typed = label.textContent.trim();
+      const shown = displayShelfName(shelf.name);
+      if (!typed || typed === shown) {
+        label.textContent = shown;
+        return;
+      }
+      shelf.name = typed;
+      label.textContent = displayShelfName(shelf.name);
       await window.neo.writeLibrary(library);
     });
     label.addEventListener('keydown', (e) => {
@@ -304,20 +375,24 @@ async function renderShelves() {
     // right-click a shelf label: publish it as one book, or delete it
     label.addEventListener('contextmenu', async (e) => {
       e.preventDefault();
-      const choice = await optionModal(`Shelf “${shelf.name}”`, null, [
+      const choice = await optionModal(t('shelf.shelfModalTitle', { name: displayShelfName(shelf.name) }), null, [
         {
-          label: 'Export shelf as anthology…',
-          desc: `Collect ${shelf.bookIds.length ? 'its ' + shelf.bookIds.length : 'the'} work${shelf.bookIds.length === 1 ? '' : 's'}, in shelf order, into a single book with a table of contents.`,
+          label: t('shelf.exportAnthology'),
+          desc: !shelf.bookIds.length
+            ? t('shelf.exportAnthologyDescEmpty')
+            : shelf.bookIds.length === 1
+              ? t('shelf.exportAnthologyDescOne', { count: shelf.bookIds.length })
+              : t('shelf.exportAnthologyDescMany', { count: shelf.bookIds.length }),
           value: 'anthology'
         },
-        { label: 'Delete shelf', desc: 'Books move to another shelf. Nothing is deleted from disk.', danger: true, value: 'del' }
+        { label: t('shelf.deleteShelf'), desc: t('shelf.deleteShelfDesc'), danger: true, value: 'del' }
       ]);
       if (choice === 'anthology') {
         await exportShelfAnthology(shelf);
       } else if (choice === 'del') {
         const mine = shelvesFor(currentAuthor().id);
         if (mine.length === 1) {
-          toast('This is your only shelf — add another before deleting this one');
+          toast(t('shelf.onlyShelfToast'));
           return;
         }
         const other = mine.find((s) => s.id !== shelf.id);
@@ -372,9 +447,9 @@ async function renderShelves() {
           .map((f) => { try { return window.neo.pathForFile(f); } catch { return null; } })
           .filter(Boolean);
         if (!paths.length) return;
-        toast('Importing…');
+        toast(t('toast.importing'));
         const results = await window.neo.importFiles(paths);
-        if (!results.length) { toast('No .docx, .txt, or .md files in that drop'); return; }
+        if (!results.length) { toast(t('toast.noDropFiles')); return; }
         await addImportedBooks(results, shelf);
         return;
       }
@@ -408,7 +483,7 @@ async function renderShelves() {
     const blank = document.createElement('div');
     blank.className = 'new-book';
     blank.textContent = '+';
-    blank.title = 'Start a new book';
+    blank.title = t('shelf.startNewBook');
     blank.onclick = () => createBookOnShelf(shelf);
     row.appendChild(blank);
 
@@ -452,7 +527,7 @@ function bookTile(meta) {
   el.innerHTML = `
     <div class="b-title"></div>
     <div class="b-author"></div>
-    <span class="b-refresh" title="New cover, woven from the current text">&#8635;</span>
+    <span class="b-refresh" title="${t('editor.newCoverTitle')}">&#8635;</span>
     <div class="b-progress" hidden><div></div></div>`;
   if (meta.coverImage) {
     el.classList.add('has-cover');
@@ -464,7 +539,7 @@ function bookTile(meta) {
   const titleEl = el.querySelector('.b-title');
   const inner = document.createElement('span');
   inner.className = 'b-tt';
-  (meta.title || 'Untitled').split(/\s+/).forEach((word, i) => {
+  (meta.title || t('common.untitled')).split(/\s+/).forEach((word, i) => {
     if (!word) return;
     if (i > 0) inner.appendChild(document.createTextNode(' '));
     const initial = document.createElement('span');
@@ -488,7 +563,11 @@ function bookTile(meta) {
     bar.firstElementChild.style.width = pct + '%';
   }
   el.title = meta.wordGoal
-    ? `${meta.title} — ${(meta.wordCount || 0).toLocaleString()} / ${meta.wordGoal.toLocaleString()} words`
+    ? t('bookMenu.bookProgressTitle', {
+        title: meta.title,
+        count: (meta.wordCount || 0).toLocaleString(),
+        goal: meta.wordGoal.toLocaleString()
+      })
     : meta.title;
   el.onclick = () => openBook(meta.id);
   el.addEventListener('dragstart', (e) => {
@@ -517,7 +596,7 @@ function bookTile(meta) {
         meta.coverImage = fname;
         await window.neo.writeBookMeta(meta.id, meta);
         renderShelves();
-        toast(`“${meta.title}” has its cover — looking like a real book`);
+        toast(t('bookMenu.coverSetToast', { title: meta.title }));
       }
     } else if (/\.(docx|txt|md)$/i.test(p)) {
       const homeShelf = library.shelves.find((s) => s.bookIds.includes(meta.id)) || library.shelves[0];
@@ -529,15 +608,15 @@ function bookTile(meta) {
   el.addEventListener('contextmenu', async (e) => {
     e.preventDefault();
     const options = [
-      { label: meta.coverImage ? 'Replace cover art…' : 'Set cover art…', desc: 'Pick an image (2:3 works best). Or just drag one from Finder onto the book.', value: 'cover' }
+      { label: meta.coverImage ? t('bookMenu.replaceCover') : t('bookMenu.setCover'), desc: t('bookMenu.coverDesc'), value: 'cover' }
     ];
     if (meta.coverImage) {
-      options.push({ label: 'Remove cover art', desc: 'Back to the generated cover.', value: 'uncover' });
+      options.push({ label: t('bookMenu.removeCover'), desc: t('bookMenu.removeCoverDesc'), value: 'uncover' });
     }
     options.push(
-      { label: 'Set word goal…', desc: 'Adds the subtle progress bar to the cover.', value: 'goal' },
-      { label: 'Remove from bookshelf', desc: 'Takes it off your shelves. The files stay safe in your NEO Library folder on disk.', value: 'remove' },
-      { label: 'Move to Trash', desc: 'Sends the book folder to your Mac Trash.', danger: true, value: 'trash' }
+      { label: t('bookMenu.setGoal'), desc: t('bookMenu.setGoalDesc'), value: 'goal' },
+      { label: t('bookMenu.removeFromShelf'), desc: t('bookMenu.removeFromShelfDesc'), value: 'remove' },
+      { label: t('bookMenu.moveToTrash'), desc: t('bookMenu.moveToTrashDesc'), danger: true, value: 'trash' }
     );
     const choice = await optionModal(`“${meta.title}”`, null, options);
     if (choice === 'cover') {
@@ -555,7 +634,7 @@ function bookTile(meta) {
       await window.neo.writeBookMeta(meta.id, meta);
       renderShelves();
     } else if (choice === 'goal') {
-      const goal = await askInput(`Word count goal for “${meta.title}”`, 'e.g. 80000 — blank removes the goal',
+      const goal = await askInput(t('bookMenu.goalPromptTitle', { title: meta.title }), t('bookMenu.goalPlaceholder'),
         meta.wordGoal ? String(meta.wordGoal) : '');
       if (goal === null) return;
       meta.wordGoal = parseInt(goal, 10) || 0;
@@ -565,7 +644,7 @@ function bookTile(meta) {
       for (const s of library.shelves) s.bookIds = s.bookIds.filter((b) => b !== meta.id);
       await window.neo.writeLibrary(library);
       renderShelves();
-      toast(`“${meta.title}” removed from the shelves — its files are still in your NEO Library`);
+      toast(t('bookMenu.removedFromShelfToast', { title: meta.title }));
     } else if (choice === 'trash') {
       const ok = await window.neo.deleteBook(meta.id, meta.title);
       if (ok) {
@@ -579,7 +658,9 @@ function bookTile(meta) {
 }
 
 async function createBookOnShelf(shelf) {
-  const meta = await window.neo.createBook({ author: displayAuthor() });
+  const meta = await window.neo.createBook({
+    author: currentAuthor().name || 'Anonymous'
+  });
   meta.tabNames = {
     notes: (library.tabDefaults && library.tabDefaults.notes) || 'Notes',
     outline: (library.tabDefaults && library.tabDefaults.outline) || 'Outline'
@@ -630,29 +711,29 @@ $('#author-chip').onclick = async () => {
   const opts = [];
   for (const a of library.authors) {
     if (a.id !== cur.id) {
-      opts.push({ label: 'Write as ' + a.name, desc: 'Switch to this name’s shelves', value: 'sw:' + a.id });
+      opts.push({ label: t('author.writeAs', { name: a.name }), desc: t('author.writeAsDesc'), value: 'sw:' + a.id });
     }
   }
-  opts.push({ label: 'Rename ' + cur.name, value: 'rename' });
-  opts.push({ label: 'Add a pen name…', desc: 'A separate set of shelves under another name', value: 'add' });
+  opts.push({ label: t('author.rename', { name: cur.name }), value: 'rename' });
+  opts.push({ label: t('author.addPen'), desc: t('author.addPenDesc'), value: 'add' });
   if (library.authors.length > 1) {
     opts.push({
-      label: 'Remove ' + cur.name,
-      desc: 'These shelves and books move to your other name. Nothing is deleted from disk.',
+      label: t('author.removeAuthor', { name: cur.name }),
+      desc: t('author.removeAuthorDesc'),
       danger: true, value: 'del'
     });
   }
-  const pick = await optionModal('Writing as ' + cur.name, null, opts);
+  const pick = await optionModal(t('author.writingAs', { name: cur.name }), null, opts);
   if (!pick) return;
   if (pick.startsWith('sw:')) {
     library.currentAuthorId = pick.slice(3);
   } else if (pick === 'rename') {
-    const name = await askInput('Author name', 'Shown on your title pages', cur.name);
+    const name = await askInput(t('author.authorNameTitle'), t('author.authorNamePh'), cur.name);
     if (name === null) return;
     cur.name = name || cur.name;
     library.authorName = library.authors[0].name; // legacy field follows the first name
   } else if (pick === 'add') {
-    const name = await askInput('New pen name', 'Shown on that name’s title pages', '');
+    const name = await askInput(t('author.newPenTitle'), t('author.newPenPh'), '');
     if (!name) return;
     const a = { id: 'a-' + Date.now().toString(36), name };
     library.authors.push(a);
@@ -696,11 +777,11 @@ async function openBook(bookId) {
   $('#editor-view').hidden = false;
   document.execCommand('defaultParagraphSeparator', false, 'p');
 
-  $('#tp-title').textContent = book.title === 'Untitled' ? '' : book.title;
+  $('#tp-title').textContent = isUntitledTitle(book.title) ? '' : book.title;
   $('#tp-subtitle').textContent = book.subtitle || '';
-  $('#tp-author').textContent = book.author || 'Anonymous';
-  $$('.tab[data-tab="notes"]')[0].textContent = book.tabNames.notes;
-  $$('.tab[data-tab="outline"]')[0].textContent = book.tabNames.outline;
+  $('#tp-author').textContent = (!book.author || book.author === 'Anonymous') ? '' : book.author;
+  $$('.tab[data-tab="notes"]')[0].textContent = displayTabName('notes', book.tabNames.notes);
+  $$('.tab[data-tab="outline"]')[0].textContent = displayTabName('outline', book.tabNames.outline);
 
   renderChapters();
   renderStickies();
@@ -732,7 +813,7 @@ async function openBook(bookId) {
   if (!library.hintShown) {
     library.hintShown = true;
     window.neo.writeLibrary(library);
-    setTimeout(() => toast(`Enter twice = section break · three times = new chapter · ${KHELP} shows everything else`, 7000), 800);
+    setTimeout(() => toast(t('toast.enterHint', { help: KHELP }), 7000), 800);
   }
 }
 
@@ -750,10 +831,10 @@ function renderChapters() {
     sec.dataset.id = chId;
     const head = document.createElement('div');
     head.className = 'chapter-head';
-    head.title = 'Right-click for chapter options · click after the number to add a title';
+    head.title = t('editor.chapterHeadTitle');
     const num = document.createElement('span');
     num.className = 'ch-num';
-    num.textContent = 'Chapter ' + (i + 1);
+    num.textContent = t('editor.chapterN', { n: i + 1 });
     const sep = document.createElement('span');
     sep.className = 'ch-sep';
     sep.textContent = '—';
@@ -815,15 +896,15 @@ async function deleteChapterToDarlings(chId) {
   }
   if (currentChapterId === chId) currentChapterId = null;
   await deleteChapterQuiet(chId);
-  if (text) toast(`Chapter removed — its words are in Darlings, or ${KZ} to undo`);
+  if (text) toast(t('chapter.removedToast', { undo: KZ }));
 }
 
 async function chapterMenu(chId, index) {
   const words = countWords(chapterText(chId));
   const choice = await optionModal(
-    `Chapter ${index + 1}`,
-    words ? `${words.toLocaleString()} words.` : 'This chapter is empty.',
-    [{ label: 'Delete chapter', desc: words ? 'Its words move to Darlings, recoverable anytime.' : 'Nothing to save — it just goes.', danger: true, value: 'delete' }]
+    t('editor.chapterN', { n: index + 1 }),
+    words ? t('chapter.chapterWords', { n: words.toLocaleString() }) : t('chapter.chapterEmpty'),
+    [{ label: t('chapter.deleteChapter'), desc: words ? t('chapter.deleteChapterDescWords') : t('chapter.deleteChapterDescEmpty'), danger: true, value: 'delete' }]
   );
   if (choice === 'delete') await deleteChapterToDarlings(chId);
 }
@@ -1278,7 +1359,8 @@ $('#tp-subtitle').addEventListener('input', () => {
 });
 // each book can carry its own pen name
 $('#tp-author').addEventListener('input', () => {
-  book.author = $('#tp-author').textContent.trim();
+  const typed = $('#tp-author').textContent.trim();
+  book.author = (!typed || typed === t('common.anonymous')) ? 'Anonymous' : typed;
   scheduleMetaSave();
 });
 
@@ -1375,7 +1457,7 @@ function insertPlaceholder() {
   if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const bodyEl = el && el.closest ? el.closest('.chapter-body') : null;
   if (!bodyEl) {
-    toast(`Click into a chapter first, then ${KPH} drops a placeholder`);
+    toast(t('toast.clickChapterFirst', { key: KPH }));
     return;
   }
   currentChapterId = bodyEl.closest('.chapter').dataset.id;
@@ -1411,7 +1493,7 @@ function renderStickies() {
   wrap.innerHTML = '';
   const open = stickies.filter((s) => !s.resolved);
   if (open.length === 0) {
-    wrap.innerHTML = `<div class="stickies-empty">No notes yet.<br><br>Hit ${KPH} while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.</div>`;
+    wrap.innerHTML = `<div class="stickies-empty">${t('editor.stickyEmpty', { key: KPH })}</div>`;
     return;
   }
   for (const s of open) {
@@ -1420,9 +1502,9 @@ function renderStickies() {
     el.className = 'sticky unresolved';
     el.dataset.sid = s.id;
     el.innerHTML = `
-      <div class="s-ch">${chIdx >= 0 ? 'Chapter ' + (chIdx + 1) : 'Unplaced'}</div>
-      <textarea placeholder="What needs doing here?" spellcheck="false"></textarea>
-      <div class="s-actions"><button class="s-go">Go to</button> <button class="s-done">Resolve</button></div>`;
+      <div class="s-ch">${chIdx >= 0 ? t('editor.fromChapter', { n: chIdx + 1 }) : t('editor.unplaced')}</div>
+      <textarea placeholder="${t('editor.stickyPlaceholder')}" spellcheck="false"></textarea>
+      <div class="s-actions"><button class="s-go">${t('editor.goTo')}</button> <button class="s-done">${t('editor.resolve')}</button></div>`;
     const ta = el.querySelector('textarea');
     ta.value = s.text;
     ta.addEventListener('input', () => {
@@ -1512,11 +1594,11 @@ function renderNav() {
     const item = document.createElement('div');
     item.className = 'nav-item' + (chId === currentChapterId ? ' current' : '');
     item.dataset.id = chId;
-    item.innerHTML = `<div class="n-row" title="Drag to reorder chapters"><span class="n-label"></span>
-      <span style="display:flex;align-items:center"><span class="n-words">${words.toLocaleString()}</span>${flagged ? '<span class="n-flag" title="Unresolved placeholder"></span>' : ''}</span></div>`;
+    item.innerHTML = `<div class="n-row" title="${t('editor.dragReorderChapters')}"><span class="n-label"></span>
+      <span style="display:flex;align-items:center"><span class="n-words">${words.toLocaleString()}</span>${flagged ? '<span class="n-flag" title="' + t('editor.unresolvedPlaceholder') + '"></span>' : ''}</span></div>`;
     item.querySelector('.n-label').textContent = book.chapterOrder.length === 1
-      ? (book.title || 'The story')
-      : (chTitle ? `${i + 1} · ${chTitle}` : `Chapter ${i + 1}`);
+      ? (book.title || t('editor.theStoryLabel'))
+      : (chTitle ? `${i + 1} · ${chTitle}` : t('editor.chapterN', { n: i + 1 }));
 
     // the row is the drag handle, so the note below stays freely editable
     const rowEl = item.querySelector('.n-row');
@@ -1615,7 +1697,7 @@ navList.addEventListener('drop', async (e) => {
   await saveMeta();
   renderChapters(); // renumbers heads and rebuilds the nav
   if (currentTab === 'outline') renderOutline();
-  toast(`Chapters reordered — ${KZ} to undo`);
+  toast(t('toast.chaptersReordered', { undo: KZ }));
 });
 
 function highlightNav() {
@@ -1683,14 +1765,19 @@ $$('.tab').forEach((tab) => {
   tab.addEventListener('dblclick', async () => {
     const kind = tab.dataset.tab;
     if (kind !== 'notes' && kind !== 'outline') return;
-    const name = await askInput('Rename tab', 'New tab name', book.tabNames[kind]);
+    const shown = displayTabName(kind, book.tabNames[kind]);
+    const name = await askInput(t('toast.renameTab'), t('toast.renameTabPh'), shown);
     if (!name) return;
-    book.tabNames[kind] = name;
-    tab.textContent = name;
+    if (name === shown) return; // left the label alone
+    let stored = name;
+    if (kind === 'notes' && name === t('common.notes')) stored = 'Notes';
+    if (kind === 'outline' && name === t('common.outline')) stored = 'Outline';
+    book.tabNames[kind] = stored;
+    tab.textContent = displayTabName(kind, stored);
     saveMeta();
     // Renamed tabs become the default for future books
     library.tabDefaults = library.tabDefaults || {};
-    library.tabDefaults[kind] = name;
+    library.tabDefaults[kind] = stored;
     window.neo.writeLibrary(library);
   });
 });
@@ -1816,7 +1903,7 @@ async function moveSelectionToDarlings(html, text) {
   });
   await window.neo.writeJSON(book.id, 'darlings', darlings);
   updateCounters();
-  toast(`Saved to Darlings — kill without remorse (${KZ} to undo)`);
+  toast(t('toast.savedDarlings', { undo: KZ }));
 }
 
 // Older versions of NEO planted invisible marker spans at darling cut points,
@@ -1855,7 +1942,7 @@ async function migrateDarlingAnchors() {
 function darlingFromKeyboard() {
   const sel = window.getSelection();
   if (!sel.rangeCount || sel.isCollapsed) {
-    toast(`Select the passage first, then ${KDA} sends it to Darlings`);
+    toast(t('toast.selectPassage', { key: KDA }));
     return;
   }
   let el = sel.anchorNode;
@@ -1890,16 +1977,16 @@ function switchTab(name) {
   oList.hidden = true;
 
   if (name === 'darlings') {
-    $('#aux-title').textContent = 'Darlings';
+    $('#aux-title').textContent = t('common.darlings');
     dList.hidden = false;
     renderDarlings();
   } else if (name === 'outline') {
-    $('#aux-title').textContent = book.tabNames.outline;
+    $('#aux-title').textContent = displayTabName('outline', book.tabNames.outline);
     oList.hidden = false;
     if (book.chapterOrder.length === 0) createChapterAt(0);
     renderOutline();
   } else {
-    $('#aux-title').textContent = book.tabNames[name] || name;
+    $('#aux-title').textContent = displayTabName(name, book.tabNames[name]);
     auxEditor.hidden = false;
     auxEditor.dataset.kind = name;
     window.neo.readAux(book.id, name).then((html) => {
@@ -1933,7 +2020,7 @@ function renderOutline(focusTarget) {
 
   const hint = document.createElement('div');
   hint.className = 'ol-hint';
-  hint.textContent = 'Enter — new chapter (or section, from a section line) · Tab — turn a fresh chapter line into a section · Shift+Tab — turn a section into a chapter · Backspace on an empty line removes it';
+  hint.textContent = t('editor.outlineHint');
   wrap.appendChild(hint);
 
   if (focusTarget) {
@@ -2019,9 +2106,9 @@ function outlineLine(kind, chId, secId, index, label, text) {
       e.preventDefault();
       if (kind !== 'chapter') return;
       const pos = book.chapterOrder.indexOf(chId);
-      if (pos === 0) { toast('The first line has to be a chapter'); return; }
+      if (pos === 0) { toast(t('toast.firstLineChapter')); return; }
       if (countWords(chapterText(chId)) > 0) {
-        toast('This chapter already has words in it — only empty chapter lines can become sections');
+        toast(t('toast.chapterHasWords'));
         return;
       }
       save();
@@ -2072,17 +2159,17 @@ function outlineLine(kind, chId, secId, index, label, text) {
       const i = book.chapterOrder.indexOf(chId);
       const words = countWords(chapterText(chId));
       const choice = await optionModal(
-        `Chapter ${i + 1}`,
-        words ? `${words.toLocaleString()} words.` : 'This chapter is empty.',
-        [{ label: 'Delete chapter', desc: words ? 'Its words move to Darlings, recoverable anytime.' : 'Nothing to save — it just goes.', danger: true, value: 'delete' }]
+        t('editor.chapterN', { n: i + 1 }),
+        words ? t('chapter.chapterWords', { n: words.toLocaleString() }) : t('chapter.chapterEmpty'),
+        [{ label: t('chapter.deleteChapter'), desc: words ? t('chapter.deleteChapterDescWords') : t('chapter.deleteChapterDescEmpty'), danger: true, value: 'delete' }]
       );
       if (choice === 'delete') {
         await deleteChapterToDarlings(chId);
         renderOutline();
       }
     } else {
-      const choice = await optionModal('Delete this section?', null,
-        [{ label: 'Delete section', desc: 'Removes the outline line and its gray ghost from the manuscript. Written prose is never touched.', danger: true, value: 'delete' }]);
+      const choice = await optionModal(t('chapter.deleteSectionTitle'), null,
+        [{ label: t('chapter.deleteSection'), desc: t('chapter.deleteSectionDesc'), danger: true, value: 'delete' }]);
       if (choice === 'delete') {
         book.sectionNotes[chId] = (book.sectionNotes[chId] || []).filter((s) => s.id !== secId);
         scheduleMetaSave();
@@ -2173,7 +2260,7 @@ function renderDarlings() {
   const wrap = $('#darlings-list');
   wrap.innerHTML = '';
   if (darlings.length === 0) {
-    wrap.innerHTML = `<div class="darlings-empty">When a beautiful paragraph is gumming up the works, select it and drag it onto the Darlings tab below.<br>It leaves your manuscript but it is never lost.</div>`;
+    wrap.innerHTML = `<div class="darlings-empty">${t('editor.darlingsEmpty')}</div>`;
     return;
   }
   for (const d of darlings) {
@@ -2185,8 +2272,8 @@ function renderDarlings() {
     const meta = document.createElement('div');
     meta.className = 'd-meta';
     const when = new Date(d.date).toLocaleDateString();
-    meta.innerHTML = `<span>from ${d.chapterLabel} · ${when} · ${countWords(d.text).toLocaleString()} words</span>
-      <span><button class="d-restore">Restore</button> <button class="d-del">Delete forever</button></span>`;
+    meta.innerHTML = `<span>${t('editor.darlingMeta', { label: displayChapterLabel(d.chapterLabel), when, words: countWords(d.text).toLocaleString() })}</span>
+      <span><button class="d-restore">${t('editor.restore')}</button> <button class="d-del">${t('editor.deleteForever')}</button></span>`;
     meta.querySelector('.d-restore').onclick = () => restoreDarling(d.id);
     meta.querySelector('.d-del').onclick = async () => {
       snapshotStructure('darling delete');
@@ -2238,7 +2325,7 @@ async function restoreDarling(id) {
         darlings = darlings.filter((x) => x.id !== id);
         await window.neo.writeJSON(book.id, 'darlings', darlings);
         scrollTo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        toast('Darling restored to its original spot');
+        toast(t('toast.darlingRestored'));
         return;
       }
     }
@@ -2257,7 +2344,7 @@ async function restoreDarling(id) {
   darlings = darlings.filter((x) => x.id !== id);
   await window.neo.writeJSON(book.id, 'darlings', darlings);
   focusChapter(chId);
-  toast('Original spot is gone — restored to the end of ' + (d.chapterLabel || 'the manuscript'));
+  toast(t('toast.darlingFallback', { label: displayChapterLabel(d.chapterLabel) }));
 }
 
 /* ================================================================== */
@@ -2273,19 +2360,19 @@ function updateCounters() {
   const total = bookWordCount();
   const wc = $('#word-counter');
   if (wordMode === 'book') {
-    wc.textContent = total.toLocaleString() + ' words';
+    wc.textContent = t('counters.words', { n: total.toLocaleString() });
   } else {
     const n = currentChapterId ? chapterWords(currentChapterId) : 0;
     const idx = book.chapterOrder.indexOf(currentChapterId);
-    wc.textContent = `ch. ${idx + 1}: ${n.toLocaleString()} words`;
+    wc.textContent = t('counters.chWords', { n: idx + 1, count: n.toLocaleString() });
   }
   const pos = $('#pos-counter');
   const idx = book.chapterOrder.indexOf(currentChapterId);
   pos.textContent = book.chapterOrder.length <= 1
     ? '' // a chapterless story needs no chapter locator
     : (idx >= 0
-      ? `chapter ${idx + 1} of ${book.chapterOrder.length}`
-      : `${book.chapterOrder.length} chapters`);
+      ? t('counters.chapterOf', { n: idx + 1, total: book.chapterOrder.length })
+      : t('counters.nChapters', { n: book.chapterOrder.length }));
   // cache for the bookshelf progress bar
   if (book.wordCount !== total) {
     book.wordCount = total;
@@ -2310,16 +2397,16 @@ function trackDailyWords(total) {
   const gc = $('#goal-counter');
   if (sprint && !sprint.done) {
     const sprintWords = total - sprint.startCount;
-    gc.textContent = `⚡ ${sprintWords.toLocaleString()} / ${sprint.target.toLocaleString()}`;
+    gc.textContent = t('counters.sprintProgress', { n: sprintWords.toLocaleString(), target: sprint.target.toLocaleString() });
     if (sprintWords >= sprint.target) {
       sprint.done = true;
-      toast(`Sprint complete — ${sprintWords.toLocaleString()} words. Well earned.`, 6000);
+      toast(t('toast.sprintComplete', { n: sprintWords.toLocaleString() }), 6000);
     }
   } else {
     const goal = library.dailyGoal || 0;
     gc.textContent = goal
-      ? `${wordsToday.toLocaleString()} / ${goal.toLocaleString()} today`
-      : `${wordsToday.toLocaleString()} today`;
+      ? t('counters.todayOfGoal', { n: wordsToday.toLocaleString(), goal: goal.toLocaleString() })
+      : t('counters.todayWords', { n: wordsToday.toLocaleString() });
     gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
   }
 }
@@ -2339,7 +2426,7 @@ document.addEventListener('selectionchange', () => {
     if (el && el.closest && el.closest('.chapter-body')) {
       const n = countWords(sel.toString());
       if (n > 0) {
-        $('#word-counter').textContent = n.toLocaleString() + ' selected';
+        $('#word-counter').textContent = t('counters.selected', { n: n.toLocaleString() });
         return;
       }
     }
@@ -2463,7 +2550,7 @@ async function structuralUndo() {
   if (currentTab === 'darlings') renderDarlings();
   if (currentTab === 'outline') renderOutline();
   updateCounters();
-  toast('Undone: ' + snap.label);
+  toast(t('toast.undone', { label: snap.label }));
 }
 
 document.addEventListener('keydown', (e) => {
@@ -2483,7 +2570,7 @@ document.addEventListener('keydown', (e) => {
 let searchState = { matches: [], idx: -1, query: '' };
 
 function openSearch() {
-  if ($('#editor-view').hidden || !book) { toast('Open a book first'); return; }
+  if ($('#editor-view').hidden || !book) { toast(t('toast.openBookFirst')); return; }
   switchTab('manuscript');
   const sel = window.getSelection();
   const preset = sel && !sel.isCollapsed ? sel.toString().slice(0, 80).trim() : '';
@@ -2544,7 +2631,7 @@ function runSearch() {
     }
   }
   const n = searchState.matches.length;
-  $('#search-count').textContent = n ? `${n} found` : 'none';
+  $('#search-count').textContent = n ? t('search.found', { n }) : t('search.none');
   paintHighlights();
 }
 
@@ -2558,7 +2645,7 @@ function gotoMatch(i) {
     const rect = m[searchState.idx].range.getBoundingClientRect();
     $('#paper-scroll').scrollTop += rect.top - window.innerHeight * 0.45;
   } catch { /* range collapsed by an edit; next search rebuilds */ }
-  $('#search-count').textContent = `${searchState.idx + 1} of ${m.length}`;
+  $('#search-count').textContent = t('search.of', { cur: searchState.idx + 1, total: m.length });
 }
 
 function freshSearchIfStale() {
@@ -2567,7 +2654,7 @@ function freshSearchIfStale() {
 
 function replaceCurrent() {
   freshSearchIfStale();
-  if (!searchState.matches.length) { toast('No matches'); return; }
+  if (!searchState.matches.length) { toast(t('toast.noMatches')); return; }
   if (searchState.idx < 0) searchState.idx = 0; // start from the very first match
   const m = searchState.matches[searchState.idx];
   const rep = $('#replace-input').value;
@@ -2611,7 +2698,7 @@ function replaceAllMatches() {
     if (touched) syncChapter(body, chId);
   }
   if (n === 0) undoStack.pop(); // nothing changed, nothing to undo
-  toast(n ? `${n} replaced across the whole book — ${KZ} to undo` : '0 replaced');
+  toast(n ? t('toast.replaced', { n, undo: KZ }) : t('toast.zeroReplaced'));
   runSearch();
 }
 
@@ -2658,7 +2745,7 @@ async function addImportedBooks(results, shelf) {
   shelf = shelf || shelvesFor(currentAuthor().id)[0] || library.shelves[0];
   let ok = 0;
   for (const r of results) {
-    if (r.error) { toast(`Couldn't import ${r.name}: ${r.error}`, 6000); continue; }
+    if (r.error) { toast(t('toast.importFail', { name: r.name, error: r.error }), 6000); continue; }
     // title/byline harvested from the document beat the filename;
     // passing the title in gives the book folder a readable name too
     const meta = await window.neo.createBook({
@@ -2687,7 +2774,9 @@ async function addImportedBooks(results, shelf) {
   }
   await window.neo.writeLibrary(library);
   if (!$('#bookshelf-view').hidden) renderShelves();
-  if (ok) toast(`${ok} book${ok === 1 ? '' : 's'} imported onto “${shelf.name}” — chapters and scene breaks detected`, 6000);
+  if (ok) toast(ok === 1
+    ? t('toast.importedOne', { shelf: shelf.name })
+    : t('toast.imported', { n: ok, shelf: shelf.name }), 6000);
 }
 
 async function importBooks() {
@@ -2709,9 +2798,7 @@ function toggleSpellcheck() {
   // nudge the engine to (re)evaluate what's on screen
   const active = document.activeElement;
   if (active && active.blur) { active.blur(); if (active.focus) active.focus(); }
-  toast(spellOn
-    ? 'Spellcheck pass ON — right-click any squiggle for suggestions. ⌘; again when you’re done.'
-    : 'Spellcheck off. Back to flow.', 5000);
+  toast(spellOn ? t('toast.spellOn') : t('toast.spellOff'), 5000);
 }
 
 let typewriterEnabled = false;
@@ -2719,7 +2806,7 @@ function toggleTypewriter() {
   typewriterEnabled = !typewriterEnabled;
   library.typewriter = typewriterEnabled;
   window.neo.writeLibrary(library);
-  toast(typewriterEnabled ? 'Typewriter scrolling ON — your line stays centered' : 'Typewriter scrolling off');
+  toast(typewriterEnabled ? t('toast.typewriterOn') : t('toast.typewriterOff'));
 }
 
 document.addEventListener('selectionchange', () => {
@@ -2785,10 +2872,10 @@ function statsChartSvg() {
     ${goalLine}
   </svg>
   <div style="display:flex;justify-content:space-between;font-size:10px;color:#666;padding:2px 4px">
-    <span>30 days ago</span>
-    <span style="color:#3d8a6a">▮ daily words</span>
-    <span style="color:var(--accent)">— total${goal ? ' · - - goal' : ''}</span>
-    <span>today</span>
+    <span>${t('stats.daysAgo')}</span>
+    <span style="color:#3d8a6a">▮ ${t('stats.dailyWords')}</span>
+    <span style="color:var(--accent)">${t('stats.chartTotal')}${goal ? ' ' + t('stats.chartGoal') : ''}</span>
+    <span>${t('stats.today')}</span>
   </div>`;
 }
 
@@ -2801,34 +2888,34 @@ function openStats() {
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
     <div class="modal" style="width:580px">
-      <h2 style="font-size:17px">${hasBook ? escHtml(book.title) + ' — progress' : 'Goals & settings'}</h2>
+      <h2 style="font-size:17px">${hasBook ? t('stats.progressTitle', { title: escHtml(book.title) }) : t('stats.goalsSettings')}</h2>
       ${hasBook ? `
       <div class="stats-nums">
-        <div><div class="big">${total.toLocaleString()}</div><div class="lbl">total words</div></div>
-        <div><div class="big">${wordsToday.toLocaleString()}</div><div class="lbl">today</div></div>
-        <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">of book goal</div></div>
+        <div><div class="big">${total.toLocaleString()}</div><div class="lbl">${t('stats.totalWords')}</div></div>
+        <div><div class="big">${wordsToday.toLocaleString()}</div><div class="lbl">${t('stats.today')}</div></div>
+        <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">${t('stats.ofBookGoal')}</div></div>
       </div>
       ${statsChartSvg()}` : ''}
       <div class="stats-row" style="margin-top:18px">
-        <label>Daily goal <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
-        ${hasBook ? `<label>Book goal <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
+        <label>${t('stats.dailyGoal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
+        ${hasBook ? `<label>${t('stats.bookGoal')} <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
       </div>
       ${hasBook ? `
       <div class="stats-row">
-        <label>Sprint <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/> words</label>
-        <button id="st-sprint-btn">${sprint && !sprint.done ? 'End sprint' : 'Start sprint'}</button>
-        <span id="st-sprint-info" class="soft">${sprint && !sprint.done ? 'sprint running…' : 'a small hill to charge up'}</span>
+        <label>${t('stats.sprint')} <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/> ${t('stats.sprintWordsLabel')}</label>
+        <button id="st-sprint-btn">${sprint && !sprint.done ? t('stats.endSprint') : t('stats.startSprint')}</button>
+        <span id="st-sprint-info" class="soft">${sprint && !sprint.done ? t('stats.sprintRunning') : t('stats.sprintHint')}</span>
       </div>` : ''}
       <div class="stats-row">
-        <label>New books open for a
+        <label>${t('stats.newBooksOpen')}
           <select id="st-style">
-            <option value="pantser"${library.writingStyle !== 'plotter' ? ' selected' : ''}>Pantser — straight to the blank page</option>
-            <option value="plotter"${library.writingStyle === 'plotter' ? ' selected' : ''}>Plotter — outline first</option>
+            <option value="pantser"${library.writingStyle !== 'plotter' ? ' selected' : ''}>${t('stats.pantserOption')}</option>
+            <option value="plotter"${library.writingStyle === 'plotter' ? ' selected' : ''}>${t('stats.plotterOption')}</option>
           </select>
         </label>
       </div>
       <div style="text-align:right;margin-top:14px">
-        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">Done</button>
+        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">${t('common.done')}</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -2849,12 +2936,12 @@ function openStats() {
     bd.querySelector('#st-sprint-btn').onclick = () => {
       if (sprint && !sprint.done) {
         const got = bookWordCount() - sprint.startCount;
-        toast(`Sprint ended — ${got.toLocaleString()} words in ${Math.round((Date.now() - sprint.startTime) / 60000)} min`);
+        toast(t('toast.sprintEnded', { words: got.toLocaleString(), min: Math.round((Date.now() - sprint.startTime) / 60000) }));
         sprint = null;
       } else {
         const target = parseInt(bd.querySelector('#st-sprint').value, 10) || 500;
         sprint = { target, startCount: bookWordCount(), startTime: Date.now(), done: false };
-        toast(`Sprint started — ${target.toLocaleString()} words. Go.`);
+        toast(t('toast.sprintStarted', { n: target.toLocaleString() }));
       }
       close();
     };
@@ -2872,18 +2959,35 @@ const DROPCAP_FONTS = {
   fantasy: '"Apple Chancery", "Snell Roundhand", cursive',
   scifi: 'Futura, "Avenir Next", "Helvetica Neue", sans-serif'
 };
-const BODY_FONTS = {
+const FONT_STACKS = {
   'Georgia': 'Georgia, "Times New Roman", serif',
   'Palatino': '"Palatino", "Palatino Linotype", serif',
   'Baskerville': 'Baskerville, Georgia, serif',
   'Hoefler Text': '"Hoefler Text", Georgia, serif',
-  'Iowan Old Style': '"Iowan Old Style", Georgia, serif'
+  'Iowan Old Style': '"Iowan Old Style", Georgia, serif',
+  'Cambria': 'Cambria, Georgia, serif',
+  'Constantia': 'Constantia, Georgia, serif',
+  'Songti SC': '"Songti SC", "STSong", "SimSun", serif',
+  'Kaiti SC': '"Kaiti SC", "STKaiti", "KaiTi", serif',
+  'PingFang SC': '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+  'SimSun': 'SimSun, "Songti SC", serif',
+  'KaiTi': 'KaiTi, "Kaiti SC", serif',
+  'Microsoft YaHei': '"Microsoft YaHei", "PingFang SC", sans-serif'
 };
+function buildBodyFonts() {
+  const out = {};
+  for (const name of window.neo.bodyFontNames()) {
+    out[name] = FONT_STACKS[name] || `"${name}", serif`;
+  }
+  return out;
+}
+let BODY_FONTS = buildBodyFonts();
 
 function applyFonts() {
   const f = library.fonts || {};
-  if (f.body && BODY_FONTS[f.body]) {
-    document.documentElement.style.setProperty('--body-font', BODY_FONTS[f.body]);
+  const bodyName = (f.body && BODY_FONTS[f.body]) ? f.body : window.neo.defaultBodyFont();
+  if (BODY_FONTS[bodyName]) {
+    document.documentElement.style.setProperty('--body-font', BODY_FONTS[bodyName]);
   }
   if (f.dropcap && DROPCAP_FONTS[f.dropcap]) {
     document.documentElement.style.setProperty('--dropcap-font', DROPCAP_FONTS[f.dropcap]);
@@ -2913,14 +3017,14 @@ $('#editor-view').addEventListener('wheel', (e) => {
 
 // Format → Align Paragraph: applies to every paragraph the selection touches
 function applyAlign(value) {
-  if (!book || currentTab !== 'manuscript') { toast('Click into a paragraph first'); return; }
+  if (!book || currentTab !== 'manuscript') { toast(t('toast.clickParagraph')); return; }
   const sel = window.getSelection();
   if (!sel.rangeCount) return;
   const r = sel.getRangeAt(0);
   let el = r.startContainer;
   if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const body = el && el.closest ? el.closest('.chapter-body') : null;
-  if (!body) { toast('Click into a paragraph first'); return; }
+  if (!body) { toast(t('toast.clickParagraph')); return; }
   const chId = body.closest('.chapter').dataset.id;
   const ps = [...body.querySelectorAll('p')].filter(
     (p) => r.intersectsNode(p) && !p.classList.contains('scene-break')
@@ -2939,52 +3043,52 @@ function showHelp() {
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
     <div class="modal" style="width:560px">
-      <h2>NEO Shortcuts</h2>
+      <h2>${t('help.title')}</h2>
 
-      <div class="help-sec">Writing</div>
+      <div class="help-sec">${t('help.secWriting')}</div>
       <div class="help-grid">
-        ${row('Enter ×2', 'Section break (***)')}
-        ${row('Enter ×3', 'New chapter, auto-numbered')}
-        ${row(KPH, 'Placeholder note')}
-        ${row(KDA, 'Send the selected passage to Darlings')}
-        ${row(KZ, 'Undo big moves (chapter deletes, replace-all, darlings) when not mid-typing')}
-        ${row('-- and ...', 'Become an em dash — and a true ellipsis …')}
-        ${row(K('⌘B · ⌘I', 'Ctrl+B · Ctrl+I'), 'Bold, italic. Quotes curl themselves.')}
+        ${row(t('help.keyEnter2'), t('help.enter2'))}
+        ${row(t('help.keyEnter3'), t('help.enter3'))}
+        ${row(KPH, t('help.placeholder'))}
+        ${row(KDA, t('help.darlings'))}
+        ${row(KZ, t('help.undo'))}
+        ${row(t('help.keyDashes'), t('help.dashes'))}
+        ${row(K('⌘B · ⌘I', 'Ctrl+B · Ctrl+I'), t('help.bold'))}
       </div>
 
-      <div class="help-sec">Getting around</div>
+      <div class="help-sec">${t('help.secAround')}</div>
       <div class="help-grid">
-        ${row(K('⌘F', 'Ctrl+F'), 'Find &amp; replace across the whole book')}
-        ${row('Hover edges', 'Left: chapters &amp; outline notes. Right: comments (☉ pins).')}
-        ${row('Esc', 'Closes whatever’s open; otherwise back to the shelf')}
+        ${row(K('⌘F', 'Ctrl+F'), t('help.find'))}
+        ${row(t('help.keyHover'), t('help.hover'))}
+        ${row(t('help.keyEsc'), t('help.esc'))}
       </div>
 
-      <div class="help-sec">Modes</div>
+      <div class="help-sec">${t('help.secModes')}</div>
       <div class="help-grid">
-        ${row(K('⌘⇧F', 'Ctrl+Shift+F'), 'Full screen (Esc leaves)')}
-        ${row(K('⌘⇧T', 'Ctrl+Shift+T'), 'Typewriter scrolling')}
-        ${row(K('⌘;', 'Ctrl+;'), 'Spellcheck pass (right-click squiggles for fixes)')}
+        ${row(K('⌘⇧F', 'Ctrl+Shift+F'), t('help.fullscreen'))}
+        ${row(K('⌘⇧T', 'Ctrl+Shift+T'), t('help.typewriter'))}
+        ${row(K('⌘;', 'Ctrl+;'), t('help.spell'))}
       </div>
 
-      <div class="help-sec">Files</div>
+      <div class="help-sec">${t('help.secFiles')}</div>
       <div class="help-grid">
-        ${row(K('⌘E', 'Ctrl+E'), 'Email a timestamped draft to yourself')}
-        ${row(K('⌘⇧I', 'Ctrl+Shift+I'), 'Import .docx / .txt / .md manuscripts')}
-        ${row('File → Export', 'txt · md · html · pdf · docx · epub')}
+        ${row(K('⌘E', 'Ctrl+E'), t('help.email'))}
+        ${row(K('⌘⇧I', 'Ctrl+Shift+I'), t('help.import'))}
+        ${row(t('help.keyExportMenu'), t('help.export'))}
       </div>
 
-      <div class="help-sec">Mouse</div>
+      <div class="help-sec">${t('help.secMouse')}</div>
       <div class="help-grid">
-        ${row('Drag text', 'Onto the Darlings tab')}
-        ${row('Right-click', 'Books, shelf names, chapter headings, outline lines')}
-        ${row('Drag chapters', 'In the left panel, to reorder — everything renumbers')}
-        ${row('Double-click', 'A tab, to rename it')}
-        ${row('Click counters', 'Cycle word counts · open goals &amp; sprints')}
-        ${row(K('Pinch', 'Ctrl+Scroll'), 'Zoom the page — text and column together (' + K('⌘0', 'Ctrl+0') + ' resets)')}
+        ${row(t('help.keyDragText'), t('help.dragText'))}
+        ${row(t('help.keyRightClick'), t('help.rightClick'))}
+        ${row(t('help.keyDragChapters'), t('help.dragChapters'))}
+        ${row(t('help.keyDoubleClick'), t('help.doubleClick'))}
+        ${row(t('help.keyCounters'), t('help.counters'))}
+        ${row(K('Pinch', 'Ctrl+Scroll'), t('help.pinch', { reset: K('⌘0', 'Ctrl+0') }))}
       </div>
 
       <div style="text-align:right;margin-top:18px">
-        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">Got it</button>
+        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">${t('common.gotIt')}</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -2999,7 +3103,10 @@ function showHelp() {
 /* ================================================================== */
 
 function safeName(s) {
-  return (s || 'Untitled').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+  // Keep letters/numbers across scripts (CJK titles). Always fall back to the
+  // English disk sentinel so export filenames stay portable.
+  const base = (s && String(s).trim()) || 'Untitled';
+  return base.replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-') || 'Untitled';
 }
 
 function parasFromHtml(html) {
@@ -3019,11 +3126,14 @@ function exportChapters() {
   return book.chapterOrder.map((chId, i) => {
     const el = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
     const paras = parasFromHtml(el ? el.innerHTML : (chapterHTML[chId] || ''));
-    const t = (book.chapterTitles || {})[chId];
+    const chTitle = (book.chapterTitles || {})[chId];
     // chapterless stories export as continuous text
+    // Headings stay English so exported files are locale-stable.
     const heading = book.chapterOrder.length === 1
       ? ''
-      : 'Chapter ' + (i + 1) + (t ? ' — ' + t : '');
+      : (chTitle
+        ? `Chapter ${i + 1} — ${chTitle}`
+        : `Chapter ${i + 1}`);
     return { num: i + 1, heading, paras };
   });
 }
@@ -3414,10 +3524,10 @@ async function shelfExportData(shelf, anthologyTitle) {
       const paras = parasFromHtml(html);
       if (!paras.length) continue;
       num++;
-      const t = (meta.chapterTitles || {})[meta.chapterOrder[i]];
+      const chTitle = (meta.chapterTitles || {})[meta.chapterOrder[i]];
       const heading = !multi
         ? meta.title
-        : (i === 0 ? meta.title : `${meta.title} — Chapter ${i + 1}${t ? ': ' + t : ''}`);
+        : (i === 0 ? meta.title : `${meta.title} — Chapter ${i + 1}${chTitle ? ': ' + chTitle : ''}`);
       sections.push({ num, heading, paras });
     }
   }
@@ -3432,29 +3542,29 @@ async function shelfExportData(shelf, anthologyTitle) {
 }
 
 async function exportShelfAnthology(shelf) {
-  if (!shelf.bookIds.length) { toast('This shelf has no books on it yet'); return; }
-  const title = await askInput('Anthology title', 'Shown on the title page, cover, and metadata', shelf.name);
+  if (!shelf.bookIds.length) { toast(t('toast.shelfEmpty')); return; }
+  const title = await askInput(t('export.anthologyTitle'), t('export.anthologyTitlePh'), shelf.name);
   if (title === null) return;
-  const format = await optionModal('Export the anthology as…', null, [
-    { label: 'EPUB', desc: 'For ebook stores — the TOC lists every story.', value: 'epub' },
-    { label: 'Word (.docx)', desc: 'For editors — each story starts on a new page.', value: 'docx' },
-    { label: 'PDF', desc: 'For reading, sharing, and print.', value: 'pdf' }
+  const format = await optionModal(t('export.exportAs'), null, [
+    { label: t('export.epub'), desc: t('export.epubDesc'), value: 'epub' },
+    { label: t('export.docx'), desc: t('export.docxDesc'), value: 'docx' },
+    { label: t('export.pdf'), desc: t('export.pdfDesc'), value: 'pdf' }
   ]);
   if (!format) return;
-  toast('Collecting the shelf…');
+  toast(t('toast.collectingShelf'));
   const data = await shelfExportData(shelf, title || shelf.name);
-  if (!data.sections.length) { toast('No words found on this shelf yet'); return; }
+  if (!data.sections.length) { toast(t('toast.noWordsShelf')); return; }
   const defaultName = safeName(data.title);
   let payload;
   if (format === 'docx') payload = { format, defaultName, zipEntries: buildDocxEntries(data) };
   else if (format === 'epub') payload = { format, defaultName, zipEntries: await buildEpubEntries(data) };
   else payload = { format: 'pdf', defaultName, content: buildHtml(data) };
   const saved = await window.neo.exportSave(payload);
-  if (saved) toast(`Anthology of ${shelf.bookIds.length} works exported: ` + saved.split('/').pop(), 6000);
+  if (saved) toast(t('toast.anthologyExported', { n: shelf.bookIds.length, file: saved.split('/').pop() }), 6000);
 }
 
 async function doExport(format) {
-  if (!book) { toast('Open a book first'); return; }
+  if (!book) { toast(t('toast.openBookFirst')); return; }
   flushAllSaves();
   const defaultName = safeName(book.title);
   let payload;
@@ -3462,7 +3572,7 @@ async function doExport(format) {
   else if (format === 'epub') payload = { format, defaultName, zipEntries: await buildEpubEntries() };
   else payload = { format, defaultName, content: format === 'txt' ? buildTxt() : format === 'md' ? buildMd() : buildHtml() };
   const saved = await window.neo.exportSave(payload);
-  if (saved) toast('Exported: ' + saved.split('/').pop());
+  if (saved) toast(t('toast.exported', { file: saved.split('/').pop() }));
 }
 
 function chooseEmailMethod() {
@@ -3473,15 +3583,15 @@ function chooseEmailMethod() {
     bd.className = 'modal-backdrop';
     bd.innerHTML = `
       <div class="modal" style="width:440px">
-        <h2 style="font-size:16px">How should NEO email your drafts?</h2>
+        <h2 style="font-size:16px">${t('email.howTitle')}</h2>
         <div class="fr-choices" style="margin-top:14px">
           <button class="fr-choice" data-m="gmail">
-            <strong>Gmail</strong>
-            <span>Opens a pre-filled compose window in your browser. NEO shows you the PDF to drag into it.</span>
+            <strong>${t('email.gmailStrong')}</strong>
+            <span>${t('email.gmailDesc')}</span>
           </button>
           <button class="fr-choice" data-m="mail">
-            <strong>Apple Mail</strong>
-            <span>Fully automatic — the PDF is attached and addressed. Just hit send.</span>
+            <strong>${t('email.mailStrong')}</strong>
+            <span>${t('email.mailDesc')}</span>
           </button>
         </div>
       </div>`;
@@ -3493,12 +3603,12 @@ function chooseEmailMethod() {
 }
 
 async function emailSettings() {
-  const addr = await askInput('Email drafts to', 'you@example.com', library.emailAddress || '');
+  const addr = await askInput(t('email.draftsTo'), t('email.draftsPh'), library.emailAddress || '');
   if (addr === null) return false;
   if (addr) library.emailAddress = addr;
   library.emailMethod = await chooseEmailMethod();
   await window.neo.writeLibrary(library);
-  toast('Email settings saved');
+  toast(t('toast.emailSaved'));
   return true;
 }
 
@@ -3510,22 +3620,24 @@ async function manuscriptHash() {
 }
 
 async function doEmailDraft() {
-  if (!book) { toast('Open a book first'); return; }
+  if (!book) { toast(t('toast.openBookFirst')); return; }
   flushAllSaves();
   if (!library.emailAddress || !library.emailMethod) {
     const ok = await emailSettings();
     if (!ok) return;
   }
   const total = bookWordCount();
-  const subject = `NEO draft — ${book.title} — ${total.toLocaleString()} words — ${new Date().toLocaleDateString()}`;
+  const subject = t('email.subject', {
+    title: book.title,
+    words: total.toLocaleString(),
+    date: new Date().toLocaleDateString()
+  });
   const hash = await manuscriptHash();
-  const body = `Draft snapshot of "${book.title}" — ${total.toLocaleString()} words.\n`
-    + `Sent from NEO on ${new Date().toLocaleString()}.\n\n`
-    + `SHA-256 fingerprint of the manuscript text:\n${hash}\n\n`
-    + (library.emailMethod === 'gmail'
-      ? 'The PDF snapshot is in the Finder window NEO just opened — drag it into this email before sending.'
-      : 'PDF snapshot attached.');
-  toast('Preparing your draft…');
+  const body = t('email.bodyIntro', { title: book.title, words: total.toLocaleString() }) + '\n'
+    + t('email.bodySent', { stamp: new Date().toLocaleString() }) + '\n\n'
+    + t('email.bodyHash') + '\n' + hash + '\n\n'
+    + (library.emailMethod === 'gmail' ? t('email.bodyGmailHint') : t('email.bodyMailHint'));
+  toast(t('toast.preparingDraft'));
   const res = await window.neo.emailDraft({
     to: library.emailAddress,
     subject,
@@ -3534,9 +3646,9 @@ async function doEmailDraft() {
     defaultName: safeName(book.title),
     method: library.emailMethod
   });
-  if (res.method === 'gmail') toast('Gmail compose opened — drag in the PDF NEO revealed, then send', 8000);
-  else if (res.ok) toast('Draft handed to Mail — hit send for your timestamp');
-  else toast('Mail unavailable — snapshot saved to your Exports folder instead');
+  if (res.method === 'gmail') toast(t('toast.gmailOpened'), 8000);
+  else if (res.ok) toast(t('toast.mailHanded'));
+  else toast(t('toast.mailUnavailable'));
 }
 
 window.neo.onMenu(async (msg) => {
@@ -3574,15 +3686,19 @@ window.neo.onMenu(async (msg) => {
     library.fonts.body = msg.value;
     await window.neo.writeLibrary(library);
     applyFonts();
-    toast('Body font: ' + msg.value);
+    toast(t('toast.bodyFont', { name: msg.value }));
   }
   if (msg.type === 'dropCap') {
     library.fonts = library.fonts || {};
     library.fonts.dropcap = msg.value;
     await window.neo.writeLibrary(library);
     applyFonts();
-    const names = { literary: 'Literary', fantasy: 'Fantasy', scifi: 'Sci-Fi' };
-    toast('Drop caps: ' + names[msg.value]);
+    const names = {
+      literary: t('firstRun.dropcapLiterary'),
+      fantasy: t('firstRun.dropcapFantasy'),
+      scifi: t('firstRun.dropcapScifi')
+    };
+    toast(t('toast.dropCaps', { name: names[msg.value] }));
   }
 });
 
@@ -3595,7 +3711,7 @@ function reportError(msg) {
   window.neo.logError(msg);
   if (!errorToastShown) {
     errorToastShown = true;
-    toast('Something hiccuped — your words are safe, and the details were logged');
+    toast(t('toast.hiccup'));
   }
 }
 window.addEventListener('error', (e) => reportError(`${e.message} @ ${e.filename}:${e.lineno}`));

@@ -6,6 +6,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electro
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const i18n = require('./i18n');
 
 // macOS Chromium's "smart delete" also removes whitespace around a deleted
 // selection, and that pass can duplicate characters. Deletes stay literal.
@@ -18,6 +19,11 @@ app.commandLine.appendSwitch('blink-settings', 'smartInsertDeleteEnabled=false')
 // covers any early access and non-redirected setups.
 let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
 let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+
+// Sandboxed preload cannot require('./i18n'); it asks main for a snapshot.
+ipcMain.on('i18n:bootstrap', (event) => {
+  event.returnValue = i18n.bootstrap(process.platform);
+});
 
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
@@ -185,13 +191,17 @@ ipcMain.handle('json:write', (_e, bookId, name, data) => {
 
 ipcMain.handle('book:delete', async (_e, bookId, title) => {
   const win = BrowserWindow.getFocusedWindow();
+  const bin = process.platform === 'win32' ? i18n.t('common.recycleBin') : i18n.t('common.trash');
   const { response } = await dialog.showMessageBox(win, {
     type: 'warning',
-    buttons: ['Cancel', process.platform === 'win32' ? 'Move to Recycle Bin' : 'Move to Trash'],
+    buttons: [
+      i18n.t('common.cancel'),
+      process.platform === 'win32' ? i18n.t('menu.moveToRecycleBin') : i18n.t('menu.moveToTrash')
+    ],
     defaultId: 0,
     cancelId: 0,
-    message: `Move “${title}” to the ${process.platform === 'win32' ? 'Recycle Bin' : 'Trash'}?`,
-    detail: 'The book folder goes to your system trash, so you can recover it.'
+    message: i18n.t('dialogs.moveToTrashMsg', { title, bin }),
+    detail: i18n.t('dialogs.moveToTrashDetail')
   });
   if (response === 1) {
     const { shell } = require('electron');
@@ -213,9 +223,9 @@ ipcMain.handle('library:path', () => LIBRARY_DIR);
 ipcMain.handle('cover:pick', async () => {
   const win = BrowserWindow.getFocusedWindow();
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: 'Choose cover art',
+    title: i18n.t('dialogs.chooseCover'),
     properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: COVER_EXTS }]
+    filters: [{ name: i18n.t('dialogs.images'), extensions: COVER_EXTS }]
   });
   return canceled || !filePaths.length ? null : filePaths[0];
 });
@@ -497,9 +507,9 @@ ipcMain.handle('import:files', async (_e, paths) => {
 ipcMain.handle('import:pick', async () => {
   const win = BrowserWindow.getFocusedWindow();
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: 'Bring your manuscripts home',
+    title: i18n.t('dialogs.bringHome'),
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Manuscripts', extensions: ['docx', 'txt', 'md'] }]
+    filters: [{ name: i18n.t('dialogs.manuscripts'), extensions: ['docx', 'txt', 'md'] }]
   });
   if (canceled || !filePaths.length) return [];
   const out = [];
@@ -599,7 +609,7 @@ function createWindow() {
       menu.append(new MenuItem({ type: 'separator' }));
     }
     menu.append(new MenuItem({
-      label: `Add “${params.misspelledWord}” to Dictionary`,
+      label: i18n.t('menu.addToDictionary', { word: params.misspelledWord }),
       click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
     }));
     menu.popup();
@@ -616,42 +626,40 @@ function sendToWindow(msg) {
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
-  const bodyFonts = isMac
-    ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
-    : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
+  const bodyFonts = i18n.bodyFontNames(process.platform);
   const template = [
     // appMenu exists only on macOS — including it on Windows throws,
     // which is exactly what kept NEO from ever opening a window there
     ...(isMac ? [{ role: 'appMenu' }] : []),
     {
-      label: 'File',
+      label: i18n.t('menu.file'),
       submenu: [
         {
-          label: 'Export',
+          label: i18n.t('menu.export'),
           submenu: [
-            { label: 'Plain Text (.txt)', click: () => sendToWindow({ type: 'export', format: 'txt' }) },
-            { label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
-            { label: 'Web Page (.html)', click: () => sendToWindow({ type: 'export', format: 'html' }) },
-            { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
-            { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
-            { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) }
+            { label: i18n.t('menu.plainText'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
+            { label: i18n.t('menu.markdown'), click: () => sendToWindow({ type: 'export', format: 'md' }) },
+            { label: i18n.t('menu.webPage'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
+            { label: i18n.t('menu.pdf'), click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
+            { label: i18n.t('menu.word'), click: () => sendToWindow({ type: 'export', format: 'docx' }) },
+            { label: i18n.t('menu.epub'), click: () => sendToWindow({ type: 'export', format: 'epub' }) }
           ]
         },
         { type: 'separator' },
         {
-          label: 'Email Draft to Myself',
+          label: i18n.t('menu.emailDraft'),
           accelerator: 'CmdOrCtrl+E',
           click: () => sendToWindow({ type: 'emailDraft' })
         },
-        { label: 'Email Settings…', click: () => sendToWindow({ type: 'emailSettings' }) },
+        { label: i18n.t('menu.emailSettings'), click: () => sendToWindow({ type: 'emailSettings' }) },
         {
-          label: 'Goals & Settings…',
+          label: i18n.t('menu.goalsSettings'),
           accelerator: 'CmdOrCtrl+,',
           click: () => sendToWindow({ type: 'stats' })
         },
         { type: 'separator' },
         {
-          label: 'Import Manuscripts…',
+          label: i18n.t('menu.importManuscripts'),
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => sendToWindow({ type: 'import' })
         },
@@ -660,7 +668,7 @@ function buildMenu() {
       ]
     },
     {
-      label: 'Edit',
+      label: i18n.t('menu.edit'),
       submenu: [
         { role: 'undo' }, { role: 'redo' },
         { type: 'separator' },
@@ -668,61 +676,61 @@ function buildMenu() {
         { role: 'pasteAndMatchStyle' }, { role: 'selectAll' },
         { type: 'separator' },
         {
-          label: 'Find & Replace',
+          label: i18n.t('menu.findReplace'),
           accelerator: 'CmdOrCtrl+F',
           click: () => sendToWindow({ type: 'find' })
         },
         {
-          label: 'Spellcheck Pass',
+          label: i18n.t('menu.spellcheck'),
           accelerator: 'CmdOrCtrl+;',
           click: () => sendToWindow({ type: 'spellcheck' })
         }
       ]
     },
     {
-      label: 'Format',
+      label: i18n.t('menu.format'),
       submenu: [
         {
-          label: 'Body Font',
+          label: i18n.t('menu.bodyFont'),
           submenu: bodyFonts.map((f) => ({
             label: f,
             click: () => sendToWindow({ type: 'bodyFont', value: f })
           }))
         },
         {
-          label: 'Drop Cap Style',
+          label: i18n.t('menu.dropCapStyle'),
           submenu: [
-            { label: 'Literary', click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
-            { label: 'Fantasy', click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
-            { label: 'Sci-Fi', click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) }
+            { label: i18n.t('menu.literary'), click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
+            { label: i18n.t('menu.fantasy'), click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
+            { label: i18n.t('menu.scifi'), click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) }
           ]
         },
         {
-          label: 'Align Paragraph',
+          label: i18n.t('menu.alignParagraph'),
           submenu: [
-            { label: 'Left', click: () => sendToWindow({ type: 'align', value: 'left' }) },
-            { label: 'Center', click: () => sendToWindow({ type: 'align', value: 'center' }) },
-            { label: 'Right', click: () => sendToWindow({ type: 'align', value: 'right' }) },
-            { label: 'Justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
+            { label: i18n.t('menu.left'), click: () => sendToWindow({ type: 'align', value: 'left' }) },
+            { label: i18n.t('menu.center'), click: () => sendToWindow({ type: 'align', value: 'center' }) },
+            { label: i18n.t('menu.right'), click: () => sendToWindow({ type: 'align', value: 'right' }) },
+            { label: i18n.t('menu.justify'), click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
         { type: 'separator' },
-        { label: 'Larger Text', accelerator: 'CmdOrCtrl+=', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
-        { label: 'Smaller Text', accelerator: 'CmdOrCtrl+-', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
-        { label: 'Reset Text Size', accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
+        { label: i18n.t('menu.largerText'), accelerator: 'CmdOrCtrl+=', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
+        { label: i18n.t('menu.smallerText'), accelerator: 'CmdOrCtrl+-', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
+        { label: i18n.t('menu.resetTextSize'), accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
         { type: 'separator' },
         {
-          label: 'Typewriter Scrolling',
+          label: i18n.t('menu.typewriterScrolling'),
           accelerator: 'CmdOrCtrl+Shift+T',
           click: () => sendToWindow({ type: 'typewriter' })
         }
       ]
     },
     {
-      label: 'View',
+      label: i18n.t('menu.view'),
       submenu: [
         {
-          label: 'Full Screen',
+          label: i18n.t('menu.fullScreen'),
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => {
             const w = BrowserWindow.getFocusedWindow();
@@ -731,24 +739,24 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
-          label: 'Page',
+          label: i18n.t('menu.page'),
           submenu: [
-            { label: 'Night', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
-            { label: 'Paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) }
+            { label: i18n.t('menu.night'), click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
+            { label: i18n.t('menu.paper'), click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) }
           ]
         },
         {
-          label: 'Brighter Interface',
+          label: i18n.t('menu.brighterInterface'),
           click: () => sendToWindow({ type: 'uiBright' })
         }
       ]
     },
     { role: 'windowMenu' },
     {
-      label: 'Help',
+      label: i18n.t('menu.help'),
       submenu: [
         {
-          label: 'NEO Shortcuts',
+          label: i18n.t('menu.neoShortcuts'),
           accelerator: 'CmdOrCtrl+/',
           click: () => sendToWindow({ type: 'help' })
         }
@@ -799,6 +807,15 @@ app.whenReady().then(() => {
       logError('paths', err);
     }
 
+    try { ensureLibrary(); } catch (err) { logError('library', err); }
+
+    try {
+      i18n.init(app.getLocale());
+    } catch (err) {
+      logError('i18n', err);
+      try { i18n.init('en'); } catch { /* keep going */ }
+    }
+
     // macOS press-and-hold accent picker can open invisibly inside Chromium
     // and re-emit swallowed keys as phantom repeated letters. Within NEO,
     // held keys simply repeat — which is what writers expect anyway.
@@ -815,7 +832,6 @@ app.whenReady().then(() => {
       }
     }
 
-    try { ensureLibrary(); } catch (err) { logError('library', err); }
     createWindow();
     try { buildMenu(); } catch (err) { logError('menu', err); }
     try { dailyBackup(); } catch (err) { logError('backup', err); }
@@ -824,8 +840,8 @@ app.whenReady().then(() => {
     // catastrophic: tell the human instead of dying in silence
     logError('startup', err);
     try {
-      dialog.showErrorBox('NEO failed to start',
-        'Please report this at github.com/hughhowey/neo/issues:\n\n' + String((err && err.stack) || err));
+      dialog.showErrorBox(i18n.t('dialogs.startFailed'),
+        i18n.t('dialogs.startFailedDetail') + '\n\n' + String((err && err.stack) || err));
     } catch { /* nothing left to try */ }
   }
   app.on('activate', () => {

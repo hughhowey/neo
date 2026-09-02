@@ -1,5 +1,25 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
+// Sandboxed preload cannot require('./i18n'). Main loads the catalogs and
+// hands us a snapshot over a synchronous IPC channel.
+  const i18nState = ipcRenderer.sendSync('i18n:bootstrap') || {
+  locale: 'en', catalog: {}, fallback: {}, bodyFontNames: [], defaultBodyFont: 'Georgia', locales: ['en']
+};
+
+function dig(obj, key) {
+  return key.split('.').reduce((o, k) => (o && o[k] != null ? o[k] : undefined), obj);
+}
+
+function t(key, vars) {
+  let str = dig(i18nState.catalog, key);
+  if (str == null) str = dig(i18nState.fallback, key);
+  if (str == null) str = key;
+  if (typeof str !== 'string') return String(str);
+  if (!vars) return str;
+  return str.replace(/\{(\w+)\}/g, (_, name) =>
+    (vars[name] != null ? String(vars[name]) : '{' + name + '}'));
+}
+
 contextBridge.exposeInMainWorld('neo', {
   readLibrary: () => ipcRenderer.invoke('library:read'),
   writeLibrary: (data) => ipcRenderer.invoke('library:write', data),
@@ -32,6 +52,12 @@ contextBridge.exposeInMainWorld('neo', {
   pathForFile: (file) => webUtils.getPathForFile(file),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
   fullscreenToggle: () => ipcRenderer.invoke('fullscreen:toggle'),
+
+  // i18n: add locales/<code>.json to ship another language
+  locale: i18nState.locale,
+  t,
+  bodyFontNames: () => i18nState.bodyFontNames.slice(),
+  defaultBodyFont: () => i18nState.defaultBodyFont,
 
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });
