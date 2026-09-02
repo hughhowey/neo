@@ -588,10 +588,22 @@ body.bright #add-shelf-btn, body.bright #import-btn { color: #b4b4b4; border-col
   box-shadow: 0 3px 14px rgba(0,0,0,0.4);
 }
 
-::-webkit-scrollbar { width: 11px; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
 ::-webkit-scrollbar-track { background: transparent; }
+/* Quiet chrome: the thumb only paints while the pane is actively scrolling. */
+.show-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); }
+.show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+body.bright .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); }
+body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.show-scrollbar { scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+body.bright .show-scrollbar { scrollbar-color: rgba(0, 0, 0, 0.22) transparent; }
 
 /* pinned notes pane: the page column shifts left to clear the pane */
 #editor-view.side-pinned #paper-scroll { left: calc(50% - 125px); }
