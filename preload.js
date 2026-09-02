@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('neo', {
   t,
   bodyFontNames: () => i18nState.bodyFontNames.slice(),
   defaultBodyFont: () => i18nState.defaultBodyFont,
+  listLocales: () => (i18nState.locales || ['en']).slice(),
+  setUiLocale: (code) => ipcRenderer.invoke('i18n:setLocale', code),
 
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });

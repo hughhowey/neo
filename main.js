@@ -25,6 +25,17 @@ ipcMain.on('i18n:bootstrap', (event) => {
   event.returnValue = i18n.bootstrap(process.platform);
 });
 
+ipcMain.handle('i18n:setLocale', (_e, pref) => {
+  ensureLibrary();
+  const lib = readJSON(LIBRARY_FILE, {});
+  lib.uiLocale = pref || 'system';
+  writeJSON(LIBRARY_FILE, lib);
+  i18n.init(i18n.resolveUiLocale(lib.uiLocale, app.getLocale()));
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+  for (const w of BrowserWindow.getAllWindows()) w.reload();
+  return true;
+});
+
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
   if (!fs.existsSync(LIBRARY_FILE)) {
@@ -423,8 +434,13 @@ async function importFile(fp) {
   // Bare numbers only count as chapter markers when there's a ladder of them —
   // a story that merely OPENS with "Seven." keeps its seven.
   const numeralMode = paras.filter((p) => p.text && isNumeralish(p.text.trim())).length >= 2;
+  // Chinese manuscripts often mark chapters as 第N章 / 序章 / 尾声, etc.
+  const isCjkHeading = (t) =>
+    (/^第[零〇一二三四五六七八九十百千万两0-9０-９]+[章节回部篇]/.test(t) && t.length < 40) ||
+    (/^(序章|序言|楔子|引子|前言|尾声|终章|后记|附录|番外)([：:\s].*)?$/.test(t) && t.length < 40);
   const isHeading = (t) => t && (
     (/^(chapter|prologue|epilogue|part)\b/i.test(t) && t.length < 60) ||
+    isCjkHeading(t.trim()) ||
     (numeralMode && isNumeralish(t))
   );
   const isBreak = (t) => /^\s*([*#•~⁂—–-]\s*){1,7}$/.test(t || '');
@@ -448,7 +464,15 @@ async function importFile(fp) {
   };
 
   const countAllWords = (list) =>
-    list.reduce((n, ch) => n + ch.reduce((m, p) => m + (p.text ? p.text.trim().split(/\s+/).length : 0), 0), 0);
+    list.reduce((n, ch) => n + ch.reduce((m, p) => {
+      if (!p.text) return m;
+      const s = p.text.trim();
+      const cjk = s.match(/[\u3400-\u9fff\uf900-\ufaff]/g);
+      let w = cjk ? cjk.length : 0;
+      const rest = s.replace(/[\u3400-\u9fff\uf900-\ufaff]/g, ' ').trim();
+      if (rest) w += rest.split(/\s+/).filter(Boolean).length;
+      return m + w;
+    }, 0), 0);
 
   // First pass trusts page breaks. Some word processors sprinkle page-break
   // formatting on every paragraph, exploding a story into confetti — if the
@@ -810,7 +834,8 @@ app.whenReady().then(() => {
     try { ensureLibrary(); } catch (err) { logError('library', err); }
 
     try {
-      i18n.init(app.getLocale());
+      const lib = readJSON(LIBRARY_FILE, {});
+      i18n.init(i18n.resolveUiLocale(lib.uiLocale, app.getLocale()));
     } catch (err) {
       logError('i18n', err);
       try { i18n.init('en'); } catch { /* keep going */ }

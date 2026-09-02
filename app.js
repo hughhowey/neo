@@ -153,7 +153,20 @@ function toast(msg, ms = 4000) {
   toast._t = setTimeout(() => { h.hidden = true; }, ms);
 }
 
-const countWords = (text) => (text.trim().match(/\S+/g) || []).length;
+// CJK characters count individually; Latin (and other) words stay space/token based.
+const countWords = (text) => {
+  const s = String(text || '').trim();
+  if (!s) return 0;
+  const cjkRe = /[\u3400-\u9fff\uf900-\ufaff]/g;
+  const cjk = s.match(cjkRe);
+  let n = cjk ? cjk.length : 0;
+  const rest = s
+    .replace(cjkRe, ' ')
+    .replace(/[^\p{L}\p{N}'’]+/gu, ' ')
+    .trim();
+  if (rest) n += (rest.match(/[\p{L}\p{N}'’]+/gu) || []).length;
+  return n;
+};
 
 function cleanChapterEl(id) {
   const el = document.querySelector(`.chapter[data-id="${id}"] .chapter-body`);
@@ -2914,6 +2927,17 @@ function openStats() {
           </select>
         </label>
       </div>
+      <div class="stats-row">
+        <label>${t('stats.language')}
+          <select id="st-lang">
+            <option value="system"${!library.uiLocale || library.uiLocale === 'system' ? ' selected' : ''}>${t('stats.languageSystem')}</option>
+            <option value="en"${library.uiLocale === 'en' ? ' selected' : ''}>${t('stats.languageEn')}</option>
+            ${(window.neo.listLocales() || []).includes('zh')
+              ? `<option value="zh"${library.uiLocale === 'zh' ? ' selected' : ''}>${t('stats.languageZh')}</option>`
+              : ''}
+          </select>
+        </label>
+      </div>
       <div style="text-align:right;margin-top:14px">
         <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">${t('common.done')}</button>
       </div>
@@ -2922,6 +2946,9 @@ function openStats() {
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
     library.writingStyle = bd.querySelector('#st-style').value;
+    const nextLocale = bd.querySelector('#st-lang').value || 'system';
+    const localeChanged = (library.uiLocale || 'system') !== nextLocale;
+    library.uiLocale = nextLocale;
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
       scheduleMetaSave();
@@ -2929,6 +2956,7 @@ function openStats() {
     await window.neo.writeLibrary(library);
     bd.remove();
     if (hasBook) updateCounters();
+    if (localeChanged) await window.neo.setUiLocale(nextLocale);
   };
   bd.querySelector('.m-ok').onclick = close;
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
