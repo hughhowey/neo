@@ -24,6 +24,16 @@ const KPH = K('⌘⇧X', 'Ctrl+Shift+X');
 const KDA = K('⌘⇧D', 'Ctrl+Shift+D');
 const KHELP = K('⌘/', 'Ctrl+/');
 
+// Scrollbars stay invisible until you scroll, then fade away again —
+// chrome only when needed.
+document.addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (!el || !el.classList) return;
+  el.classList.add('show-scrollbar');
+  clearTimeout(el._neoSbHide);
+  el._neoSbHide = setTimeout(() => el.classList.remove('show-scrollbar'), 750);
+}, true);
+
 function askInput(title, placeholder, value = '') {
   return new Promise((resolve) => {
     const bd = document.createElement('div');
