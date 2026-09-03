@@ -263,11 +263,11 @@ body.night #aux-editor * { color: inherit; }
   display: flex; flex-direction: column; justify-content: center;
 }
 #tp-title {
-  font-family: Georgia, serif; font-size: calc(34px * var(--page-zoom, 1)); font-weight: 700;
+  font-family: var(--body-font); font-size: calc(34px * var(--page-zoom, 1)); font-weight: 700;
   outline: none; min-height: 44px;
 }
 #tp-subtitle {
-  font-family: Georgia, serif; font-size: 17px; font-style: italic;
+  font-family: var(--body-font); font-size: 17px; font-style: italic;
   color: #555; margin-top: 14px; outline: none; min-height: 24px;
 }
 #tp-author {
