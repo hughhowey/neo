@@ -787,6 +787,18 @@ function checkForUpdates() {
 }
 
 app.whenReady().then(() => {
+  // Packaged builds get name/icon from electron-builder; this covers `npm start`.
+  try {
+    const devIcon = path.join(__dirname, 'build', 'icon.png');
+    if (process.platform === 'darwin' && fs.existsSync(devIcon)) {
+      if (app.dock) app.dock.setIcon(devIcon);
+      app.setAboutPanelOptions({
+        applicationName: 'NEO',
+        applicationVersion: app.getVersion(),
+        iconPath: devIcon
+      });
+    }
+  } catch { /* cosmetic only */ }
   // Startup discipline: the window is created first, and every other step is
   // individually guarded so no single failure can leave the app running
   // invisibly with no window.
