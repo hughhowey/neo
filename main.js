@@ -645,7 +645,7 @@ function buildMenu() {
         },
         { label: 'Email Settings…', click: () => sendToWindow({ type: 'emailSettings' }) },
         {
-          label: 'Goals & Settings…',
+          label: isMac ? 'Goals & Settings…' : 'Goals && Settings…',
           accelerator: 'CmdOrCtrl+,',
           click: () => sendToWindow({ type: 'stats' })
         },
@@ -668,7 +668,7 @@ function buildMenu() {
         { role: 'pasteAndMatchStyle' }, { role: 'selectAll' },
         { type: 'separator' },
         {
-          label: 'Find & Replace',
+          label: isMac ? 'Find & Replace' : 'Find && Replace',
           accelerator: 'CmdOrCtrl+F',
           click: () => sendToWindow({ type: 'find' })
         },
