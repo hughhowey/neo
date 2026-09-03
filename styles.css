@@ -501,6 +501,12 @@ body.night #aux-editor * { color: inherit; }
 #counters { display: flex; gap: 18px; font-size: 12px; color: var(--muted); }
 #counters span { cursor: pointer; user-select: none; }
 #counters span:hover { color: #ddd; }
+#zoom-control { display: inline-flex; align-items: center; gap: 6px; }
+#zoom-control button {
+  background: none; border: none; color: inherit; font-size: 13px;
+  cursor: pointer; padding: 0 2px; line-height: 1;
+}
+#zoom-control button:hover, #zoom-control:hover { color: #ddd; }
 
 /* --- Find & replace bar --- */
 #searchbar {
