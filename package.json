@@ -3,6 +3,7 @@
   "productName": "NEO",
   "version": "0.4.3",
   "description": "A word processor for authors. Distraction-free by default.",
+  "homepage": "https://github.com/hughhowey/neo",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -64,13 +65,20 @@
         {
           "target": "AppImage",
           "arch": [
-            "x64"
+            "x64",
+            "arm64"
           ]
         }
       ],
       "category": "Office",
-      "maintainer": "Hugh Howey <hughhowey@gmail.com>",
-      "synopsis": "A distraction-free word processor for authors"
+      "synopsis": "A distraction-free word processor for authors",
+      "desktop": {
+        "entry": {
+          "Comment": "A word processor for authors. Distraction-free by default.",
+          "Keywords": "writing;writer;novel;book;author;manuscript;wordprocessor;"
+        }
+      },
+      "maintainer": "Hugh Howey <hughhowey@gmail.com>"
     },
     "nsis": {
       "oneClick": true,
