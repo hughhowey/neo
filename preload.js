@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('neo', {
   pathForFile: (file) => webUtils.getPathForFile(file),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
   fullscreenToggle: () => ipcRenderer.invoke('fullscreen:toggle'),
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });

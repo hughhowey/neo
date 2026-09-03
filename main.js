@@ -765,12 +765,60 @@ function buildMenu() {
           label: 'NEO Shortcuts',
           accelerator: 'CmdOrCtrl+/',
           click: () => sendToWindow({ type: 'help' })
+        },
+        { type: 'separator' },
+        {
+          label: 'Check for Update…',
+          click: () => sendToWindow({ type: 'checkUpdate' })
         }
       ]
     }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+
+// Manual update check (Help → Check for Update…): a direct GitHub Releases
+// lookup, separate from the silent auto-updater. Works in dev builds too.
+let lastReleaseUrl = null;
+
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na !== nb) return na - nb;
+  }
+  return 0;
+}
+
+ipcMain.handle('update:check', async () => {
+  try {
+    const res = await fetch('https://api.github.com/repos/hughhowey/neo/releases/latest', {
+      headers: { 'User-Agent': 'NEO-App' }
+    });
+    if (!res.ok) throw new Error('GitHub API returned ' + res.status);
+    const data = await res.json();
+    const latestVersion = String(data.tag_name || '').replace(/^v/, '');
+    const currentVersion = app.getVersion();
+    lastReleaseUrl = data.html_url || null;
+    return {
+      hasUpdate: !!latestVersion && compareVersions(latestVersion, currentVersion) > 0,
+      latestVersion,
+      currentVersion
+    };
+  } catch (err) {
+    logError('update', err);
+    return { error: true };
+  }
+});
+
+// the renderer may only open the release page fetched above — never arbitrary URLs
+ipcMain.handle('update:openRelease', () => {
+  if (lastReleaseUrl && /^https:\/\/github\.com\//.test(lastReleaseUrl)) {
+    require('electron').shell.openExternal(lastReleaseUrl);
+  }
+  return true;
+});
 
 // Two copies of NEO editing the same library is how words get eaten
 if (!app.requestSingleInstanceLock()) {
