@@ -1092,17 +1092,13 @@ function guardMarkerDelete(e, body, chId) {
   if (!isMark(node.previousSibling) && !isMark(node.nextSibling)) return false;
 
   e.preventDefault();
+  const targetOffset = back ? r.startOffset - 1 : r.startOffset;
   const del = document.createRange();
-  if (back) {
-    del.setStart(node, r.startOffset - 1);
-    del.setEnd(node, r.startOffset);
-  } else {
-    del.setStart(node, r.startOffset);
-    del.setEnd(node, r.startOffset + 1);
-  }
+  del.setStart(node, targetOffset);
+  del.setEnd(node, targetOffset + 1);
   del.deleteContents();
   const caret = document.createRange();
-  caret.setStart(node, back ? r.startOffset - 1 : r.startOffset);
+  caret.setStart(node, targetOffset);
   caret.collapse(true);
   sel.removeAllRanges();
   sel.addRange(caret);
