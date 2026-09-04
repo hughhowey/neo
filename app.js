@@ -690,6 +690,25 @@ $('#author-chip').onclick = async () => {
 /*  EDITOR — open / render                                             */
 /* ================================================================== */
 
+// SYNC UTILITY: chapterNotes and chapterTitles are separate fields that
+// historically served different UI paths (outline vs manuscript header).
+// We keep both in book.json for backwards compatibility, but they should
+// always agree. This backfill runs on load to repair older books where
+// a user set notes in the outline but never touched the manuscript header.
+// Non-destructive: only fills gaps, never overwrites an existing title.
+function backfillChapterTitles(book) {
+  book.chapterTitles = book.chapterTitles || {};
+  book.chapterNotes = book.chapterNotes || {};
+  let count = 0;
+  for (const chId of book.chapterOrder) {
+    if (book.chapterNotes[chId] && !book.chapterTitles[chId]) {
+      book.chapterTitles[chId] = book.chapterNotes[chId];
+      count++;
+    }
+  }
+  return count;
+}
+
 async function openBook(bookId) {
   book = await window.neo.readBookMeta(bookId);
   if (!book) return;
@@ -701,6 +720,9 @@ async function openBook(bookId) {
   }
   stickies = await window.neo.readJSON(bookId, 'stickies', []);
   darlings = await window.neo.readJSON(bookId, 'darlings', []);
+
+  // Backfill chapterTitles from chapterNotes for older books (see PR #A).
+  if (backfillChapterTitles(book) > 0) scheduleMetaSave();
 
   $('#bookshelf-view').hidden = true;
   $('#editor-view').hidden = false;
@@ -782,6 +804,9 @@ function renderChapters() {
     });
     titleSpan.addEventListener('blur', () => {
       book.chapterTitles[chId] = titleSpan.textContent.trim();
+      // SYNC: mirror into chapterNotes so the outline/nav note stays current (PR #A).
+      book.chapterNotes = book.chapterNotes || {};
+      book.chapterNotes[chId] = book.chapterTitles[chId];
       scheduleMetaSave();
       renderNav();
     });
@@ -1554,6 +1579,9 @@ function renderNav() {
     });
     note.addEventListener('blur', () => {
       book.chapterNotes[chId] = note.textContent.trim();
+      // SYNC: mirror into chapterTitles so manuscript header + exports stay current (PR #A).
+      book.chapterTitles = book.chapterTitles || {};
+      book.chapterTitles[chId] = book.chapterNotes[chId];
       scheduleMetaSave();
     });
     item.appendChild(note);
@@ -1982,6 +2010,10 @@ function outlineLine(kind, chId, secId, index, label, text) {
     const val = txt.textContent.trim();
     if (kind === 'chapter') {
       book.chapterNotes[chId] = val;
+      // SYNC: keep chapterTitles in lockstep so the manuscript header
+      // and exports reflect what the user writes in the outline (PR #A).
+      book.chapterTitles = book.chapterTitles || {};
+      book.chapterTitles[chId] = val;
     } else {
       const sec = (book.sectionNotes[chId] || []).find((s) => s.id === secId);
       if (sec) sec.text = val;
@@ -2054,6 +2086,9 @@ function outlineLine(kind, chId, secId, index, label, text) {
       const at = book.chapterOrder.indexOf(chId) + 1;
       const newId = createChapterAt(at);
       book.chapterNotes[newId] = sec.text;
+      // SYNC: promoted section text becomes the new chapter's title too (PR #A).
+      book.chapterTitles = book.chapterTitles || {};
+      book.chapterTitles[newId] = sec.text;
       scheduleMetaSave();
       syncGhosts(chId);
       renderOutline({ chId: newId });

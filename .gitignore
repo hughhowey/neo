@@ -13,3 +13,6 @@ dist/
 # personal maintainer notes — not part of the public repo
 RELEASING.md
 GITHUB-SETUP.md
+
+# Kiro working files (specs, steering, etc.)
+.kiro/
