@@ -602,23 +602,46 @@ function createWindow() {
   });
   win.loadFile('index.html');
 
-  // Right-click suggestions during a spellcheck pass
-  win.webContents.on('context-menu', (_event, params) => {
-    if (!params.misspelledWord) return;
-    const menu = new Menu();
-    for (const s of (params.dictionarySuggestions || []).slice(0, 6)) {
-      menu.append(new MenuItem({ label: s, click: () => win.webContents.replaceMisspelling(s) }));
-    }
-    if (params.dictionarySuggestions && params.dictionarySuggestions.length) {
-      menu.append(new MenuItem({ type: 'separator' }));
-    }
-    menu.append(new MenuItem({
-      label: `Add “${params.misspelledWord}” to Dictionary`,
-      click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
-    }));
-    menu.popup();
-  });
+  // NEO does its own spellchecking (see spell:* handlers) — the engine's
+  // checker proved unreliable at scanning existing text, so it stays off
+  win.webContents.session.setSpellCheckerEnabled(false);
 }
+
+// ---------------------------------------------------------------------------
+// Spellcheck: NEO's own dictionary (Hunspell en-US via nspell), identical on
+// every platform. The renderer paints the squiggles and asks for suggestions.
+// ---------------------------------------------------------------------------
+let neoSpell = null;
+
+function initSpell() {
+  try {
+    const nspell = require('nspell');
+    require('dictionary-en-us')((err, dict) => {
+      if (err) { logError('spell', err); return; }
+      neoSpell = nspell(dict);
+      try {
+        const lib = readJSON(LIBRARY_FILE, {});
+        for (const w of lib.customWords || []) neoSpell.add(w);
+      } catch { /* custom words are a nicety */ }
+    });
+  } catch (err) {
+    logError('spell', err);
+  }
+}
+
+ipcMain.handle('spell:check', (_e, words) => {
+  const out = {};
+  // dictionary still loading: report everything correct rather than crying wolf
+  for (const w of words) out[w] = neoSpell ? neoSpell.correct(w) : true;
+  return out;
+});
+
+ipcMain.handle('spell:suggest', (_e, word) => (neoSpell ? neoSpell.suggest(word).slice(0, 6) : []));
+
+ipcMain.handle('spell:learn', (_e, word) => {
+  if (neoSpell && typeof word === 'string') neoSpell.add(word);
+  return true;
+});
 
 // ---------------------------------------------------------------------------
 // Application menu — Help and Format live here, out of the writing room
@@ -768,6 +791,10 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
+          label: 'About NEO',
+          click: () => sendToWindow({ type: 'about' })
+        },
+        {
           label: 'Check for Update…',
           click: () => sendToWindow({ type: 'checkUpdate' })
         }
@@ -790,6 +817,10 @@ function compareVersions(a, b) {
   }
   return 0;
 }
+
+// toggling at the session level forces the engine to re-scan visible text —
+// newer Chromium ignores attribute changes on text it has already looked at
+ipcMain.handle('app:version', () => app.getVersion());
 
 ipcMain.handle('update:check', async () => {
   try {
@@ -891,6 +922,7 @@ app.whenReady().then(() => {
 
     try { ensureLibrary(); } catch (err) { logError('library', err); }
     createWindow();
+    try { initSpell(); } catch (err) { logError('spell', err); }
     try { buildMenu(); } catch (err) { logError('menu', err); }
     try { dailyBackup(); } catch (err) { logError('backup', err); }
     try { checkForUpdates(); } catch (err) { logError('updater', err); }

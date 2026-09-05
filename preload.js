@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('neo', {
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
   fullscreenToggle: () => ipcRenderer.invoke('fullscreen:toggle'),
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  spellCheckWords: (words) => ipcRenderer.invoke('spell:check', words),
+  spellSuggest: (word) => ipcRenderer.invoke('spell:suggest', word),
+  spellLearn: (word) => ipcRenderer.invoke('spell:learn', word),
+  appVersion: () => ipcRenderer.invoke('app:version'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))

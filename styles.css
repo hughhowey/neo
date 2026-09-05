@@ -317,6 +317,27 @@ body.night #aux-editor * { color: inherit; }
   font-size: 3.4em; float: left; line-height: 0.8;
   padding: 4px 8px 0 0; font-family: var(--dropcap-font);
 }
+/* NEO's spellcheck pass: flagged words, painted like search matches */
+::highlight(neo-spell) {
+  text-decoration: underline wavy #cf5c56;
+  text-decoration-skip-ink: none;
+  background-color: rgba(207, 92, 86, 0.12);
+}
+.spell-menu {
+  position: fixed; z-index: 300; min-width: 170px;
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 8px;
+  padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column;
+}
+.spell-menu button {
+  background: none; border: none; color: #ddd; text-align: left;
+  padding: 6px 10px; border-radius: 5px; font-size: 14px; cursor: pointer;
+  font-family: Georgia, serif;
+}
+.spell-menu button:hover:not(:disabled) { background: #333; }
+.spell-menu button:disabled { color: #777; font-style: italic; }
+.spell-menu .sm-sep { height: 1px; background: #3a3a3a; margin: 4px 0; }
+
 /* Section breaks: Enter twice for ***, three times for a new chapter */
 .chapter-body p.scene-break {
   text-align: center; text-indent: 0 !important;

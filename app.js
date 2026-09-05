@@ -795,7 +795,7 @@ function renderChapters() {
     const body = document.createElement('div');
     body.className = 'chapter-body';
     body.contentEditable = 'true';
-    body.spellcheck = spellOn;
+    body.spellcheck = false; // NEO runs its own spellcheck pass
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
     // older marks used a "?" that read as a broken image — normalize to the flag
     body.querySelectorAll('.ph-mark').forEach((m) => { m.textContent = '⚑'; });
@@ -849,6 +849,7 @@ function wireChapterBody(body, chId) {
     chapterHTML[chId] = captureBody(body);
     wordCache[chId] = null;
     scheduleChapterSave(chId);
+    if (spellOn) scheduleSpellRescan(chId, body);
     updateCounters();
     scheduleNavRefresh();
   });
@@ -1186,6 +1187,11 @@ document.addEventListener('selectionchange', () => {
       try { lastCaretPara.normalize(); } catch { /* fine */ }
     }
     lastCaretPara = caretP;
+  }
+  // during a spellcheck pass, each chapter scans as the caret arrives
+  if (spellOn && caretP) {
+    const ch = caretP.closest('.chapter');
+    if (ch) scanSpellingIn(ch.querySelector('.chapter-body'), ch.dataset.id);
   }
   // the drop cap steps aside while the caret is in the first paragraph
   const inFirst = caretP && caretP.parentElement &&
@@ -1879,6 +1885,7 @@ function darlingFromKeyboard() {
 function switchTab(name) {
   currentTab = name;
   $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  if (spellOn) setTimeout(scanSpellingHere, 0);
   const paper = $('#paper');
   const aux = $('#aux-paper');
   const auxEditor = $('#aux-editor');
@@ -2159,7 +2166,14 @@ function syncGhosts(chId) {
 }
 
 let auxDirty = false;
-$('#aux-editor').addEventListener('input', () => { auxDirty = true; scheduleAuxSave(); });
+$('#aux-editor').addEventListener('input', () => {
+  auxDirty = true;
+  scheduleAuxSave();
+  if (spellOn) {
+    const key = 'aux-' + ($('#aux-editor').dataset.kind || 'notes');
+    scheduleSpellRescan(key, $('#aux-editor'));
+  }
+});
 // notes paste arrives clean, same as the manuscript
 $('#aux-editor').addEventListener('paste', (e) => {
   e.preventDefault();
@@ -2711,17 +2725,179 @@ $('#import-btn').onclick = importBooks;
 /*  SPELLCHECK PASS + TYPEWRITER SCROLLING                             */
 /* ================================================================== */
 
+/* NEO's own spellcheck pass: a bundled dictionary (via the main process),
+   squiggles painted with the CSS Highlight API — the same machinery as
+   search — and a right-click menu for suggestions. Chapters scan lazily
+   as the caret reaches them. */
 let spellOn = false;
+let spellScanned = new Set();
+let spellRanges = new Map();     // key → [Range]
+const spellCache = new Map();    // word → correct?
+
+const spellNorm = (w) => w.replace(/’/g, "'").replace(/^'+|'+$/g, '');
+
+function spellElFor(key) {
+  return key.startsWith('aux-')
+    ? $('#aux-editor')
+    : document.querySelector(`.chapter[data-id="${key}"] .chapter-body`);
+}
+
+async function spellScanEl(el, key) {
+  if (!el || !spellOn) return;
+  spellScanned.add(key);
+  const occurrences = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const re = /[A-Za-z'’]+/g;
+  let n;
+  while ((n = walker.nextNode())) {
+    const p = n.parentElement;
+    if (p && p.closest('.scene-break, .ghost, .ph-mark')) continue;
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(n.data))) {
+      const word = spellNorm(m[0]);
+      if (word.length < 2) continue;
+      if (/^[A-Z'’]+$/.test(m[0])) continue; // acronyms and shouting are legal
+      occurrences.push({ node: n, start: m.index, end: m.index + m[0].length, word });
+    }
+  }
+  const unknown = [...new Set(occurrences.map((o) => o.word))].filter((w) => !spellCache.has(w));
+  if (unknown.length) {
+    const res = await window.neo.spellCheckWords(unknown);
+    for (const w of unknown) spellCache.set(w, res[w] !== false);
+  }
+  if (!spellOn) return; // toggled off while we were checking
+  const ranges = [];
+  for (const o of occurrences) {
+    if (spellCache.get(o.word) || !o.node.isConnected) continue;
+    try {
+      const r = new Range();
+      r.setStart(o.node, o.start);
+      r.setEnd(o.node, o.end);
+      ranges.push(r);
+    } catch { /* node changed underneath us */ }
+  }
+  spellRanges.set(key, ranges);
+  rebuildSpellHighlight();
+}
+
+function rebuildSpellHighlight() {
+  if (!spellOn) return;
+  const hl = new Highlight();
+  for (const list of spellRanges.values()) for (const r of list) hl.add(r);
+  CSS.highlights.set('neo-spell', hl);
+}
+
+function scanSpellingIn(el, key) {
+  if (!el || spellScanned.has(key)) return;
+  spellScanEl(el, key);
+}
+
+// scan wherever the writer currently is
+function scanSpellingHere() {
+  if (currentTab === 'manuscript') {
+    const body = currentChapterId && spellElFor(currentChapterId);
+    if (body) scanSpellingIn(body, currentChapterId);
+  } else {
+    scanSpellingIn($('#aux-editor'), 'aux-' + ($('#aux-editor').dataset.kind || 'notes'));
+  }
+}
+
+function scheduleSpellRescan(key, el) {
+  clearTimeout(saveTimers['sp-' + key]);
+  saveTimers['sp-' + key] = setTimeout(() => { if (spellOn) spellScanEl(el, key); }, 600);
+}
+
 function toggleSpellcheck() {
   spellOn = !spellOn;
-  $$('.chapter-body').forEach((b) => { b.spellcheck = spellOn; });
-  $('#aux-editor').spellcheck = spellOn;
-  // nudge the engine to (re)evaluate what's on screen
-  const active = document.activeElement;
-  if (active && active.blur) { active.blur(); if (active.focus) active.focus(); }
-  toast(spellOn
-    ? 'Spellcheck pass ON — right-click any squiggle for suggestions. ⌘; again when you’re done.'
-    : 'Spellcheck off. Back to flow.', 5000);
+  if (spellOn) {
+    spellScanned = new Set();
+    spellRanges = new Map();
+    scanSpellingHere();
+  } else {
+    CSS.highlights.delete('neo-spell');
+    spellRanges = new Map();
+    document.querySelector('.spell-menu')?.remove();
+  }
+  toast(spellOn ? 'Spellcheck on' : 'Spellcheck off');
+}
+
+// right-click a flagged word for suggestions
+document.addEventListener('contextmenu', async (e) => {
+  if (!spellOn) return;
+  const editor = e.target.closest && e.target.closest('.chapter-body, #aux-editor');
+  if (!editor) return;
+  const pos = document.caretRangeFromPoint(e.clientX, e.clientY);
+  if (!pos || pos.startContainer.nodeType !== Node.TEXT_NODE) return;
+  const node = pos.startContainer;
+  const text = node.data;
+  const isW = (c) => /[A-Za-z'’]/.test(c);
+  let a = pos.startOffset, b = pos.startOffset;
+  while (a > 0 && isW(text[a - 1])) a--;
+  while (b < text.length && isW(text[b])) b++;
+  if (a === b) return;
+  const word = spellNorm(text.slice(a, b));
+  if (spellCache.get(word) !== false) return; // only flagged words get our menu
+  e.preventDefault();
+  const chEl = editor.closest ? editor.closest('.chapter') : null;
+  const key = editor.id === 'aux-editor'
+    ? 'aux-' + (editor.dataset.kind || 'notes')
+    : (chEl ? chEl.dataset.id : null);
+  const sugg = await window.neo.spellSuggest(word);
+  showSpellMenu(e.clientX, e.clientY, word, sugg, {
+    replace: (s) => {
+      const sel = window.getSelection();
+      const r = document.createRange();
+      r.setStart(node, a); r.setEnd(node, b);
+      sel.removeAllRanges(); sel.addRange(r);
+      document.execCommand('insertText', false, s);
+      if (key) spellScanEl(spellElFor(key), key);
+    },
+    learn: async () => {
+      library.customWords = library.customWords || [];
+      if (!library.customWords.includes(word)) library.customWords.push(word);
+      await window.neo.writeLibrary(library);
+      await window.neo.spellLearn(word);
+      spellCache.set(word, true);
+      for (const k of [...spellScanned]) spellScanEl(spellElFor(k), k);
+    }
+  });
+});
+
+function showSpellMenu(x, y, word, suggestions, actions) {
+  document.querySelector('.spell-menu')?.remove();
+  const menu = document.createElement('div');
+  menu.className = 'spell-menu';
+  if (suggestions.length) {
+    for (const s of suggestions) {
+      const btn = document.createElement('button');
+      btn.textContent = s;
+      btn.onclick = () => { menu.remove(); actions.replace(s); };
+      menu.appendChild(btn);
+    }
+  } else {
+    const none = document.createElement('button');
+    none.textContent = 'No suggestions';
+    none.disabled = true;
+    menu.appendChild(none);
+  }
+  const sep = document.createElement('div');
+  sep.className = 'sm-sep';
+  menu.appendChild(sep);
+  const learn = document.createElement('button');
+  learn.textContent = `Add “${word}” to dictionary`;
+  learn.onclick = () => { menu.remove(); actions.learn(); };
+  menu.appendChild(learn);
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, window.innerWidth - r.width - 10) + 'px';
+  menu.style.top = Math.min(y + 4, window.innerHeight - r.height - 10) + 'px';
+  const close = (ev) => {
+    if (menu.contains(ev.target)) return;
+    menu.remove();
+    document.removeEventListener('mousedown', close, true);
+  };
+  document.addEventListener('mousedown', close, true);
 }
 
 let typewriterEnabled = false;
@@ -3571,7 +3747,7 @@ async function doEmailDraft() {
 async function checkForUpdate() {
   const res = await window.neo.checkForUpdate();
   if (res.error) { toast("Couldn't check for updates — try again later"); return; }
-  if (!res.hasUpdate) { toast("You're on the latest version"); return; }
+  if (!res.hasUpdate) { toast(`You're on the latest version (${res.currentVersion})`); return; }
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
@@ -3590,8 +3766,30 @@ async function checkForUpdate() {
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
 }
 
+// Help → About NEO: the version, plainly
+async function showAbout() {
+  const v = await window.neo.appVersion();
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  bd.innerHTML = `
+    <div class="modal" style="width:340px;text-align:center">
+      <h2 style="font-size:22px;letter-spacing:6px">NEO</h2>
+      <p style="color:#999">Version ${v}</p>
+      <p style="font-size:13px;color:#777">A word processor for authors.<br>Free, open source, yours.</p>
+      <div style="margin-top:16px">
+        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">Back to writing</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  const close = () => bd.remove();
+  bd.querySelector('.m-ok').onclick = close;
+  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  bd.querySelector('.m-ok').focus();
+}
+
 window.neo.onMenu(async (msg) => {
   if (msg.type === 'help') showHelp();
+  if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'export') doExport(msg.format);
   if (msg.type === 'emailDraft') doEmailDraft();
