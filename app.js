@@ -43,8 +43,8 @@ function askInput(title, placeholder, value = '') {
         <h2 style="font-size:16px">${title}</h2>
         <input type="text" spellcheck="false" placeholder="${placeholder}" />
         <div style="text-align:right;margin-top:14px">
-          <button class="m-cancel" style="background:none;border:none;color:#888;margin-right:14px">Cancel</button>
-          <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">OK</button>
+          <button class="m-cancel btn-quiet" style="margin-right:10px">Cancel</button>
+          <button class="m-ok btn-gold">OK</button>
         </div>
       </div>`;
     document.body.appendChild(bd);
@@ -78,7 +78,7 @@ function optionModal(title, message, options) {
         ${message ? `<p>${message}</p>` : ''}
         ${buttons}
         <div style="text-align:right;margin-top:6px">
-          <button class="m-cancel" style="background:none;border:none;color:#888">Cancel</button>
+          <button class="m-cancel btn-quiet">Cancel</button>
         </div>
       </div>`;
     document.body.appendChild(bd);
@@ -229,6 +229,8 @@ function displayAuthor() {
 }
 
 async function renderShelves() {
+  const view = $('#bookshelf-view');
+  const keepScroll = view.scrollTop; // re-rendering must not move the page
   $('#author-chip').textContent = displayAuthor();
   const wrap = $('#shelves');
   wrap.innerHTML = '';
@@ -426,6 +428,7 @@ async function renderShelves() {
     sec.appendChild(row);
     wrap.appendChild(sec);
   }
+  view.scrollTop = keepScroll;
 }
 
 // single shared drop-position indicator for shelf drags
@@ -547,7 +550,11 @@ function bookTile(meta) {
     options.push(
       { label: 'Set word goal…', desc: 'Adds the subtle progress bar to the cover.', value: 'goal' },
       { label: 'Remove from bookshelf', desc: 'Takes it off your shelves. The files stay safe in your NEO Library folder on disk.', value: 'remove' },
-      { label: 'Move to Trash', desc: 'Sends the book folder to your Mac Trash.', danger: true, value: 'trash' }
+      {
+        label: navigator.platform.toLowerCase().includes('win') ? 'Move to Recycle Bin' : 'Move to Trash',
+        desc: 'Sends the book folder to your system trash, where you can recover it.',
+        danger: true, value: 'trash'
+      }
     );
     const choice = await optionModal(`“${meta.title}”`, null, options);
     if (choice === 'cover') {
@@ -799,6 +806,12 @@ function renderChapters() {
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
     // older marks used a "?" that read as a broken image — normalize to the flag
     body.querySelectorAll('.ph-mark').forEach((m) => { m.textContent = '⚑'; });
+    // heal no-break spaces planted in prose by the old engine repair pass
+    const tw = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let tn;
+    while ((tn = tw.nextNode())) {
+      if (tn.data.includes('\u00a0')) tn.data = tn.data.replace(/\u00a0/g, ' ');
+    }
     wireChapterBody(body, chId);
     sec.appendChild(head);
     sec.appendChild(body);
@@ -3014,7 +3027,7 @@ function openStats() {
         </label>
       </div>
       <div style="text-align:right;margin-top:14px">
-        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">Done</button>
+        <button class="m-ok btn-gold">Done</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -3188,7 +3201,7 @@ function showHelp() {
       </div>
 
       <div style="text-align:right;margin-top:18px">
-        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">Got it</button>
+        <button class="m-ok btn-gold">Got it</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -3206,16 +3219,32 @@ function safeName(s) {
   return (s || 'Untitled').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
 }
 
+// Every paragraph is rebuilt from its text runs, so exports carry only
+// author-meaningful markup: text, bold, italic, alignment, scene breaks.
+// Stray spans, inline styles, trailing <br>s, and no-break spaces all
+// stop at this door.
 function parasFromHtml(html) {
   const holder = document.createElement('div');
   holder.innerHTML = html || '';
   holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
-  return [...holder.querySelectorAll('p')].map((p) => ({
-    sceneBreak: p.classList.contains('scene-break'),
-    text: p.innerText.trim(),
-    html: p.outerHTML,
-    align: (p.style && p.style.textAlign) || ''
-  })).filter((p) => p.sceneBreak || p.text);
+  return [...holder.querySelectorAll('p')].map((p) => {
+    const sceneBreak = p.classList.contains('scene-break');
+    const align = (p.style && p.style.textAlign) || '';
+    const runs = paraRuns(p.innerHTML).filter((r) => r.text);
+    const inner = runs.map((r) => {
+      let t = escHtml(r.text);
+      if (r.i) t = '<i>' + t + '</i>';
+      if (r.b) t = '<b>' + t + '</b>';
+      return t;
+    }).join('');
+    return {
+      sceneBreak,
+      text: p.innerText.replace(/\u00a0/g, ' ').trim(),
+      runs,
+      align,
+      html: `<p${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
+    };
+  }).filter((p) => p.sceneBreak || p.text);
 }
 
 function exportChapters() {
@@ -3261,27 +3290,40 @@ function buildTxt(data) {
 
 function buildMd(data) {
   const d = data || bookExportData();
+  // wrap a run in emphasis markers, keeping boundary spaces outside them
+  const mdRun = (r) => {
+    let t = r.text.replace(/([\\*_`])/g, '\\$1');
+    const mark = r.b && r.i ? '***' : r.b ? '**' : r.i ? '*' : '';
+    if (!mark) return t;
+    const lead = t.match(/^\s*/)[0];
+    const trail = t.match(/\s*$/)[0];
+    const core = t.slice(lead.length, t.length - trail.length);
+    return core ? lead + mark + core + mark + trail : t;
+  };
   let out = `# ${d.title}\n\n`;
   if (d.subtitle) out += `*${d.subtitle}*\n\n`;
   out += `**by ${d.author}**\n\n`;
   for (const ch of d.sections) {
     if (ch.heading) out += `\n## ${ch.heading}\n\n`;
-    for (const p of ch.paras) out += p.sceneBreak ? '\n\\*\\*\\*\n\n' : p.text + '\n\n';
+    for (const p of ch.paras) {
+      out += p.sceneBreak ? '\n***\n\n' : p.runs.map(mdRun).join('') + '\n\n';
+    }
   }
   return out;
 }
 
-function buildHtml(data) {
+function buildHtml(data, opts = {}) {
   const d = data || bookExportData();
   const total = d.sections.reduce((s, ch) => s + ch.paras.reduce((n, p) => n + countWords(p.text || ''), 0), 0);
   const stamp = new Date().toLocaleString();
   const chaptersHtml = d.sections.map((ch) => {
+    // only the chapter's opening paragraph gets the enlarged initial —
+    // scene breaks resume ordinary body text
     let first = true;
     const paras = ch.paras.map((p) => {
-      if (p.sceneBreak) { first = true; return '<p class="brk">***</p>'; }
+      if (p.sceneBreak) return '<p class="brk">***</p>';
       let html = p.html;
       if (first) {
-        // mark section openers via the DOM so existing classes/styles survive
         const h = document.createElement('div');
         h.innerHTML = html;
         if (h.firstElementChild) {
@@ -3310,7 +3352,9 @@ function buildHtml(data) {
   .chapter h2 { text-align: center; letter-spacing: 4px; text-transform: uppercase; font-size: 12pt; font-weight: normal; color: #555; margin: 60px 0 40px; }
   .chapter p { text-indent: 2em; margin: 0; }
   .chapter h2 + p, .brk + p, .chapter p.first { text-indent: 0; }
-  .chapter h2 + p::first-letter, .chapter p.first::first-letter { font-size: 3em; float: left; line-height: 0.8; padding: 3px 6px 0 0; }
+  /* an in-flow raised initial: stays inside its word for copy, search,
+     and screen readers, unlike a floated drop cap */
+  .chapter h2 + p::first-letter, .chapter p.first::first-letter { font-size: 1.8em; line-height: 1; }
   .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .prov { margin-top: 80px; text-align: center; color: #999; font-size: 9pt; }
 </style></head><body>
@@ -3318,7 +3362,7 @@ function buildHtml(data) {
 ${d.subtitle ? `<p class="sub">${d.subtitle}</p>` : ''}
 <p class="auth">${d.author}</p></div>
 ${chaptersHtml}
-<p class="prov">${total.toLocaleString()} words · exported from NEO on ${stamp}</p>
+${opts.stamp ? `<p class="prov">${total.toLocaleString()} words · exported from NEO on ${stamp}</p>` : ''}
 </body></html>`;
 }
 
@@ -3336,7 +3380,7 @@ function paraRuns(pHtml) {
   const walk = (node, b, i) => {
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
-        if (child.textContent) runs.push({ text: child.textContent, b, i });
+        if (child.textContent) runs.push({ text: child.textContent.replace(/\u00a0/g, ' '), b, i });
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         if (child.classList && child.classList.contains('ph-mark')) {
           runs.push({ mark: child.dataset.sid || '' });
@@ -3537,7 +3581,7 @@ ${chItems}
 <spine toc="ncx">
 <itemref idref="cover" linear="no"/>
 <itemref idref="titlepage"/>
-<itemref idref="nav"/>
+<itemref idref="nav"${chapters.length === 1 ? ' linear="no"' : ''}/>
 ${chSpine}
 </spine>
 <guide>
@@ -3734,7 +3778,7 @@ async function doEmailDraft() {
     to: library.emailAddress,
     subject,
     body,
-    html: buildHtml(),
+    html: buildHtml(null, { stamp: true }), // the email snapshot is a provenance record
     defaultName: safeName(book.title),
     method: library.emailMethod
   });
@@ -3755,8 +3799,8 @@ async function checkForUpdate() {
       <h2 style="font-size:16px">NEO ${res.latestVersion} is available</h2>
       <p>You have ${res.currentVersion}.</p>
       <div style="text-align:right;margin-top:14px">
-        <button class="m-cancel" style="background:none;border:none;color:#888;margin-right:14px">Later</button>
-        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">View Release</button>
+        <button class="m-cancel btn-quiet" style="margin-right:10px">Later</button>
+        <button class="m-ok btn-gold">View Release</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
@@ -3777,7 +3821,7 @@ async function showAbout() {
       <p style="color:#999">Version ${v}</p>
       <p style="font-size:13px;color:#777">A word processor for authors.<br>Free, open source, yours.</p>
       <div style="margin-top:16px">
-        <button class="m-ok" style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;color:#191919">Back to writing</button>
+        <button class="m-ok btn-gold">Back to writing</button>
       </div>
     </div>`;
   document.body.appendChild(bd);

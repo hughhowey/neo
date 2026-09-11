@@ -165,6 +165,18 @@ button { font: inherit; cursor: pointer; }
   color: #eee; font-size: 14px;
 }
 .modal input:focus { outline: none; border-color: var(--accent); }
+
+/* the two button voices every dialog speaks in */
+.btn-gold {
+  background: var(--accent); border: none; border-radius: 6px;
+  padding: 8px 20px; color: #191919; font-size: 14px; cursor: pointer;
+}
+.btn-gold:hover { filter: brightness(1.08); }
+.btn-quiet {
+  background: none; border: none; color: #888;
+  font-size: 14px; padding: 8px 10px; cursor: pointer;
+}
+.btn-quiet:hover { color: #bbb; }
 .fr-choices { display: flex; gap: 12px; }
 #fr-sample {
   background: var(--paper); color: var(--ink); border-radius: 6px;
@@ -337,6 +349,8 @@ body.night #aux-editor * { color: inherit; }
 .spell-menu button:hover:not(:disabled) { background: #333; }
 .spell-menu button:disabled { color: #777; font-style: italic; }
 .spell-menu .sm-sep { height: 1px; background: #3a3a3a; margin: 4px 0; }
+body.bright .spell-menu { border-color: #4a4a4a; }
+body.bright .spell-menu button { color: #eee; }
 
 /* Section breaks: Enter twice for ***, three times for a new chapter */
 .chapter-body p.scene-break {
@@ -621,8 +635,9 @@ body.bright #add-shelf-btn, body.bright #import-btn { color: #b4b4b4; border-col
 /* the thumb only paints while the pane is actively scrolling */
 .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); }
 .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
-body.bright .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); }
-body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+/* bright mode is still a dark theme — thumbs stay light, just more present */
+body.bright .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.26); }
+body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 
 /* pinned notes pane: the page column shifts left to clear the pane */
 #editor-view.side-pinned #paper-scroll { left: calc(50% - 125px); }
