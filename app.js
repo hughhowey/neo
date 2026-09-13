@@ -1418,7 +1418,7 @@ function insertPlaceholder() {
   range.collapse(false);
   range.insertNode(span);
   // park the caret just past the mark and keep writing
-  const after = document.createTextNode(' ');
+  const after = document.createTextNode(' ');
   span.after(after);
   range.setStartAfter(after);
   range.collapse(true);
@@ -1510,8 +1510,20 @@ function resolveSticky(sid) {
   const mark = document.querySelector(`.ph-mark[data-sid="${sid}"]`);
   if (mark) {
     const chId = mark.closest('.chapter').dataset.id;
+    const prev = mark.previousSibling;
+    const next = mark.nextSibling;
     mark.remove();
-    chapterHTML[chId] = captureBody(document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`));
+    // tidy the seam: old flags parked a no-break space after themselves,
+    // and removing a flag between two spaces shouldn't leave both
+    if (next && next.nodeType === Node.TEXT_NODE) next.data = next.data.replace(/^\u00a0/, ' ');
+    if (prev && prev.nodeType === Node.TEXT_NODE) prev.data = prev.data.replace(/\u00a0$/, ' ');
+    if (prev && next && prev.nodeType === Node.TEXT_NODE && next.nodeType === Node.TEXT_NODE &&
+        / $/.test(prev.data) && /^ /.test(next.data)) {
+      next.data = next.data.slice(1);
+    }
+    const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
+    try { body.normalize(); } catch { /* fine */ }
+    chapterHTML[chId] = captureBody(body);
     scheduleChapterSave(chId);
   }
   stickies = stickies.filter((s) => s.id !== sid);
