@@ -530,7 +530,6 @@ function bookTile(meta) {
         meta.coverImage = fname;
         await window.neo.writeBookMeta(meta.id, meta);
         renderShelves();
-        toast(`“${meta.title}” has its cover — looking like a real book`);
       }
     } else if (/\.(docx|txt|md)$/i.test(p)) {
       const homeShelf = library.shelves.find((s) => s.bookIds.includes(meta.id)) || library.shelves[0];
@@ -806,6 +805,16 @@ function renderChapters() {
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
     // older marks used a "?" that read as a broken image — normalize to the flag
     body.querySelectorAll('.ph-mark').forEach((m) => { m.textContent = '⚑'; });
+    // heal the engine's style-junk spans left by past merges and splits
+    stripJunkSpans(body);
+    // heal prose that got merged into a scene-break's styled paragraph:
+    // real breaks contain only ***, anything else is a stained paragraph
+    body.querySelectorAll('p.scene-break').forEach((p) => {
+      if (p.textContent.trim() !== '***') {
+        p.classList.remove('scene-break');
+        p.removeAttribute('style');
+      }
+    });
     // heal no-break spaces planted in prose by the old engine repair pass
     const tw = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     let tn;
@@ -859,6 +868,7 @@ function wireChapterBody(body, chId) {
   body.addEventListener('focus', () => { currentChapterId = chId; updateCounters(); highlightNav(); });
 
   body.addEventListener('input', () => {
+    breakRun = 0; // fresh typing: ⌘Z belongs to the engine again
     chapterHTML[chId] = captureBody(body);
     wordCache[chId] = null;
     scheduleChapterSave(chId);
@@ -888,6 +898,17 @@ function wireChapterBody(body, chId) {
   body.addEventListener('compositionend', () => { composing = false; });
   body.addEventListener('keydown', (e) => {
     if (composing || e.isComposing || e.keyCode === 229) return;
+    // count consecutive Enters — the double/triple rhythm works mid-sentence
+    if (e.key === 'Enter' && !e.shiftKey) enterRun++;
+    else enterRun = 0;
+    // ⌘Z right after a break operation undoes the break via the structural
+    // stack — the engine's own undo never saw it and would corrupt the page
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && breakRun > 0 && undoStack.length) {
+      e.preventDefault();
+      breakRun--;
+      structuralUndo();
+      return;
+    }
     // Chromium's selection-delete can duplicate a neighboring character when
     // the selection spans fragmented text nodes. Merging the fragments right
     // before any destructive keystroke.
@@ -897,8 +918,11 @@ function wireChapterBody(body, chId) {
         (s && !s.isCollapsed && (e.key.length === 1 || e.key === 'Enter'));
       if (destructive) healSelectionSeams(body);
     }
+    if (styleKeepScroll(e)) return;
+    if (sceneBreakDelete(e, body, chId)) return;
     if (spaceSafeDelete(e, body, chId)) return;
     if (emptyChapterBackspace(e, body, chId)) return;
+    if (chapterStartBackspace(e, body, chId)) return;
     if (guardMarkerDelete(e, body, chId)) return;
     if (handleEnter(e, body, chId)) return;
     if (handleTabSpacing(e)) return;
@@ -908,6 +932,7 @@ function wireChapterBody(body, chId) {
   body.addEventListener('blur', () => {
     try { body.normalize(); } catch { /* nothing to merge */ }
   });
+  body.addEventListener('mousedown', () => { enterRun = 0; });
   body.addEventListener('click', (e) => {
     const mark = e.target.closest('.ph-mark');
     if (mark) focusSticky(mark.dataset.sid);
@@ -935,16 +960,107 @@ function wireChapterBody(body, chId) {
   });
 }
 
+function focusChapterStart(chId) {
+  const nb = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
+  if (!nb) return;
+  nb.focus({ preventScroll: true });
+  const nr = document.createRange();
+  const first = nb.querySelector('p');
+  if (first) nr.setStart(first, 0); // inside the first paragraph, not the container
+  else nr.selectNodeContents(nb);
+  nr.collapse(true);
+  const s = window.getSelection();
+  s.removeAllRanges();
+  s.addRange(nr);
+  currentChapterId = chId;
+  highlightNav();
+}
+
 // Backspace in an empty chapter deletes it:
 function emptyChapterBackspace(e, body, chId) {
   if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
   if (body.innerText.trim() !== '') return false; // ghosts count as content
   const idx = book.chapterOrder.indexOf(chId);
-  if (idx <= 0 || book.chapterOrder.length < 2) return false;
+  if (idx < 0 || book.chapterOrder.length < 2) return false;
   e.preventDefault();
   snapshotStructure('empty chapter removed');
-  const prev = book.chapterOrder[idx - 1];
-  deleteChapterQuiet(chId).then(() => focusChapter(prev));
+  breakRun++;
+  if (idx > 0) {
+    const prev = book.chapterOrder[idx - 1];
+    deleteChapterQuiet(chId).then(() => { focusChapter(prev); resetNativeUndo(); });
+  } else {
+    // an empty chapter 1 dissolves too — the caret lands at the top of
+    // what just became the new chapter 1
+    const next = book.chapterOrder[1];
+    deleteChapterQuiet(chId).then(() => { focusChapterStart(next); resetNativeUndo(); });
+  }
+  return true;
+}
+
+// ⌘B / ⌘I applied by hand: the engine's native handling scrolls the
+// selection "into view" and mis-measures NEO's transformed page column,
+// throwing the reader to the top of the screen. Style, don't scroll.
+function styleKeepScroll(e) {
+  if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return false;
+  if (e.code !== 'KeyB' && e.code !== 'KeyI') return false;
+  e.preventDefault();
+  const sc = $('#paper-scroll');
+  const keep = sc.scrollTop;
+  document.execCommand(e.code === 'KeyB' ? 'bold' : 'italic');
+  sc.scrollTop = keep;
+  requestAnimationFrame(() => { sc.scrollTop = keep; });
+  return true;
+}
+
+// Backspace at the very start of a chapter swallows an empty chapter above it
+function chapterStartBackspace(e, body, chId) {
+  if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(body);
+  try { pre.setEnd(r.startContainer, r.startOffset); } catch { return false; }
+  if (pre.toString().length !== 0) return false; // caret isn't at the chapter's first character
+  const idx = book.chapterOrder.indexOf(chId);
+  if (idx <= 0) return false;
+  const prevId = book.chapterOrder[idx - 1];
+  const prevBody = document.querySelector(`.chapter[data-id="${prevId}"] .chapter-body`);
+  if (!prevBody) return false;
+  e.preventDefault();
+  if (prevBody.innerText.trim() === '') {
+    // empty chapter above: swallow it
+    snapshotStructure('empty chapter removed');
+    breakRun++;
+    deleteChapterQuiet(prevId).then(() => { focusChapterStart(chId); resetNativeUndo(); });
+    return true;
+  }
+  // chapter with words above: merge this chapter up into it — the inverse
+  // of a triple-Enter split, and ⌘Z restores the split
+  snapshotStructure('chapters merged');
+  const prevCount = prevBody.querySelectorAll('p').length;
+  const keepScroll = $('#paper-scroll').scrollTop;
+  chapterHTML[prevId] = captureBody(prevBody) + captureBody(body);
+  window.neo.writeChapter(book.id, prevId, chapterHTML[prevId]);
+  for (const s of stickies) if (s.chapterId === chId) s.chapterId = prevId;
+  window.neo.writeJSON(book.id, 'stickies', stickies);
+  for (const d of darlings) if (d.chapterId === chId) d.chapterId = prevId;
+  window.neo.writeJSON(book.id, 'darlings', darlings);
+  if (book.sectionNotes && book.sectionNotes[chId]) {
+    book.sectionNotes[prevId] = [...(book.sectionNotes[prevId] || []), ...book.sectionNotes[chId]];
+    delete book.sectionNotes[chId];
+  }
+  if (book.chapterTitles) delete book.chapterTitles[chId];
+  if (book.chapterNotes) delete book.chapterNotes[chId];
+  book.chapterOrder = book.chapterOrder.filter((c) => c !== chId);
+  delete chapterHTML[chId];
+  window.neo.deleteChapter(book.id, chId);
+  saveMeta();
+  renderChapters();
+  renderStickies();
+  restoreCaret({ chId: prevId, pIdx: prevCount, off: 0, scroll: keepScroll });
+  resetNativeUndo();
+  breakRun++;
   return true;
 }
 
@@ -1120,8 +1236,46 @@ function guardMarkerDelete(e, body, chId) {
   return true;
 }
 
-// Enter once: new paragraph. Enter twice: *** section break.
-// Enter three times: new chapter.
+// The engine wraps text in style-carrying spans during merges and splits
+// ("<span style='text-indent...'>"). They corrupt later edits — unwrap them,
+// keeping only NEO's own marks.
+function stripJunkSpans(el) {
+  for (const s of [...el.querySelectorAll('span:not(.ph-mark)')]) {
+    while (s.firstChild) s.before(s.firstChild);
+    s.remove();
+  }
+}
+
+// Enter once: new paragraph. Enter twice: *** section break — wherever the
+// caret is, even mid-sentence. Enter three times: the chapter splits here.
+let enterRun = 0;
+// break operations live outside the engine's undo history; while the most
+// recent edits are breaks, ⌘Z routes to NEO's structural undo, one per press
+let breakRun = 0;
+
+function splitChapterAt(body, chId, block, sel) {
+  const parts = [];
+  let n = block;
+  while (n) {
+    const next = n.nextElementSibling;
+    parts.push(n.outerHTML);
+    n.remove();
+    n = next;
+  }
+  if (!body.querySelector('p')) body.innerHTML = '<p><br></p>';
+  syncChapter(body, chId);
+  const idx = book.chapterOrder.indexOf(chId);
+  const newId = createChapterAt(idx + 1);
+  chapterHTML[newId] = parts.join('') || '<p><br></p>';
+  window.neo.writeChapter(book.id, newId, chapterHTML[newId]);
+  const keepScroll = $('#paper-scroll').scrollTop;
+  renderChapters();
+  focusChapterStart(newId);
+  $('#paper-scroll').scrollTop = keepScroll; // the split point stays in view
+  resetNativeUndo();
+  breakRun++;
+}
+
 function handleEnter(e, body, chId) {
   if (e.key !== 'Enter' || e.shiftKey) return false;
   const sel = window.getSelection();
@@ -1130,25 +1284,73 @@ function handleEnter(e, body, chId) {
   if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
   const block = el && el.closest ? el.closest('p') : null;
   if (!block || !body.contains(block)) return false;
-  if (block.textContent.trim() !== '') return false; // normal Enter on a real paragraph
-
+  if (block.classList.contains('scene-break')) { e.preventDefault(); return true; } // Enter on a *** line: nothing
   const prev = block.previousElementSibling;
 
-  // Third Enter: the empty paragraph sits right under a *** break — make a chapter
-  if (prev && prev.classList.contains('scene-break')) {
+  if (block.textContent.trim() !== '') {
+    // caret inside a real paragraph — where is it?
+    const r = sel.getRangeAt(0);
+    const pre = document.createRange();
+    pre.selectNodeContents(block);
+    try { pre.setEnd(r.startContainer, r.startOffset); } catch { return false; }
+    const atStart = pre.toString().length === 0;
+
+    // second/third Enter mid-flow: the caret sits at the start of the text
+    // that the previous press pushed down
+    if (atStart && enterRun >= 2 && prev) {
+      if (prev.classList.contains('scene-break')) {
+        // third Enter: everything from here becomes the next chapter
+        e.preventDefault();
+        snapshotStructure('chapter split');
+        prev.remove();
+        splitChapterAt(body, chId, block, sel);
+        return true;
+      }
+      e.preventDefault();
+      // a break made by the full double-Enter gesture un-splits on undo too
+      snapshotStructure('section break', { rejoin: enterRun >= 2 });
+      if (prev.textContent.trim() === '') {
+        prev.classList.add('scene-break');
+        prev.textContent = '***';
+      } else {
+        const brk = document.createElement('p');
+        brk.className = 'scene-break';
+        brk.textContent = '***';
+        block.before(brk);
+      }
+      const keep = document.createRange();
+      keep.setStart(block, 0);
+      keep.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(keep);
+      syncChapter(body, chId);
+      resetNativeUndo();
+      breakRun++;
+      return true;
+    }
+
+    // normal Enter — native split so ⌘Z keeps working; junk spans (which
+    // make the engine clone whole paragraphs) are stripped first if present
     e.preventDefault();
-    prev.remove();
-    block.remove();
-    if (!body.querySelector('p')) body.innerHTML = '<p><br></p>';
+    if (block.querySelector('span:not(.ph-mark)')) stripJunkSpans(block);
+    document.execCommand('insertParagraph');
     syncChapter(body, chId);
-    currentChapterId = chId;
-    newChapter();
     return true;
   }
 
-  // Second Enter: empty paragraph (not the chapter's first) becomes a *** break
+  // Third Enter at end of flow: empty paragraph under a *** — chapter splits here
+  if (prev && prev.classList.contains('scene-break')) {
+    e.preventDefault();
+    snapshotStructure('chapter split');
+    prev.remove();
+    splitChapterAt(body, chId, block, sel);
+    return true;
+  }
+
+  // Second Enter at end of flow: the empty paragraph becomes a *** break
   if (prev) {
     e.preventDefault();
+    snapshotStructure('section break', { rejoin: enterRun >= 2 });
     block.classList.add('scene-break');
     block.textContent = '***';
     const np = document.createElement('p');
@@ -1160,9 +1362,42 @@ function handleEnter(e, body, chId) {
     sel.removeAllRanges();
     sel.addRange(range);
     syncChapter(body, chId);
+    resetNativeUndo();
+    breakRun++;
     return true;
   }
   return false;
+}
+
+// Backspace just below a *** (or Delete just above one) removes the break
+// itself — prose never merges into the break's styled paragraph
+function sceneBreakDelete(e, body, chId) {
+  if (e.key !== 'Backspace' && e.key !== 'Delete') return false;
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  let el = r.startContainer;
+  if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const block = el && el.closest ? el.closest('p') : null;
+  if (!block || !body.contains(block)) return false;
+  const back = e.key === 'Backspace';
+  const edge = document.createRange();
+  edge.selectNodeContents(block);
+  try {
+    if (back) edge.setEnd(r.startContainer, r.startOffset);
+    else edge.setStart(r.startContainer, r.startOffset);
+  } catch { return false; }
+  if (edge.toString().length !== 0) return false; // caret isn't at the block's edge
+  const target = back ? block.previousElementSibling : block.nextElementSibling;
+  if (!target || !target.classList.contains('scene-break')) return false;
+  e.preventDefault();
+  snapshotStructure('section break removed');
+  target.remove();
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
 }
 
 // Read a body's HTML for saving:
@@ -1652,7 +1887,6 @@ navList.addEventListener('drop', async (e) => {
   await saveMeta();
   renderChapters(); // renumbers heads and rebuilds the nav
   if (currentTab === 'outline') renderOutline();
-  toast(`Chapters reordered — ${KZ} to undo`);
 });
 
 function highlightNav() {
@@ -2187,6 +2421,7 @@ function syncGhosts(chId) {
 }
 
 let auxDirty = false;
+$('#aux-editor').addEventListener('keydown', (e) => { styleKeepScroll(e); });
 $('#aux-editor').addEventListener('input', () => {
   auxDirty = true;
   scheduleAuxSave();
@@ -2470,10 +2705,89 @@ $('#back-to-shelf').onclick = backToShelf;
 
 let undoStack = [];
 
-function snapshotStructure(label) {
+// remember where the caret is — paragraph number plus offset within that
+// paragraph, so even a caret in an EMPTY paragraph has an exact address
+function captureCaret() {
+  try {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || currentTab !== 'manuscript') return null;
+    const r = sel.getRangeAt(0);
+    let el = r.startContainer;
+    if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+    const bodyEl = el && el.closest ? el.closest('.chapter-body') : null;
+    if (!bodyEl) return null;
+    const blk = el.closest('p');
+    const ps = [...bodyEl.querySelectorAll('p')];
+    let off = 0;
+    if (blk) {
+      const pre = document.createRange();
+      pre.selectNodeContents(blk);
+      pre.setEnd(r.startContainer, r.startOffset);
+      off = pre.toString().length;
+    }
+    return {
+      chId: bodyEl.closest('.chapter').dataset.id,
+      pIdx: blk ? ps.indexOf(blk) : 0, // container-level caret: treat as chapter start
+      off,
+      scroll: $('#paper-scroll').scrollTop
+    };
+  } catch { return null; }
+}
+
+function restoreCaret(caret) {
+  if (!caret) return;
+  const bodyEl = document.querySelector(`.chapter[data-id="${caret.chId}"] .chapter-body`);
+  if (!bodyEl) return;
+  bodyEl.focus({ preventScroll: true });
+  const sel = window.getSelection();
+  const finish = () => {
+    currentChapterId = caret.chId;
+    if (typeof caret.scroll === 'number') $('#paper-scroll').scrollTop = caret.scroll;
+  };
+  const ps = [...bodyEl.querySelectorAll('p')];
+  const blk = ps[caret.pIdx] || ps[ps.length - 1];
+  if (!blk) { finish(); return; }
+  const w = document.createTreeWalker(blk, NodeFilter.SHOW_TEXT);
+  let pos = 0, n;
+  while ((n = w.nextNode())) {
+    if (caret.off <= pos + n.data.length) {
+      const r = document.createRange();
+      r.setStart(n, caret.off - pos);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      finish();
+      return;
+    }
+    pos += n.data.length;
+  }
+  // empty paragraph, or offset past its end
+  const r = document.createRange();
+  r.selectNodeContents(blk);
+  r.collapse(caret.off === 0);
+  sel.removeAllRanges();
+  sel.addRange(r);
+  finish();
+}
+
+// The engine's undo history must never replay against a document NEO has
+// rearranged by hand — clear it whenever such a rearrangement happens.
+function resetNativeUndo() {
+  const caret = captureCaret();
+  if (!caret) return;
+  const bodyEl = document.querySelector(`.chapter[data-id="${caret.chId}"] .chapter-body`);
+  if (!bodyEl) return;
+  bodyEl.contentEditable = 'false';
+  bodyEl.contentEditable = 'true';
+  restoreCaret(caret);
+}
+
+function snapshotStructure(label, opts) {
   if (!book) return;
   undoStack.push({
     label,
+    rejoin: !!(opts && opts.rejoin),
+    caret: captureCaret(),
     chapterOrder: [...book.chapterOrder],
     chapterHTML: { ...chapterHTML },
     chapterTitles: { ...(book.chapterTitles || {}) },
@@ -2508,7 +2822,58 @@ async function structuralUndo() {
   if (currentTab === 'darlings') renderDarlings();
   if (currentTab === 'outline') renderOutline();
   updateCounters();
-  toast('Undone: ' + snap.label);
+  restoreCaret(snap.caret); // back to work, no announcement
+  if (snap.rejoin) rejoinAtCaret();
+  resetNativeUndo();
+}
+
+// after undoing a double-Enter break, close the split the gesture made:
+// the caret's paragraph flows back into the one above it
+function rejoinAtCaret() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  let el = sel.anchorNode;
+  if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const blk = el && el.closest ? el.closest('p') : null;
+  const body = blk && blk.closest('.chapter-body');
+  if (!blk || !body) return;
+  const prev = blk.previousElementSibling;
+  if (!prev || prev.tagName !== 'P') return;
+  if (prev.classList.contains('scene-break') || blk.classList.contains('scene-break')) return;
+  const chId = body.closest('.chapter').dataset.id;
+  const at = prev.textContent.length;
+  if (blk.textContent.trim() === '') {
+    blk.remove();
+  } else {
+    for (const junk of blk.querySelectorAll('br')) junk.remove();
+    for (const junk of prev.querySelectorAll('br')) junk.remove(); // an empty line's placeholder must not survive the merge
+    while (blk.firstChild) prev.appendChild(blk.firstChild);
+    blk.remove();
+    try { prev.normalize(); } catch { /* fine */ }
+  }
+  // caret lands at the healed seam
+  const w = document.createTreeWalker(prev, NodeFilter.SHOW_TEXT);
+  let pos = 0, n, placed = false;
+  while ((n = w.nextNode())) {
+    if (at <= pos + n.data.length) {
+      const r = document.createRange();
+      r.setStart(n, at - pos);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      placed = true;
+      break;
+    }
+    pos += n.data.length;
+  }
+  if (!placed) {
+    const r = document.createRange();
+    r.selectNodeContents(prev);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  syncChapter(body, chId);
 }
 
 document.addEventListener('keydown', (e) => {
@@ -3876,15 +4241,12 @@ window.neo.onMenu(async (msg) => {
     library.fonts.body = msg.value;
     await window.neo.writeLibrary(library);
     applyFonts();
-    toast('Body font: ' + msg.value);
   }
   if (msg.type === 'dropCap') {
     library.fonts = library.fonts || {};
     library.fonts.dropcap = msg.value;
     await window.neo.writeLibrary(library);
     applyFonts();
-    const names = { literary: 'Literary', fantasy: 'Fantasy', scifi: 'Sci-Fi' };
-    toast('Drop caps: ' + names[msg.value]);
   }
 });
 
