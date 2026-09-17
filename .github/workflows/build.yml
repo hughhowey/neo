@@ -96,16 +96,15 @@ jobs:
             dist/*-mac.zip
             dist/latest-mac.yml
             dist/*.blockmap
+      # sequential uploads via the gh CLI: --clobber replaces duplicates, so
+      # re-runs never collide with a half-loaded draft
       - name: Attach to draft release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: true
-          files: |
-            dist/*.dmg
-            dist/*-mac.zip
-            dist/latest-mac.yml
-            dist/*.blockmap
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --title "NEO $GITHUB_REF_NAME" 2>/dev/null || true
+          gh release upload "$GITHUB_REF_NAME" dist/*.dmg dist/*-mac.zip dist/latest-mac.yml dist/*.blockmap --clobber
 
   linux:
     runs-on: ubuntu-latest
