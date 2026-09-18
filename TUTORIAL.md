@@ -55,7 +55,8 @@ Click the word counter that says "0 today" and you get the progress room: set a 
 
 **Cover Art**
 
-As of v0.3.3 NEO accepts cover art dragged right onto your WIP, or uploaded after right-clicking the default gradient cover. This is the philosophy behind NEO: the more your WIPs look like books, the harder you'll work on them! Upload any kind of art at a 2:3 width:height ratio.
+New books are automatically given cover art with a seeded abstract look (six art styles, six type templates, typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint a cover from the text. This is a bit more work but totally worth it. Get an OpenAI API key from their website and paste it into Goals & Settings. The art is generated in the background for about a penny a picture. (These are not meant for publication, just writing inspiration!) The API key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to a gen-AI model. The ↻ on any book re-rolls its type and colors, or paints it again. And you can always switch back and forth from the seeded modern look to the painted variety.
+
 
 **Getting your book out**
 
