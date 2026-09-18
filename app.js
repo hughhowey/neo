@@ -124,6 +124,10 @@ function chapterWords(chId) {
 let libraryDirPath = '';
 
 function coverUrl(meta) {
+  // Pocket serves the library through a URL; desktop hands a plain path
+  if (/^[a-z]+:\/\//.test(libraryDirPath)) {
+    return libraryDirPath + '/' + encodeURIComponent(meta.id) + '/' + encodeURIComponent(meta.coverImage);
+  }
   const p = (libraryDirPath + '/' + meta.id + '/' + meta.coverImage).replace(/\\/g, '/');
   return encodeURI('file://' + (p.startsWith('/') ? '' : '/') + p);
 }

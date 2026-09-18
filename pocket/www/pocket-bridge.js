@@ -92,7 +92,13 @@
       });
     },
     writeLibrary: async (data) => { await writeJSONFile(p('library.json'), data); return true; },
-    libraryPath: async () => 'Documents/NEO Library',
+    libraryPath: async () => {
+      // a served URL lets cover art render in the webview
+      try {
+        const u = await FS().getUri({ path: ROOT, directory: DIR });
+        return window.Capacitor.convertFileSrc(u.uri);
+      } catch { return 'Documents/NEO Library'; }
+    },
 
     /* ---------- books ---------- */
     readBookMeta: (bookId) => readJSONFile(p(bookId, 'book.json'), null),
