@@ -229,6 +229,7 @@ function displayAuthor() {
 }
 
 async function renderShelves() {
+  await NeoCovers.ready; // display faces, so titles measure true
   const view = $('#bookshelf-view');
   const keepScroll = view.scrollTop; // re-rendering must not move the page
   $('#author-chip').textContent = displayAuthor();
@@ -441,58 +442,69 @@ function dropIndicator() {
   return _dropInd;
 }
 
-// A cheap, deterministic "cover": two hues drawn from the book's seed.
-// Refresh folds in the current word count, so the cover evolves with the text.
-function coverHash(meta) {
-  const seed = String(meta.coverSeed || meta.id);
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return h;
+// Covers are two layers the shelf composites live: art (a seeded abstract,
+// an image the writer chose, or one NEO painted from the text) and type.
+// See covers.js. Painted art is read once and downsampled to tile size so
+// forty books on a shelf cost about as much as forty small PNGs.
+const artCache = new Map(); // bookId/file -> { url, canvas }
+
+async function paintedArt(meta) {
+  const art = meta.coverArt;
+  if (!art || art.status !== 'done' || !art.file) return null;
+  const key = meta.id + '/' + art.file;
+  if (artCache.has(key)) return artCache.get(key);
+  const data = await window.neo.readCover(meta.id, art.file);
+  if (!data) return null;
+  const entry = await NeoCovers.fitImage(key, `data:${data.mime};base64,${data.base64}`);
+  if (entry) artCache.set(key, entry);
+  return entry;
 }
 
-function coverGradient(meta) {
-  const h = coverHash(meta);
-  const hue1 = h % 360;
-  const hue2 = (hue1 + 40 + (h >> 8) % 140) % 360;
-  const angle = 115 + ((h >> 16) % 50);
-  return `linear-gradient(${angle}deg, hsl(${hue1}, 55%, 38%) 0%, hsl(${hue2}, 60%, 22%) 100%)`;
+// Which layers a book has to show, and which one is showing. Nothing is
+// ever thrown away by switching: the writer's image, NEO's painting, and the
+// abstract all stay available, and coverMode just picks one.
+const hasPainting = (meta) => !!(meta.coverArt && meta.coverArt.status === 'done' && meta.coverArt.file);
+function coverMode(meta) {
+  const m = meta.coverMode;
+  if (m === 'image' && meta.coverImage) return 'image';
+  if (m === 'painted' && hasPainting(meta)) return 'painted';
+  if (m === 'abstract') return 'abstract';
+  return meta.coverImage ? 'image' : hasPainting(meta) ? 'painted' : 'abstract';
+}
+
+function dressTile(el, meta) {
+  el.classList.remove('has-cover');
+  const mode = coverMode(meta);
+  if (mode === 'image') {
+    el.classList.add('has-cover');
+    el.style.background = `#1d1d1d url("${coverUrl(meta)}") center / cover no-repeat`;
+    return;
+  }
+  // the abstract shows instantly; painted art replaces it once decoded
+  NeoCovers.dress(el, NeoCovers.plan(meta));
+  el.classList.toggle('cv-painting', !!(meta.coverArt && meta.coverArt.status === 'pending'));
+  if (mode !== 'painted') return;
+  paintedArt(meta).then((art) => {
+    if (art && el.isConnected && coverMode(meta) === 'painted') NeoCovers.dress(el, NeoCovers.plan(meta, art));
+  });
 }
 
 function bookTile(meta) {
   const el = document.createElement('div');
-  el.className = 'book cover cv-serif'; // the house style: Didot, framed
+  el.className = 'book';
+  el.dataset.bookId = meta.id;
   el.draggable = true;
   el.innerHTML = `
-    <div class="b-title"></div>
-    <div class="b-author"></div>
-    <span class="b-refresh" title="New cover, woven from the current text">&#8635;</span>
+    <div class="b-text"><div class="b-title"></div><div class="b-author"></div></div>
+    <span class="b-refresh" title="New cover">&#8635;</span>
+    <div class="b-painting" hidden></div>
     <div class="b-progress" hidden><div></div></div>`;
-  if (meta.coverImage) {
-    el.classList.add('has-cover');
-    el.style.background = `#1d1d1d url("${coverUrl(meta)}") center / cover no-repeat`;
-  } else {
-    el.style.background = coverGradient(meta);
-  }
-  // ALL CAPS, with each word's initial slightly larger
-  const titleEl = el.querySelector('.b-title');
-  const inner = document.createElement('span');
-  inner.className = 'b-tt';
-  (meta.title || 'Untitled').split(/\s+/).forEach((word, i) => {
-    if (!word) return;
-    if (i > 0) inner.appendChild(document.createTextNode(' '));
-    const initial = document.createElement('span');
-    initial.className = 'ti';
-    initial.textContent = word.slice(0, 1).toUpperCase();
-    inner.appendChild(initial);
-    inner.appendChild(document.createTextNode(word.slice(1).toUpperCase()));
-  });
-  titleEl.appendChild(inner);
   el.querySelector('.b-author').textContent = meta.author || '';
+  dressTile(el, meta);
+  el.querySelector('.b-painting').hidden = !(meta.coverArt && meta.coverArt.status === 'pending');
   el.querySelector('.b-refresh').onclick = async (e) => {
     e.stopPropagation();
-    meta.coverSeed = meta.id + ':' + (meta.wordCount || 0) + ':' + Date.now().toString(36);
-    await window.neo.writeBookMeta(meta.id, meta);
-    el.style.background = coverGradient(meta);
+    await refreshCover(meta, el);
   };
   if (meta.wordGoal > 0) {
     const bar = el.querySelector('.b-progress');
@@ -528,6 +540,7 @@ function bookTile(meta) {
       const fname = await window.neo.setCover(meta.id, p);
       if (fname) {
         meta.coverImage = fname;
+        meta.coverMode = 'image';
         await window.neo.writeBookMeta(meta.id, meta);
         renderShelves();
       }
@@ -544,7 +557,7 @@ function bookTile(meta) {
       { label: meta.coverImage ? 'Replace cover art…' : 'Set cover art…', desc: 'Pick an image (2:3 works best). Or just drag one from Finder onto the book.', value: 'cover' }
     ];
     if (meta.coverImage) {
-      options.push({ label: 'Remove cover art', desc: 'Back to the generated cover.', value: 'uncover' });
+      options.push({ label: 'Remove cover art', desc: 'Deletes the image from the book folder. (To just hide it, use the \u21bb on the book.)', danger: true, value: 'uncover' });
     }
     options.push(
       { label: 'Set word goal…', desc: 'Adds the subtle progress bar to the cover.', value: 'goal' },
@@ -562,6 +575,7 @@ function bookTile(meta) {
       const fname = await window.neo.setCover(meta.id, src);
       if (fname) {
         meta.coverImage = fname;
+        meta.coverMode = 'image';
         await window.neo.writeBookMeta(meta.id, meta);
         renderShelves();
       }
@@ -592,6 +606,116 @@ function bookTile(meta) {
     }
   });
   return el;
+}
+
+/* ---- painted covers ----
+   At a thousand words a story has a shape, so NEO reads it and paints an
+   abstract cover to sit under the type. The writer's own cover (coverImage)
+   always wins; the abstract is the fallback; painting never blocks typing. */
+
+const PAINT_AT = 1000;
+const STALE_PAINT_MS = 10 * 60 * 1000; // a job that never came back
+
+function paintable(meta) {
+  if (!meta || meta.coverImage) return false; // the writer's own art is never painted over
+  if ((meta.wordCount || 0) < PAINT_AT) return false;
+  const art = meta.coverArt;
+  if (!art) return true;
+  if (art.status === 'pending') return Date.now() - Date.parse(art.at || 0) > STALE_PAINT_MS;
+  return false; // done, shelved, or failed: the ↻ on the tile is the way back in
+}
+
+function bookPlainText() {
+  return book.chapterOrder.map((id) => chapterText(id)).join('\n\n');
+}
+
+// Paint the open book, or a book on the shelf (text is read from disk then).
+async function requestPaint(meta, text) {
+  if (!(await window.neo.hasSecret('openai'))) {
+    if (!library.coverArtNudged) {
+      library.coverArtNudged = true;
+      await window.neo.writeLibrary(library);
+      toast('This story just passed 1,000 words — add an OpenAI key under Goals & Settings and NEO will paint it a cover.', 8000);
+    }
+    return;
+  }
+  meta.coverArt = { status: 'pending', at: new Date().toISOString(), words: meta.wordCount || 0 };
+  if (book && book.id === meta.id) scheduleMetaSave();
+  else await window.neo.writeBookMeta(meta.id, meta);
+  markPainting(meta.id, true);
+  if (text == null) {
+    const m = await window.neo.readBookMeta(meta.id);
+    const parts = [];
+    for (const chId of (m && m.chapterOrder) || []) {
+      const holder = document.createElement('div');
+      holder.innerHTML = await window.neo.readChapter(meta.id, chId);
+      holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
+      parts.push(holder.innerText);
+    }
+    text = parts.join('\n\n');
+  }
+  const opts = library.coverArt || {};
+  const res = await window.neo.paintCover(meta.id, text, { textModel: opts.textModel, imageModel: opts.imageModel });
+  // the writer may have moved on — write to whichever copy of the meta is live
+  const live = (book && book.id === meta.id) ? book : (await window.neo.readBookMeta(meta.id)) || meta;
+  if (res && res.file) {
+    live.coverArt = { status: 'done', file: res.file, brief: res.brief, words: meta.wordCount || 0, at: new Date().toISOString() };
+    if (!live.coverImage) live.coverMode = 'painted';
+    artCache.delete(meta.id + '/' + res.file);
+  } else {
+    live.coverArt = { status: 'failed', error: (res && res.error) || 'unknown', at: new Date().toISOString() };
+    toast('NEO couldn\u2019t paint that cover: ' + live.coverArt.error, 7000);
+  }
+  if (live === book) scheduleMetaSave();
+  else await window.neo.writeBookMeta(meta.id, live);
+  markPainting(meta.id, false);
+  if (!$('#bookshelf-view').hidden) renderShelves();
+}
+
+// shimmer on the tile while its painting is in flight
+function markPainting(bookId, on) {
+  for (const el of $$('.book')) {
+    if (el.dataset.bookId !== bookId) continue;
+    el.classList.toggle('cv-painting', on);
+    const sh = el.querySelector('.b-painting');
+    if (sh) sh.hidden = !on;
+  }
+}
+
+// the ↻ on a tile: switch between the covers a book has, re-roll the
+// abstract, or paint a fresh one from the text
+async function refreshCover(meta, el) {
+  const mode = coverMode(meta);
+  const enough = (meta.wordCount || 0) >= PAINT_AT;
+  const hasKey = await window.neo.hasSecret('openai');
+  const options = [];
+  if (meta.coverImage && mode !== 'image') options.push({ label: 'Show your cover art', desc: 'The image you gave this book.', value: 'image' });
+  if (hasPainting(meta) && mode !== 'painted') options.push({ label: 'Show NEO\u2019s painting', desc: 'The cover painted from the text.', value: 'painted' });
+  if (mode !== 'abstract') options.push({ label: 'Show the abstract', desc: 'The seeded cover every book starts with.', value: 'abstract' });
+  options.push({ label: 'New type & colours', desc: mode === 'abstract' ? 'A fresh abstract and a different title style.' : 'Re-sets the title in a different style over the same art.', value: 'reroll' });
+  if (hasKey) {
+    options.push(enough
+      ? { label: hasPainting(meta) ? 'Paint it again' : 'Paint a cover from the text', desc: 'NEO reads the manuscript and paints a new abstract cover. About a minute, about a penny.', value: 'paint' }
+      : { label: 'Paint a cover from the text', desc: `Once the story passes ${PAINT_AT.toLocaleString()} words.`, value: 'nope' });
+  }
+  // a plain abstract with nothing else to offer just re-rolls
+  const choice = options.length === 1 ? 'reroll' : await optionModal(`Cover for \u201c${escHtml(meta.title)}\u201d`, null, options);
+  if (!choice || choice === 'nope') return;
+  const live = (book && book.id === meta.id) ? book : meta;
+  if (choice === 'paint') {
+    if (meta.coverArt && meta.coverArt.status === 'pending' && !paintable(meta)) { toast('Still painting\u2026'); return; }
+    live.coverMode = 'painted';
+    requestPaint(live, book && book.id === meta.id ? bookPlainText() : null);
+    return;
+  }
+  if (choice === 'reroll') {
+    live.coverSeed = meta.id + ':' + (meta.wordCount || 0) + ':' + Date.now().toString(36);
+    if (mode === 'image') live.coverMode = 'abstract';
+  } else {
+    live.coverMode = choice;
+  }
+  if (live === book) scheduleMetaSave(); else await window.neo.writeBookMeta(meta.id, live);
+  dressTile(el, live);
 }
 
 async function createBookOnShelf(shelf) {
@@ -2570,6 +2694,10 @@ function updateCounters() {
   if (book.wordCount !== total) {
     book.wordCount = total;
     scheduleMetaSave();
+    // crossing a thousand words earns the story a painted cover
+    if (total >= PAINT_AT && !(library.coverArt && library.coverArt.auto === false) && paintable(book)) {
+      requestPaint(book, bookPlainText());
+    }
   }
   trackDailyWords(total);
 }
@@ -3364,7 +3492,7 @@ function statsChartSvg() {
   </div>`;
 }
 
-function openStats() {
+function openStats(focus) {
   const hasBook = !!book;
   const today = hasBook ? (book.dailyCounts || {})[todayStr()] : null;
   const wordsToday = today ? today.end - today.start : 0;
@@ -3399,14 +3527,42 @@ function openStats() {
           </select>
         </label>
       </div>
+      <div class="stats-row st-covers">
+        <label>Painted covers
+          <input id="st-key" type="password" autocomplete="off" spellcheck="false" placeholder="OpenAI API key (sk-…)" style="width:230px"/>
+        </label>
+        <label class="st-check"><input id="st-auto" type="checkbox"${!(library.coverArt && library.coverArt.auto === false) ? ' checked' : ''}/> paint at 1,000 words</label>
+      </div>
+      <p class="soft" id="st-key-note" style="margin:-8px 0 10px;font-size:12px">${''}</p>
+      <details class="st-advanced">
+        <summary class="soft">Models</summary>
+        <div class="stats-row">
+          <label>Brief <input id="st-tmodel" type="text" spellcheck="false" placeholder="gpt-5-mini" value="${escHtml((library.coverArt && library.coverArt.textModel) || '')}"/></label>
+          <label>Paint <input id="st-imodel" type="text" spellcheck="false" placeholder="gpt-image-1-mini" value="${escHtml((library.coverArt && library.coverArt.imageModel) || '')}"/></label>
+        </div>
+      </details>
       <div style="text-align:right;margin-top:14px">
         <button class="m-ok btn-gold">Done</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
+  const keyNote = bd.querySelector('#st-key-note');
+  window.neo.hasSecret('openai').then((has) => {
+    keyNote.textContent = has
+      ? 'A key is saved, encrypted, outside your library folder. Paste a new one to replace it; type “remove” to forget it.'
+      : 'Once a story passes 1,000 words, NEO reads it and paints an abstract cover — about a penny a picture. Your key is stored encrypted, outside your library.';
+  });
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
     library.writingStyle = bd.querySelector('#st-style').value;
+    const key = bd.querySelector('#st-key').value.trim();
+    if (key === 'remove') await window.neo.setSecret('openai', '');
+    else if (key) await window.neo.setSecret('openai', key);
+    library.coverArt = {
+      auto: bd.querySelector('#st-auto').checked,
+      textModel: bd.querySelector('#st-tmodel').value.trim() || undefined,
+      imageModel: bd.querySelector('#st-imodel').value.trim() || undefined
+    };
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
       scheduleMetaSave();
@@ -3417,6 +3573,7 @@ function openStats() {
   };
   bd.querySelector('.m-ok').onclick = close;
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  if (focus === 'covers') bd.querySelector('#st-key').focus();
   if (hasBook) {
     bd.querySelector('#st-sprint-btn').onclick = () => {
       if (sprint && !sprint.done) {
@@ -4215,7 +4372,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'spellcheck') toggleSpellcheck();
   if (msg.type === 'typewriter') toggleTypewriter();
   if (msg.type === 'import') importBooks();
-  if (msg.type === 'stats') openStats();
+  if (msg.type === 'stats') openStats(msg.focus);
   if (msg.type === 'align') {
     applyAlign(msg.value);
   }

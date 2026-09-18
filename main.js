@@ -257,7 +257,7 @@ ipcMain.handle('cover:remove', (_e, bookId) => {
 
 ipcMain.handle('cover:read', (_e, bookId, fname) => {
   try {
-    if (!/^cover-\d+\.(png|jpg|webp)$/.test(fname)) return null;
+    if (!/^(cover|art)-\d+\.(png|jpg|webp)$/.test(fname)) return null;
     const buf = fs.readFileSync(path.join(bookDir(bookId), fname));
     const ext = path.extname(fname).slice(1);
     const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
@@ -265,6 +265,90 @@ ipcMain.handle('cover:read', (_e, bookId, fname) => {
   } catch {
     return null;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Painted covers: once a story passes a thousand words, NEO reads it and
+// paints an abstract cover (art.js). The API key lives encrypted in the
+// app's own data folder — never in the library, which gets synced and
+// backed up as plain files.
+// ---------------------------------------------------------------------------
+
+const SECRETS_FILE = () => path.join(app.getPath('userData'), 'secrets.json');
+
+function readSecret(name) {
+  try {
+    const { safeStorage } = require('electron');
+    const all = readJSON(SECRETS_FILE(), {});
+    if (!all[name]) return null;
+    if (all[name].enc && safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(Buffer.from(all[name].value, 'base64'));
+    }
+    return all[name].value;
+  } catch (err) {
+    logError('secret', err);
+    return null;
+  }
+}
+
+ipcMain.handle('secret:set', (_e, name, value) => {
+  const { safeStorage } = require('electron');
+  const all = readJSON(SECRETS_FILE(), {});
+  if (!value) {
+    delete all[name];
+  } else if (safeStorage.isEncryptionAvailable()) {
+    all[name] = { enc: true, value: safeStorage.encryptString(String(value)).toString('base64') };
+  } else {
+    all[name] = { enc: false, value: String(value) };
+  }
+  writeJSON(SECRETS_FILE(), all);
+  return true;
+});
+
+ipcMain.handle('secret:has', (_e, name) => !!readSecret(name));
+
+// One painting at a time per book; a second request while one is running
+// simply gets the running one's answer.
+const paintJobs = new Map();
+
+ipcMain.handle('cover:paint', (_e, bookId, text, options) => {
+  if (paintJobs.has(bookId)) return paintJobs.get(bookId);
+  const job = (async () => {
+    const apiKey = readSecret('openai');
+    if (!apiKey) return { error: 'No OpenAI key — add one under Goals & Settings' };
+    const dir = bookDir(bookId);
+    if (!fs.existsSync(dir)) return { error: 'Book folder is missing' };
+    try {
+      const art = require('./art.js');
+      const out = await art.paintCover({
+        apiKey,
+        text: String(text || ''),
+        textModel: options && options.textModel,
+        imageModel: options && options.imageModel
+      });
+      // sweep older paintings; the writer's own cover-*.png files are untouched
+      for (const f of fs.readdirSync(dir)) {
+        if (/^art-\d+\.(png|jpg|webp)$/.test(f)) fs.unlinkSync(path.join(dir, f));
+      }
+      const fname = 'art-' + Date.now() + '.jpg';
+      fs.writeFileSync(path.join(dir, fname), out.buffer);
+      // the brief sits beside the picture, so a future repaint can start from it
+      writeJSON(path.join(dir, 'art.json'), {
+        file: fname,
+        brief: out.brief,
+        textModel: out.textModel,
+        imageModel: out.imageModel,
+        painted: new Date().toISOString()
+      });
+      return { file: fname, brief: out.brief };
+    } catch (err) {
+      logError('paint', err);
+      return { error: String((err && err.message) || err) };
+    }
+  })();
+  paintJobs.set(bookId, job);
+  job.finally(() => paintJobs.delete(bookId));
+  return job;
 });
 
 // ---------------------------------------------------------------------------
@@ -681,6 +765,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'emailDraft' })
         },
         { label: 'Email Settings…', click: () => sendToWindow({ type: 'emailSettings' }) },
+        { label: 'Cover Art…', click: () => sendToWindow({ type: 'stats', focus: 'covers' }) },
         {
           label: isMac ? 'Goals & Settings…' : 'Goals && Settings…',
           accelerator: 'CmdOrCtrl+,',

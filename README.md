@@ -43,6 +43,8 @@ Outline chapters and sections in the Outline tab; section notes appear in the ma
 
 Whether you already have a cover in mind, want to whip up something in Canva or Photoshop, or are okay with using AI art either as placeholder or final file, NEO is happy to accept it. Drag your 2:3 ratio art right on the book in your bookshelf. I've always done this as a habit, having the cover art early. Seeing the book inspires me to work on it daily and make it better!
 
+Until then, every book gets a cover anyway. A new book is dressed in a seeded abstract (six art styles, six type templates, real typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint an abstract cover from the text: add an OpenAI API key under Goals & Settings, and the painting happens quietly in the background for about a penny a picture. The key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to an image model. The ↻ on any book re-rolls its type and colours, or paints it again.
+
 **Goals and momentum** 
 
 Daily word goals, word sprints, and a NaNoWriMo-style progress chart. Needs more testing, but I think it works okay!
@@ -80,7 +82,7 @@ The app is very simple: an Electron shell (`main.js`), a preload bridge (`preloa
 
 ## Roadmap (things I'm dreaming up but may never get to):
 
-Chapter version history · manuscript format for agent submissions (Times New Roman, double-spaced, address block, just to make Kristin Nelson happy) · custom cover art (auto-generated based on the text so far, refreshable if you don't like it. · global end matter that updates every book at once (same for copyright pages, bios, etc).
+Chapter version history · manuscript format for agent submissions (Times New Roman, double-spaced, address block, just to make Kristin Nelson happy) · global end matter that updates every book at once (same for copyright pages, bios, etc).
 
 ## Contributing
 

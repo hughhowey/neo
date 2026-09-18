@@ -94,45 +94,157 @@ button { font: inherit; cursor: pointer; }
 
 .book {
   box-shadow: inset 3px 0 6px -3px rgba(0,0,0,0.45), 2px 3px 8px rgba(0,0,0,0.45);
-  color: #fff; padding: 16px 9px 9px;
+  color: #fff; overflow: hidden;
 }
-.book .b-title {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  text-align: center; word-wrap: break-word; overflow: hidden;
-  line-height: 1.2; text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+
+/* ---------------- Cover typography ----------------
+   The art is painted onto the tile's background (see covers.js); the title
+   above it is real text, broken into lines by covers.js with each line sized
+   to run the tile's full width — the title is the design, not a caption.
+   cv-light / cv-dark pick the ink from the art's brightness; cv-scrim adds a
+   veil where the art is busy. */
+@font-face { font-family: 'NEO Anton'; src: url('fonts/anton-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'NEO Bebas'; src: url('fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'NEO Oswald'; src: url('fonts/oswald-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'NEO Abril'; src: url('fonts/abril-fatface-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-900-normal.woff2') format('woff2'); font-weight: 900; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-900-italic.woff2') format('woff2'); font-weight: 900; font-style: italic; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; }
+@font-face { font-family: 'NEO Cinzel'; src: url('fonts/cinzel-latin-900-normal.woff2') format('woff2'); font-weight: 900; }
+@font-face { font-family: 'NEO Josefin'; src: url('fonts/josefin-sans-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'NEO Josefin'; src: url('fonts/josefin-sans-latin-600-normal.woff2') format('woff2'); font-weight: 600; }
+@font-face { font-family: 'NEO Baskerville'; src: url('fonts/libre-baskerville-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+
+.book .b-text {
+  position: absolute; left: 8px; right: 8px; z-index: 2;
+  display: flex; flex-direction: column; pointer-events: none;
 }
+.book .b-title { display: flex; flex-direction: column; align-items: center; }
+.book .b-line { display: block; white-space: nowrap; line-height: 1; }
 .book .b-author {
-  font-size: 8px; text-align: center; color: rgba(255,255,255,0.8);
-  text-transform: uppercase; letter-spacing: 1.5px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  padding-top: 6px;
+  font-family: 'NEO Josefin', 'Helvetica Neue', sans-serif; font-weight: 600;
+  font-size: 7.5px; text-transform: uppercase; letter-spacing: 1.6px; text-align: center;
+  margin-top: 7px; opacity: 0.9;
 }
-/* the house cover style: crisp caps inside a thin frame */
-.book.cv-serif .b-title {
-  font-family: Optima, Candara, Georgia, serif;
-  font-size: 12px; font-weight: 700;
-  letter-spacing: 1.2px; line-height: 1.45;
+/* ink — the title and the author line each take their own from the art beneath them */
+.book.cv-light { color: #fff; }
+.book.cv-light .b-title { text-shadow: 0 1px 6px rgba(0,0,0,0.45); }
+.book.cv-dark { color: #141414; }
+.book.cv-dark .b-title { text-shadow: 0 1px 4px rgba(255,255,255,0.3); }
+.book.cv-au-light .b-author { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+.book.cv-au-dark .b-author { color: #141414; opacity: 0.8; }
+.book.cv-au-long .b-author { letter-spacing: 0.8px; font-size: 6.5px; }
+/* a small plate under the author line when the art beneath it is ambiguous */
+.book.cv-au-scrim .b-author { align-self: center; padding: 3px 6px 2px; border-radius: 2px; }
+.book.cv-au-scrim.cv-au-light .b-author { background: rgba(0,0,0,0.5); text-shadow: none; }
+.book.cv-au-scrim.cv-au-dark .b-author { background: rgba(255,255,255,0.6); opacity: 1; }
+.book.cv-stack.cv-au-scrim .b-author, .book.cv-oswald.cv-au-scrim .b-author { align-self: flex-start; }
+.book.cv-band .b-author { background: none !important; padding: 0; }
+/* the veil, only when the art fights the type */
+.book.cv-scrim::after {
+  content: ''; position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
 }
-.book .b-tt { display: inline-block; text-align: center; }
-.book .b-title .ti { font-size: 1.35em; }
-.book.cv-serif::before {
-  content: ''; position: absolute; inset: 5px;
-  border: 1px solid rgba(255,255,255,0.45);
+.book.cv-light.cv-scrim::after { background: radial-gradient(ellipse at center, rgba(0,0,0,0.5), rgba(0,0,0,0) 72%); }
+.book.cv-dark.cv-scrim::after { background: radial-gradient(ellipse at center, rgba(255,255,255,0.55), rgba(255,255,255,0) 72%); }
+
+/* stack — Anton: a tower of condensed caps from the top, author at the foot */
+.book.cv-stack .b-text { top: 10px; bottom: 9px; justify-content: space-between; }
+.book.cv-stack .b-title { font-family: 'NEO Anton', Impact, sans-serif; align-items: stretch; text-align: left; }
+.book.cv-stack .b-line { line-height: 0.9; letter-spacing: 0.3px; }
+.book.cv-stack .b-line.b-small { line-height: 1.4; letter-spacing: 2px; }
+.book.cv-stack .b-author { text-align: left; }
+.book.cv-stack.cv-scrim::after { top: 0; bottom: 30%; background: linear-gradient(to top, rgba(0,0,0,0), rgba(0,0,0,0.6)); }
+.book.cv-dark.cv-stack.cv-scrim::after { background: linear-gradient(to top, rgba(255,255,255,0), rgba(255,255,255,0.65)); }
+
+/* bebas — tall condensed caps, centred, with tracked-out connectors */
+.book.cv-bebas .b-text { top: 12px; bottom: 12px; justify-content: center; }
+.book.cv-bebas .b-title { font-family: 'NEO Bebas', Impact, sans-serif; }
+.book.cv-bebas .b-line { line-height: 0.88; letter-spacing: 0.5px; }
+.book.cv-bebas .b-line.b-small { line-height: 1.5; letter-spacing: 3px; }
+.book.cv-bebas.cv-scrim::after { top: 18%; bottom: 18%; }
+
+/* black — Playfair Black, the connectors in a whispered italic */
+.book.cv-black .b-text { top: 12px; bottom: 12px; justify-content: center; }
+.book.cv-black .b-title { font-family: 'NEO Playfair', Georgia, serif; font-weight: 900; }
+.book.cv-black .b-line { line-height: 0.98; }
+.book.cv-black .b-line.b-ital { font-style: italic; font-weight: 900; line-height: 1.4; }
+.book.cv-black.cv-scrim::after { top: 18%; bottom: 18%; }
+
+/* fat — Abril Fatface, the block sitting low over the author line */
+.book.cv-fat .b-text { bottom: 10px; justify-content: flex-end; }
+.book.cv-fat .b-title { font-family: 'NEO Abril', 'NEO Playfair', Georgia, serif; }
+.book.cv-fat .b-line { line-height: 0.98; }
+.book.cv-fat .b-line.b-ital { font-family: 'NEO Playfair', Georgia, serif; font-style: italic; font-weight: 900; line-height: 1.4; }
+.book.cv-fat.cv-scrim::after { top: 30%; bottom: 0; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.65)); }
+.book.cv-dark.cv-fat.cv-scrim::after { background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.7)); }
+
+/* cinzel — heavy inscriptional caps inside a thin frame */
+.book.cv-cinzel .b-text { top: 16px; bottom: 14px; justify-content: center; }
+.book.cv-cinzel .b-title { font-family: 'NEO Cinzel', Georgia, serif; font-weight: 900; }
+.book.cv-cinzel .b-line { line-height: 1.05; letter-spacing: 0.5px; }
+.book.cv-cinzel .b-line.b-small { line-height: 1.6; letter-spacing: 2.5px; }
+.book.cv-cinzel::before {
+  content: ''; position: absolute; inset: 5px; z-index: 2;
+  border: 1.5px solid currentColor; opacity: 0.6;
   border-radius: 2px 4px 4px 2px; pointer-events: none;
 }
+.book.cv-cinzel.cv-scrim::after { top: 18%; bottom: 18%; }
+
+/* band — a solid ribbon across the middle, always legible */
+.book.cv-band .b-text { top: 50%; transform: translateY(-50%); left: 0; right: 0; padding: 9px 8px 8px; }
+.book.cv-band .b-title { font-family: 'NEO Josefin', 'Helvetica Neue', sans-serif; font-weight: 700; }
+.book.cv-band .b-line { line-height: 1.05; letter-spacing: 0.8px; }
+.book.cv-band .b-title::after { content: ''; display: block; width: 16px; height: 1.5px; background: currentColor; margin: 6px auto 0; opacity: 0.7; }
+.book.cv-band .b-author { margin-top: 5px; }
+.book.cv-band.cv-light .b-text { background: rgba(10,10,10,0.78); }
+.book.cv-band.cv-dark .b-text { background: rgba(255,255,255,0.86); }
+.book.cv-band .b-title, .book.cv-band .b-author { text-shadow: none; }
+.book.cv-band.cv-light .b-author { color: #fff; }
+.book.cv-band.cv-dark .b-author { color: #141414; }
+.book.cv-band.cv-scrim::after { display: none; }
+
+/* oswald — bold left-set caps under a thick rule, author at the foot */
+.book.cv-oswald .b-text { top: 10px; bottom: 9px; justify-content: space-between; }
+.book.cv-oswald .b-title { font-family: 'NEO Oswald', 'NEO Anton', sans-serif; font-weight: 700; align-items: stretch; text-align: left; }
+.book.cv-oswald .b-title::before { content: ''; display: block; width: 26px; height: 4px; background: currentColor; margin-bottom: 7px; }
+.book.cv-oswald .b-line { line-height: 0.95; }
+.book.cv-oswald .b-line.b-small { line-height: 1.4; letter-spacing: 2px; }
+.book.cv-oswald .b-author { text-align: left; }
+.book.cv-oswald.cv-scrim::after { top: 0; bottom: 30%; background: linear-gradient(to top, rgba(0,0,0,0), rgba(0,0,0,0.6)); }
+.book.cv-dark.cv-oswald.cv-scrim::after { background: linear-gradient(to top, rgba(255,255,255,0), rgba(255,255,255,0.65)); }
+
+/* settings: painted covers */
+.st-covers label input[type=password] { font-family: monospace; font-size: 12px; }
+.st-check { display: inline-flex !important; align-items: center; gap: 6px; }
+.st-advanced { margin-bottom: 6px; }
+.st-advanced summary { cursor: pointer; font-size: 12px; list-style: none; }
+.st-advanced summary::before { content: '\25B8 '; }
+.st-advanced[open] summary::before { content: '\25BE '; }
+.st-advanced input { width: 150px; }
+
+/* NEO is painting a cover from the text: a slow shimmer along the spine */
+.book.cv-painting::before { animation: none; }
+.book .b-painting {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(110deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 70%);
+  background-size: 250% 100%; animation: neo-shimmer 1.8s linear infinite;
+}
+@keyframes neo-shimmer { from { background-position: 120% 0; } to { background-position: -130% 0; } }
+
 .drop-indicator {
   width: 3px; height: 140px; align-self: flex-end; margin-bottom: 5px;
   background: var(--accent); border-radius: 2px; pointer-events: none;
   box-shadow: 0 0 10px rgba(201,168,106,0.8); flex-shrink: 0;
 }
 .book .b-refresh {
-  position: absolute; top: 4px; right: 6px; font-size: 12px;
+  position: absolute; top: 4px; right: 6px; font-size: 12px; z-index: 4;
   color: rgba(255,255,255,0.0); cursor: pointer; transition: color 0.15s;
 }
 .book:hover .b-refresh { color: rgba(255,255,255,0.65); }
 .book .b-refresh:hover { color: #fff; }
 .book .b-progress {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+  position: absolute; bottom: 0; left: 0; right: 0; height: 3px; z-index: 4;
   background: rgba(0,0,0,0.12); border-radius: 0 0 6px 3px; overflow: hidden;
 }
 .book .b-progress > div { height: 100%; background: var(--accent); }
@@ -604,10 +716,8 @@ body.bright .spell-menu button { color: #eee; }
 .help-grid .hk { color: #eee; font-weight: 600; white-space: nowrap; }
 
 /* --- Custom cover art: the image IS the cover --- */
-.book.has-cover .b-title,
-.book.has-cover .b-author,
-.book.has-cover .b-refresh { display: none; }
-.book.has-cover::before { display: none; }
+.book.has-cover .b-text { display: none; }
+.book.has-cover::before, .book.has-cover::after { display: none; }
 
 /* --- Brighter interface (View menu) — the quiet default, turned up --- */
 body.bright { --muted: #b4b4b4; }
