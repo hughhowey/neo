@@ -13,3 +13,8 @@ dist/
 # personal maintainer notes — not part of the public repo
 RELEASING.md
 GITHUB-SETUP.md
+
+# NEO Pocket
+pocket/node_modules/
+pocket/www/app.js
+pocket/www/styles.css

@@ -1,0 +1,31 @@
+/* ======================= NEO POCKET — mobile chrome ======================= */
+/* Loaded after styles.css: reshapes the desktop chrome for a folding screen. */
+
+/* the page fills the fold */
+#paper-scroll { width: 100%; }
+#paper, #aux-paper { width: 100%; max-width: 100%; margin: 0 0 80px; }
+.sheet, #aux-paper { padding: 34px 26px 60px; box-shadow: none; border: none; min-height: 92vh; }
+
+/* touch has no hover: edge-sneak panels retire; the ☰ button serves instead */
+#nav-hotzone, #side-hotzone { display: none; }
+#pocket-chapters {
+  position: fixed; top: 12px; left: 12px; z-index: 500;
+  width: 44px; height: 44px; border-radius: 10px;
+  background: rgba(30, 30, 30, 0.85); color: #b9b4a8;
+  border: 1px solid #3a3a3a; font-size: 20px;
+}
+#nav-pane.open { transform: translateX(0); }
+
+/* desktop-only powers stay out of sight */
+#import-btn, #zoom-control, #side-pane, #dragstrip { display: none !important; }
+
+/* the bottom bar is always present — nothing to hover with */
+#bottombar { opacity: 1 !important; }
+.tab { padding: 12px 16px; font-size: 15px; }
+
+/* bookshelf breathing room on a narrow screen */
+#bookshelf-view { padding: 20px 18px 60px; }
+#shelf-header h1 { font-size: 22px; letter-spacing: 6px; margin-left: 56px; }
+
+/* generous tap targets */
+button, .b-refresh, #nav-add, #back-to-shelf { min-height: 40px; }
