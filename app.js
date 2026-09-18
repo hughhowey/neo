@@ -453,11 +453,17 @@ async function paintedArt(meta) {
   if (!art || art.status !== 'done' || !art.file) return null;
   const key = meta.id + '/' + art.file;
   if (artCache.has(key)) return artCache.get(key);
-  const data = await window.neo.readCover(meta.id, art.file);
-  if (!data) return null;
-  const entry = await NeoCovers.fitImage(key, `data:${data.mime};base64,${data.base64}`);
-  if (entry) artCache.set(key, entry);
-  return entry;
+  try {
+    const data = await window.neo.readCover(meta.id, art.file);
+    if (!data) { window.neo.logError('painted cover missing on disk: ' + key); return null; }
+    const entry = await NeoCovers.fitImage(key, `data:${data.mime};base64,${data.base64}`);
+    if (!entry) { window.neo.logError('painted cover would not decode: ' + key); return null; }
+    artCache.set(key, entry);
+    return entry;
+  } catch (err) {
+    window.neo.logError('painted cover: ' + (err && err.stack || err));
+    return null;
+  }
 }
 
 // Which layers a book has to show, and which one is showing. Nothing is
@@ -480,12 +486,16 @@ function dressTile(el, meta) {
     el.style.background = `#1d1d1d url("${coverUrl(meta)}") center / cover no-repeat`;
     return;
   }
-  // the abstract shows instantly; painted art replaces it once decoded
+  // the abstract shows instantly; painted art replaces it once decoded.
+  // The tile may not be on the page yet when the art arrives (the shelf
+  // attaches tiles after reading every book), so the only staleness check
+  // is whether this tile has been dressed again since we started.
   NeoCovers.dress(el, NeoCovers.plan(meta));
   el.classList.toggle('cv-painting', !!(meta.coverArt && meta.coverArt.status === 'pending'));
+  const token = (el._dressToken = (el._dressToken || 0) + 1);
   if (mode !== 'painted') return;
   paintedArt(meta).then((art) => {
-    if (art && el.isConnected && coverMode(meta) === 'painted') NeoCovers.dress(el, NeoCovers.plan(meta, art));
+    if (art && el._dressToken === token) NeoCovers.dress(el, NeoCovers.plan(meta, art));
   });
 }
 
@@ -655,7 +665,13 @@ async function requestPaint(meta, text) {
     text = parts.join('\n\n');
   }
   const opts = library.coverArt || {};
-  const res = await window.neo.paintCover(meta.id, text, { textModel: opts.textModel, imageModel: opts.imageModel });
+  let res = null;
+  try {
+    res = await window.neo.paintCover(meta.id, text, { textModel: opts.textModel, imageModel: opts.imageModel });
+  } catch (err) {
+    window.neo.logError('paint request: ' + (err && err.stack || err));
+    res = { error: String((err && err.message) || err) };
+  }
   // the writer may have moved on — write to whichever copy of the meta is live
   const live = (book && book.id === meta.id) ? book : (await window.neo.readBookMeta(meta.id)) || meta;
   if (res && res.file) {
@@ -3557,6 +3573,7 @@ function openStats(focus) {
     library.writingStyle = bd.querySelector('#st-style').value;
     const key = bd.querySelector('#st-key').value.trim();
     if (key === 'remove') await window.neo.setSecret('openai', '');
+    else if (key && !/^sk-[A-Za-z0-9_-]{20,}$/.test(key)) toast('That doesn\u2019t look like an OpenAI key (they start with sk-) \u2014 not saved', 6000);
     else if (key) await window.neo.setSecret('openai', key);
     library.coverArt = {
       auto: bd.querySelector('#st-auto').checked,
