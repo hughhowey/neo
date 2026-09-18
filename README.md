@@ -41,9 +41,7 @@ Outline chapters and sections in the Outline tab; section notes appear in the ma
 
 **Cover Art** 
 
-Whether you already have a cover in mind, want to whip up something in Canva or Photoshop, or are okay with using AI art either as placeholder or final file, NEO is happy to accept it. Drag your 2:3 ratio art right on the book in your bookshelf. I've always done this as a habit, having the cover art early. Seeing the book inspires me to work on it daily and make it better!
-
-Until then, every book gets a cover anyway. A new book is dressed in a seeded abstract (six art styles, six type templates, real typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint an abstract cover from the text: add an OpenAI API key under Goals & Settings, and the painting happens quietly in the background for about a penny a picture. The key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to an image model. The ↻ on any book re-rolls its type and colours, or paints it again.
+Every book gets a cover! New books are dressed in a seeded abstract (six art styles, six type templates, typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint an abstract cover from the text. This is a bit more work but totally worth it. Get an OpenAI API key from their website and paste it into Goals & Settings. The art is generated in the background for about a penny a picture. (These are not meant for publication, just writing inspiration!) The API key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to a gen-AI model. The ↻ on any book re-rolls its type and colors, or paints it again. And you can always switch back and forth from the seeded modern look to the painted variety.
 
 **Goals and momentum** 
 
