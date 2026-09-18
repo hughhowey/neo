@@ -23,7 +23,25 @@
   }
 
   async function writeText(path, data) {
-    await FS().writeFile({ path, directory: DIR, data, encoding: 'utf8', recursive: true });
+    try {
+      await FS().writeFile({ path, directory: DIR, data, encoding: 'utf8', recursive: true });
+    } catch (err) {
+      showPermissionHelp();
+      throw err;
+    }
+  }
+
+  let permissionHelpShown = false;
+  function showPermissionHelp() {
+    if (permissionHelpShown) return;
+    permissionHelpShown = true;
+    const bd = document.createElement('div');
+    bd.style.cssText = 'position:fixed;inset:0;background:#191919;color:#d6d2c6;z-index:9999;' +
+      'display:flex;align-items:center;justify-content:center;padding:40px;text-align:center';
+    bd.innerHTML = '<div style="max-width:420px"><h2 style="letter-spacing:5px">NEO POCKET</h2>' +
+      '<p style="line-height:1.6;margin-top:16px">Pocket can see the NEO Library folder but Android is blocking it from reading files that other apps (like Syncthing) created.</p>' +
+      '<p style="line-height:1.6;color:#999;margin-top:12px">Open Android Settings → Apps → NEO Pocket → Permissions, and allow <b>All files access</b>. Then reopen Pocket.</p></div>';
+    document.body.appendChild(bd);
   }
 
   async function readJSONFile(path, fallback) {
@@ -36,22 +54,26 @@
 
   const bookDir = (bookId) => p(bookId);
 
-  // if the folder isn't reachable, show one honest screen instead of a broken app
+  // The honest access test: reading a file another app created. An app can
+  // always touch its OWN files without the big permission — which is exactly
+  // how a too-gentle test lies about a half-broken setup.
   async function checkAccess() {
     try {
       await ensureDir(ROOT);
-      await writeText(p('.pocket-touch'), String(Date.now()));
-      try { await FS().deleteFile({ path: p('.pocket-touch'), directory: DIR }); } catch { /* fine */ }
+      let names = [];
+      try {
+        const ls = await FS().readdir({ path: ROOT, directory: DIR });
+        names = (ls.files || []).map((f) => (f && f.name) || f);
+      } catch { /* fall through to the write test */ }
+      if (names.includes('library.json')) {
+        await readText(p('library.json')); // the file that matters, whoever made it
+      } else {
+        await FS().writeFile({ path: p('.pocket-touch'), directory: DIR, data: String(Date.now()), encoding: 'utf8', recursive: true });
+        try { await FS().deleteFile({ path: p('.pocket-touch'), directory: DIR }); } catch { /* fine */ }
+      }
       return true;
     } catch (err) {
-      const bd = document.createElement('div');
-      bd.style.cssText = 'position:fixed;inset:0;background:#191919;color:#d6d2c6;z-index:9999;' +
-        'display:flex;align-items:center;justify-content:center;padding:40px;text-align:center';
-      bd.innerHTML = '<div style="max-width:420px"><h2 style="letter-spacing:5px">NEO POCKET</h2>' +
-        '<p style="line-height:1.6;margin-top:16px">Pocket needs permission to reach the NEO Library folder in your Documents.</p>' +
-        '<p style="line-height:1.6;color:#999;margin-top:12px">Open Android Settings → Apps → NEO Pocket → Permissions, ' +
-        'and allow <b>All files access</b> (or Files &amp; media). Then reopen Pocket.</p></div>';
-      document.body.appendChild(bd);
+      showPermissionHelp();
       return false;
     }
   }
