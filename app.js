@@ -667,7 +667,7 @@ async function requestPaint(meta, text) {
   const opts = library.coverArt || {};
   let res = null;
   try {
-    res = await window.neo.paintCover(meta.id, text, { textModel: opts.textModel, imageModel: opts.imageModel });
+    res = await window.neo.paintCover(meta.id, text, { textModel: opts.textModel, imageModel: opts.imageModel, quality: opts.quality });
   } catch (err) {
     window.neo.logError('paint request: ' + (err && err.stack || err));
     res = { error: String((err && err.message) || err) };
@@ -711,7 +711,7 @@ async function refreshCover(meta, el) {
   options.push({ label: 'New type & colours', desc: mode === 'abstract' ? 'A fresh abstract and a different title style.' : 'Re-sets the title in a different style over the same art.', value: 'reroll' });
   if (hasKey) {
     options.push(enough
-      ? { label: hasPainting(meta) ? 'Paint it again' : 'Paint a cover from the text', desc: 'NEO reads the manuscript and paints a new abstract cover. About a minute, about a penny.', value: 'paint' }
+      ? { label: hasPainting(meta) ? 'Paint it again' : 'Paint a cover from the text', desc: 'NEO reads the manuscript and paints a new cover. About a minute; a few cents.', value: 'paint' }
       : { label: 'Paint a cover from the text', desc: `Once the story passes ${PAINT_AT.toLocaleString()} words.`, value: 'nope' });
   }
   // a plain abstract with nothing else to offer just re-rolls
@@ -3555,6 +3555,11 @@ function openStats(focus) {
         <div class="stats-row">
           <label>Brief <input id="st-tmodel" type="text" spellcheck="false" placeholder="gpt-5-mini" value="${escHtml((library.coverArt && library.coverArt.textModel) || '')}"/></label>
           <label>Paint <input id="st-imodel" type="text" spellcheck="false" placeholder="gpt-image-1-mini" value="${escHtml((library.coverArt && library.coverArt.imageModel) || '')}"/></label>
+          <label>Quality
+            <select id="st-quality">
+              ${['low', 'medium', 'high'].map((q) => `<option value="${q}"${((library.coverArt && library.coverArt.quality) || 'medium') === q ? ' selected' : ''}>${q}</option>`).join('')}
+            </select>
+          </label>
         </div>
       </details>
       <div style="text-align:right;margin-top:14px">
@@ -3566,7 +3571,7 @@ function openStats(focus) {
   window.neo.hasSecret('openai').then((has) => {
     keyNote.textContent = has
       ? 'A key is saved, encrypted, outside your library folder. Paste a new one to replace it; type “remove” to forget it.'
-      : 'Once a story passes 1,000 words, NEO reads it and paints an abstract cover — about a penny a picture. Your key is stored encrypted, outside your library.';
+      : 'Once a story passes 1,000 words, NEO reads it and paints a cover — a few cents a picture. Your key is stored encrypted, outside your library.';
   });
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
@@ -3578,7 +3583,8 @@ function openStats(focus) {
     library.coverArt = {
       auto: bd.querySelector('#st-auto').checked,
       textModel: bd.querySelector('#st-tmodel').value.trim() || undefined,
-      imageModel: bd.querySelector('#st-imodel').value.trim() || undefined
+      imageModel: bd.querySelector('#st-imodel').value.trim() || undefined,
+      quality: bd.querySelector('#st-quality').value
     };
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;

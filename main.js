@@ -324,7 +324,8 @@ ipcMain.handle('cover:paint', (_e, bookId, text, options) => {
         apiKey,
         text: String(text || ''),
         textModel: options && options.textModel,
-        imageModel: options && options.imageModel
+        imageModel: options && options.imageModel,
+        quality: options && options.quality
       });
       // sweep older paintings; the writer's own cover-*.png files are untouched
       for (const f of fs.readdirSync(dir)) {

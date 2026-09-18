@@ -1,7 +1,8 @@
 // NEO — painted covers (main process)
 //
-// Once a story passes a thousand words, NEO reads it and paints a small,
-// textless, abstract cover for the shelf. Two calls to OpenAI: a language
+// Once a story passes a thousand words, NEO reads it and paints a textless
+// cover for the shelf in the manner of a real jacket: a committed style, a
+// scene from the book, dramatic light. Two calls to OpenAI: a language
 // model turns the manuscript into an art director's brief, then an image
 // model paints the brief. The title and author are never in the picture —
 // the shelf sets those in real type on top (see covers.js).
@@ -17,13 +18,18 @@ const OPENAI = 'https://api.openai.com/v1';
 const TEXT_MODELS = ['gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini'];
 const IMAGE_MODELS = ['gpt-image-1-mini', 'gpt-image-1'];
 
-const BRIEF_SYSTEM = `You are an art director briefing an illustrator on a SMALL abstract book-cover image that will be seen mostly as a thumbnail. Read the manuscript excerpt, then reply with ONE paragraph of at most 70 words describing the picture to paint:
-- a palette of two or three colours, named plainly
-- one central motif drawn from the story, reduced to its simplest shape (an object, a landscape, a pattern — never a person or a face)
-- the mood, and a texture (flat, grainy, painterly, misty, etc.)
-Modern, minimal, abstract. Nothing literal or busy. Do not mention the title, the author, any text, lettering, or typography. Reply with the paragraph only.`;
+const BRIEF_SYSTEM = `You are an art director at a major publisher, briefing a cover illustrator. Read the manuscript excerpt and write ONE paragraph of 90 to 130 words describing the image for this book's cover. It must look like a real, commercial book cover — the kind that sells the story at a glance — not an abstract or a logo.
 
-const PAINT_SUFFIX = ' Minimalist modern book-cover art, abstract, a single strong simple composition with generous quiet space in the upper and lower thirds. Absolutely no text, letters, words, numbers, signatures, borders, or logos anywhere in the image. No people, no faces.';
+Decide these, in this order, and state them plainly:
+1. STYLE — commit to one: cinematic photoreal, painterly concept art, retro pulp paperback, vintage engraving or woodcut, noir, mid-century poster, watercolour, etc. Choose what suits the story's genre and tone.
+2. SCENE — one specific moment, place, or object from the manuscript, rendered in full: setting, scale, weather, time of day, and the single most striking detail. A lone figure is welcome (seen from behind, in silhouette, or at a distance — never a close-up face).
+3. LIGHT AND PALETTE — the light source and two or three dominant colours, named plainly.
+4. MOOD — one line.
+5. COMPOSITION — where the subject sits, and which third of the frame (top or bottom) stays calmer so a title can be set there later.
+
+Never describe or request any text, lettering, title, author name, logo, or border. Reply with the paragraph only.`;
+
+const PAINT_SUFFIX = ' Professional book cover illustration, full-bleed, portrait format, dramatic lighting, rich atmosphere, strong focal point, high production value. The image contains absolutely no text, letters, words, numbers, watermarks, signatures, borders, or logos of any kind.';
 
 // Strip a manuscript to the part worth reading: the opening carries the
 // world, the ending carries the weight. ~6,000 words is plenty for a brief.
@@ -89,14 +95,14 @@ async function writeBrief({ apiKey, text, model }) {
   });
 }
 
-async function paint({ apiKey, brief, model }) {
+async function paint({ apiKey, brief, model, quality }) {
   return withModels(model, IMAGE_MODELS, async (m) => {
     const body = await call('/images/generations', apiKey, {
       model: m,
       prompt: brief + PAINT_SUFFIX,
       n: 1,
       size: '1024x1536',
-      quality: 'low',
+      quality: quality || 'medium',
       output_format: 'jpeg'
     });
     const b64 = body.data && body.data[0] && body.data[0].b64_json;
@@ -106,9 +112,9 @@ async function paint({ apiKey, brief, model }) {
 }
 
 // The whole job: text in, { buffer, brief, textModel, imageModel } out.
-async function paintCover({ apiKey, text, textModel, imageModel }) {
+async function paintCover({ apiKey, text, textModel, imageModel, quality }) {
   const b = await writeBrief({ apiKey, text, model: textModel });
-  const p = await paint({ apiKey, brief: b.result, model: imageModel });
+  const p = await paint({ apiKey, brief: b.result, model: imageModel, quality });
   return { buffer: p.result, brief: b.result, textModel: b.model, imageModel: p.model };
 }
 
