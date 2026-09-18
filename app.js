@@ -2708,10 +2708,12 @@ function updateCounters() {
       : `${book.chapterOrder.length} chapters`);
   // cache for the bookshelf progress bar
   if (book.wordCount !== total) {
+    // only a true crossing earns a painting — a story that was already long
+    // before NEO could paint keeps its abstract until the writer asks
+    const before = typeof book.wordCount === 'number' ? book.wordCount : total;
     book.wordCount = total;
     scheduleMetaSave();
-    // crossing a thousand words earns the story a painted cover
-    if (total >= PAINT_AT && !(library.coverArt && library.coverArt.auto === false) && paintable(book)) {
+    if (before < PAINT_AT && total >= PAINT_AT && !(library.coverArt && library.coverArt.auto === false) && paintable(book)) {
       requestPaint(book, bookPlainText());
     }
   }
