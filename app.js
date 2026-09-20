@@ -641,11 +641,12 @@ function bookPlainText() {
 
 // Paint the open book, or a book on the shelf (text is read from disk then).
 async function requestPaint(meta, text) {
-  if (!(await window.neo.hasSecret('openai'))) {
+  const provider = coverProvider();
+  if (!(await window.neo.hasSecret(provider))) {
     if (!library.coverArtNudged) {
       library.coverArtNudged = true;
       await window.neo.writeLibrary(library);
-      toast('This story just passed 1,000 words — add an OpenAI key under Goals & Settings and NEO will paint it a cover.', 8000);
+      toast('This story just passed 1,000 words \u2014 add an API key under File \u2192 Cover Art\u2026 and NEO will paint it a cover.', 8000);
     }
     return;
   }
@@ -664,10 +665,11 @@ async function requestPaint(meta, text) {
     }
     text = parts.join('\n\n');
   }
-  const opts = library.coverArt || {};
+  const cs = coverSettings();
+  const mine = (cs.models && cs.models[provider]) || {};
   let res = null;
   try {
-    res = await window.neo.paintCover(meta.id, text, { textModel: opts.textModel, imageModel: opts.imageModel, quality: opts.quality });
+    res = await window.neo.paintCover(meta.id, text, { provider, textModel: mine.text, imageModel: mine.image, quality: cs.quality });
   } catch (err) {
     window.neo.logError('paint request: ' + (err && err.stack || err));
     res = { error: String((err && err.message) || err) };
@@ -703,7 +705,7 @@ function markPainting(bookId, on) {
 async function refreshCover(meta, el) {
   const mode = coverMode(meta);
   const enough = (meta.wordCount || 0) >= PAINT_AT;
-  const hasKey = await window.neo.hasSecret('openai');
+  const hasKey = await window.neo.hasSecret(coverProvider());
   const options = [];
   if (meta.coverImage && mode !== 'image') options.push({ label: 'Show your cover art', desc: 'The image you gave this book.', value: 'image' });
   if (hasPainting(meta) && mode !== 'painted') options.push({ label: 'Show NEO\u2019s painting', desc: 'The cover painted from the text.', value: 'painted' });
@@ -3510,7 +3512,106 @@ function statsChartSvg() {
   </div>`;
 }
 
-function openStats(focus) {
+/* ================================================================== */
+/*  COVER ART SETTINGS (File → Cover Art…)                             */
+/* ================================================================== */
+
+// One key per provider. The brief and the painting always come from the
+// same provider, so a writer only ever needs one account.
+const COVER_PROVIDERS = {
+  openai: { name: 'OpenAI', keyHint: 'sk-…', keyTest: /^sk-[A-Za-z0-9_-]{20,}$/, where: 'platform.openai.com → API keys', text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: 'a few cents a picture' },
+  gemini: { name: 'Google Gemini', keyHint: 'AIza…', keyTest: /^AIza[A-Za-z0-9_-]{20,}$/, where: 'aistudio.google.com → Get API key', text: 'gemini-2.5-flash', image: 'gemini-2.5-flash-image', quality: false, cost: 'free tier available, rate-limited' },
+  xai: { name: 'xAI Grok', keyHint: 'xai-…', keyTest: /^xai-[A-Za-z0-9_-]{20,}$/, where: 'console.x.ai → API keys', text: 'grok-4-fast', image: 'grok-2-image', quality: false, cost: 'a few cents a picture' }
+};
+const coverSettings = () => library.coverArt || {};
+const coverProvider = () => (COVER_PROVIDERS[coverSettings().provider] ? coverSettings().provider : 'openai');
+
+function openCoverArt() {
+  const cs = coverSettings();
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  const provOptions = Object.entries(COVER_PROVIDERS).map(([id, p]) =>
+    `<option value="${id}"${coverProvider() === id ? ' selected' : ''}>${p.name}</option>`).join('');
+  bd.innerHTML = `
+    <div class="modal" style="width:540px">
+      <h2 style="font-size:17px">Cover art</h2>
+      <p>Every book gets a cover on the shelf: an abstract with the title set in type. With a key from one of these providers, NEO can also read a story once it passes ${PAINT_AT.toLocaleString()} words and paint a cover from the text. Paintings stay on your shelf — exports never include them.</p>
+      <div class="stats-row">
+        <label>Provider <select id="ca-provider">${provOptions}</select></label>
+        <label class="st-check"><input id="ca-auto" type="checkbox"${cs.auto === false ? '' : ' checked'}/> paint at ${PAINT_AT.toLocaleString()} words</label>
+      </div>
+      <div class="stats-row st-covers">
+        <label>API key <input id="ca-key" type="password" autocomplete="off" spellcheck="false" style="width:300px"/></label>
+      </div>
+      <p class="soft" id="ca-note" style="margin:-6px 0 12px;font-size:12px"></p>
+      <details class="st-advanced">
+        <summary class="soft">Models</summary>
+        <div class="stats-row">
+          <label>Brief <input id="ca-tmodel" type="text" spellcheck="false"/></label>
+          <label>Paint <input id="ca-imodel" type="text" spellcheck="false"/></label>
+          <label id="ca-quality-wrap">Quality
+            <select id="ca-quality">
+              ${['low', 'medium', 'high'].map((q) => `<option value="${q}"${(cs.quality || 'medium') === q ? ' selected' : ''}>${q}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <p class="soft" style="font-size:12px;margin:0 0 6px">Leave blank for NEO\u2019s defaults. Names drift; if a provider retires one, NEO tries its own list before giving up.</p>
+      </details>
+      <div style="text-align:right;margin-top:14px">
+        <button class="m-cancel btn-quiet" style="margin-right:10px">Cancel</button>
+        <button class="m-ok btn-gold">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  const sel = bd.querySelector('#ca-provider');
+  const key = bd.querySelector('#ca-key');
+  const note = bd.querySelector('#ca-note');
+  const models = (cs.models || {});
+  // per-provider fields: key placeholder, stored model overrides, quality
+  const showProvider = async () => {
+    const id = sel.value, p = COVER_PROVIDERS[id];
+    key.value = '';
+    key.placeholder = `${p.name} key (${p.keyHint})`;
+    bd.querySelector('#ca-tmodel').value = (models[id] && models[id].text) || '';
+    bd.querySelector('#ca-tmodel').placeholder = p.text;
+    bd.querySelector('#ca-imodel').value = (models[id] && models[id].image) || '';
+    bd.querySelector('#ca-imodel').placeholder = p.image;
+    bd.querySelector('#ca-quality-wrap').style.display = p.quality ? '' : 'none';
+    const has = await window.neo.hasSecret(id);
+    if (sel.value !== id) return;
+    note.textContent = has
+      ? `A ${p.name} key is saved, encrypted, outside your library folder. Paste a new one to replace it, or type \u201cremove\u201d to forget it.`
+      : `Get a key at ${p.where} (${p.cost}). It\u2019s stored encrypted on this computer and only ever sent to ${p.name}.`;
+  };
+  sel.onchange = showProvider;
+  showProvider();
+  const done = () => bd.remove();
+  bd.querySelector('.m-cancel').onclick = done;
+  bd.querySelector('.m-ok').onclick = async () => {
+    const id = sel.value, p = COVER_PROVIDERS[id];
+    const k = key.value.trim();
+    if (k === 'remove') await window.neo.setSecret(id, '');
+    else if (k && !p.keyTest.test(k)) { toast(`That doesn\u2019t look like a ${p.name} key (they start with ${p.keyHint.replace('…', '')}) \u2014 not saved`, 6000); return; }
+    else if (k) await window.neo.setSecret(id, k);
+    models[id] = {
+      text: bd.querySelector('#ca-tmodel').value.trim() || undefined,
+      image: bd.querySelector('#ca-imodel').value.trim() || undefined
+    };
+    library.coverArt = {
+      provider: id,
+      auto: bd.querySelector('#ca-auto').checked,
+      quality: bd.querySelector('#ca-quality').value,
+      models
+    };
+    await window.neo.writeLibrary(library);
+    done();
+    if (!(await window.neo.hasSecret(id))) toast(`Saved. Add a ${p.name} key to start painting.`, 5000);
+  };
+  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(); } });
+  key.focus();
+}
+
+function openStats() {
   const hasBook = !!book;
   const today = hasBook ? (book.dailyCounts || {})[todayStr()] : null;
   const wordsToday = today ? today.end - today.start : 0;
@@ -3545,49 +3646,14 @@ function openStats(focus) {
           </select>
         </label>
       </div>
-      <div class="stats-row st-covers">
-        <label>Painted covers
-          <input id="st-key" type="password" autocomplete="off" spellcheck="false" placeholder="OpenAI API key (sk-…)" style="width:230px"/>
-        </label>
-        <label class="st-check"><input id="st-auto" type="checkbox"${!(library.coverArt && library.coverArt.auto === false) ? ' checked' : ''}/> paint at 1,000 words</label>
-      </div>
-      <p class="soft" id="st-key-note" style="margin:-8px 0 10px;font-size:12px">${''}</p>
-      <details class="st-advanced">
-        <summary class="soft">Models</summary>
-        <div class="stats-row">
-          <label>Brief <input id="st-tmodel" type="text" spellcheck="false" placeholder="gpt-5-mini" value="${escHtml((library.coverArt && library.coverArt.textModel) || '')}"/></label>
-          <label>Paint <input id="st-imodel" type="text" spellcheck="false" placeholder="gpt-image-1-mini" value="${escHtml((library.coverArt && library.coverArt.imageModel) || '')}"/></label>
-          <label>Quality
-            <select id="st-quality">
-              ${['low', 'medium', 'high'].map((q) => `<option value="${q}"${((library.coverArt && library.coverArt.quality) || 'medium') === q ? ' selected' : ''}>${q}</option>`).join('')}
-            </select>
-          </label>
-        </div>
-      </details>
       <div style="text-align:right;margin-top:14px">
         <button class="m-ok btn-gold">Done</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
-  const keyNote = bd.querySelector('#st-key-note');
-  window.neo.hasSecret('openai').then((has) => {
-    keyNote.textContent = has
-      ? 'A key is saved, encrypted, outside your library folder. Paste a new one to replace it; type “remove” to forget it.'
-      : 'Once a story passes 1,000 words, NEO reads it and paints a cover — a few cents a picture. Your key is stored encrypted, outside your library.';
-  });
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
     library.writingStyle = bd.querySelector('#st-style').value;
-    const key = bd.querySelector('#st-key').value.trim();
-    if (key === 'remove') await window.neo.setSecret('openai', '');
-    else if (key && !/^sk-[A-Za-z0-9_-]{20,}$/.test(key)) toast('That doesn\u2019t look like an OpenAI key (they start with sk-) \u2014 not saved', 6000);
-    else if (key) await window.neo.setSecret('openai', key);
-    library.coverArt = {
-      auto: bd.querySelector('#st-auto').checked,
-      textModel: bd.querySelector('#st-tmodel').value.trim() || undefined,
-      imageModel: bd.querySelector('#st-imodel').value.trim() || undefined,
-      quality: bd.querySelector('#st-quality').value
-    };
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
       scheduleMetaSave();
@@ -3598,7 +3664,6 @@ function openStats(focus) {
   };
   bd.querySelector('.m-ok').onclick = close;
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
-  if (focus === 'covers') bd.querySelector('#st-key').focus();
   if (hasBook) {
     bd.querySelector('#st-sprint-btn').onclick = () => {
       if (sprint && !sprint.done) {
@@ -3899,6 +3964,8 @@ function buildHtml(data, opts = {}) {
 <html><head><meta charset="utf-8"><title>${d.title}</title>
 <style>
   body { font-family: Georgia, serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
+  .coverpage { text-align: center; margin: 0 0 40px; page-break-after: always; }
+  .coverpage img { display: block; margin: 0 auto; width: 100%; max-width: 620px; max-height: 95vh; object-fit: contain; }
   .titlepage { text-align: center; margin: 30vh 0 20vh; page-break-after: always; }
   .titlepage h1 { font-size: 30pt; margin: 0; }
   .titlepage .sub { font-style: italic; color: #555; }
@@ -3913,6 +3980,7 @@ function buildHtml(data, opts = {}) {
   .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .prov { margin-top: 80px; text-align: center; color: #999; font-size: 9pt; }
 </style></head><body>
+${opts.cover ? `<div class="coverpage"><img src="data:${opts.cover.mime};base64,${opts.cover.base64}" alt="Cover"/></div>` : ''}
 <div class="titlepage"><h1>${d.title}</h1>
 ${d.subtitle ? `<p class="sub">${d.subtitle}</p>` : ''}
 <p class="auth">${d.author}</p></div>
@@ -4017,43 +4085,17 @@ function buildDocxEntries(data) {
 
 /* ---------- EPUB (KDP-friendly: EPUB 3, nav + NCX TOC, cover image) ---------- */
 
-function makeCoverJpeg(d) {
-  // 1600x2560 per KDP's recommended cover dimensions
-  const W = 1600, H = 2560;
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  // reuse the bookshelf gradient hues
-  const seed = String(d.coverSeed || d.id);
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const hue1 = h % 360, hue2 = (hue1 + 40 + (h >> 8) % 140) % 360;
-  const g = ctx.createLinearGradient(0, 0, W * 0.4, H);
-  g.addColorStop(0, `hsl(${hue1}, 55%, 38%)`);
-  g.addColorStop(1, `hsl(${hue2}, 60%, 22%)`);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  // title, wrapped
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 18;
-  ctx.font = 'bold 150px Georgia';
-  const words = (d.title || 'Untitled').split(/\s+/);
-  const lines = [];
-  let line = '';
-  for (const w of words) {
-    const test = line ? line + ' ' + w : w;
-    if (ctx.measureText(test).width > W - 300 && line) { lines.push(line); line = w; }
-    else line = test;
+// The cover that travels with an export: the writer's own image if they
+// gave one, otherwise the shelf's abstract with the title set in type,
+// rendered at KDP size. NEO's paintings never leave the shelf.
+async function exportCover(d) {
+  if (d.coverImage) {
+    const c = await window.neo.readCover(d.id, d.coverImage);
+    if (c) return { base64: c.base64, mime: c.mime, ext: c.ext };
   }
-  lines.push(line);
-  let y = H * 0.32;
-  for (const l of lines) { ctx.fillText(l, W / 2, y); y += 175; }
-  ctx.font = '72px Georgia';
-  ctx.fillText((d.author || '').toUpperCase(), W / 2, H * 0.82);
-  return canvas.toDataURL('image/jpeg', 0.86).split(',')[1];
+  await NeoCovers.ready;
+  const url = NeoCovers.renderFull(d).toDataURL('image/jpeg', 0.9);
+  return { base64: url.split(',')[1], mime: 'image/jpeg', ext: 'jpg' };
 }
 
 function chapterXhtml(ch, d) {
@@ -4088,19 +4130,11 @@ async function buildEpubEntries(data) {
   const uuid = 'urn:uuid:neo-' + d.id;
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
-  // real cover art when the book has it; the generated gradient otherwise
-  let coverName = 'cover.jpg';
-  let coverMime = 'image/jpeg';
-  let coverContent = null;
-  if (d.coverImage) {
-    const c = await window.neo.readCover(d.id, d.coverImage);
-    if (c) {
-      coverName = 'cover.' + c.ext;
-      coverMime = c.mime;
-      coverContent = c.base64;
-    }
-  }
-  if (!coverContent) coverContent = makeCoverJpeg(d);
+  // real cover art when the book has it; the shelf's cover otherwise
+  const cover = await exportCover(d);
+  const coverName = 'cover.' + cover.ext;
+  const coverMime = cover.mime;
+  const coverContent = cover.base64;
   const chItems = chapters.map((ch) =>
     `<item id="ch${ch.num}" href="ch${ch.num}.xhtml" media-type="application/xhtml+xml"/>`).join('\n');
   const chSpine = chapters.map((ch) => `<itemref idref="ch${ch.num}"/>`).join('\n');
@@ -4251,7 +4285,7 @@ async function exportShelfAnthology(shelf) {
   let payload;
   if (format === 'docx') payload = { format, defaultName, zipEntries: buildDocxEntries(data) };
   else if (format === 'epub') payload = { format, defaultName, zipEntries: await buildEpubEntries(data) };
-  else payload = { format: 'pdf', defaultName, content: buildHtml(data) };
+  else payload = { format: 'pdf', defaultName, content: buildHtml(data, { cover: await exportCover(data) }) };
   const saved = await window.neo.exportSave(payload);
   if (saved) toast(`Anthology of ${shelf.bookIds.length} works exported: ` + saved.split('/').pop(), 6000);
 }
@@ -4263,7 +4297,9 @@ async function doExport(format) {
   let payload;
   if (format === 'docx') payload = { format, defaultName, zipEntries: buildDocxEntries() };
   else if (format === 'epub') payload = { format, defaultName, zipEntries: await buildEpubEntries() };
-  else payload = { format, defaultName, content: format === 'txt' ? buildTxt() : format === 'md' ? buildMd() : buildHtml() };
+  else if (format === 'txt') payload = { format, defaultName, content: buildTxt() };
+  else if (format === 'md') payload = { format, defaultName, content: buildMd() };
+  else payload = { format, defaultName, content: buildHtml(null, { cover: await exportCover(bookExportData()) }) };
   const saved = await window.neo.exportSave(payload);
   if (saved) toast('Exported: ' + saved.split('/').pop());
 }
@@ -4397,7 +4433,8 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'spellcheck') toggleSpellcheck();
   if (msg.type === 'typewriter') toggleTypewriter();
   if (msg.type === 'import') importBooks();
-  if (msg.type === 'stats') openStats(msg.focus);
+  if (msg.type === 'stats') openStats();
+  if (msg.type === 'coverArt') openCoverArt();
   if (msg.type === 'align') {
     applyAlign(msg.value);
   }

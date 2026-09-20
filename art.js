@@ -2,21 +2,17 @@
 //
 // Once a story passes a thousand words, NEO reads it and paints a textless
 // cover for the shelf in the manner of a real jacket: a committed style, a
-// scene from the book, dramatic light. Two calls to OpenAI: a language
-// model turns the manuscript into an art director's brief, then an image
-// model paints the brief. The title and author are never in the picture —
-// the shelf sets those in real type on top (see covers.js).
+// scene from the book, dramatic light. Two calls to the writer's chosen
+// provider: a language model turns the manuscript into an art director's
+// brief, then an image model paints the brief. The title and author are
+// never in the picture — the shelf sets those in real type on top (see
+// covers.js). Paintings live on the shelf only; exports never carry them.
 //
-// Everything here is swappable: `writeBrief` and `paint` are the whole
-// provider surface, so another vendor is a matter of replacing two functions.
+// Three providers, one key each: OpenAI, Google Gemini, xAI Grok. Each is a
+// pair of functions — writeBrief and paint — so adding a fourth is a matter
+// of writing two more.
 
 'use strict';
-
-const OPENAI = 'https://api.openai.com/v1';
-
-// Model names drift; the first that answers wins. Settings can override.
-const TEXT_MODELS = ['gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini'];
-const IMAGE_MODELS = ['gpt-image-1-mini', 'gpt-image-1'];
 
 const BRIEF_SYSTEM = `You are an art director at a major publisher, briefing a cover illustrator. Read the manuscript excerpt and write ONE paragraph of 90 to 130 words describing the image for this book's cover. It must look like a real, commercial book cover — the kind that sells the story at a glance — not an abstract or a logo.
 
@@ -39,22 +35,27 @@ function excerpt(text) {
   return words.slice(0, 4500).join(' ') + '\n\n[…]\n\n' + words.slice(-1500).join(' ');
 }
 
+// ---------------------------------------------------------------------------
+// HTTP plumbing shared by every provider
+// ---------------------------------------------------------------------------
+
 function isModelError(status, body) {
-  const code = body && body.error && (body.error.code || body.error.type || '');
-  const msg = body && body.error && body.error.message || '';
-  return status === 404 || /model/i.test(code) || /model|not (found|supported|exist)/i.test(msg);
+  const code = body && body.error && (body.error.code || body.error.type || body.error.status || '');
+  const msg = (body && body.error && body.error.message) || '';
+  return status === 404 || /model/i.test(String(code)) || /model|not (found|supported|exist)|deprecated/i.test(msg);
 }
 
-async function call(path, apiKey, payload) {
-  const res = await fetch(OPENAI + path, {
+async function post(url, headers, payload) {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(payload)
   });
   let body = null;
   try { body = await res.json(); } catch { /* non-JSON error page */ }
   if (!res.ok) {
-    const err = new Error((body && body.error && body.error.message) || ('OpenAI returned ' + res.status));
+    const msg = (body && body.error && (body.error.message || body.error.msg)) || (body && body.message);
+    const err = new Error(msg || ('The provider returned ' + res.status));
     err.status = res.status;
     err.modelProblem = isModelError(res.status, body);
     throw err;
@@ -77,45 +78,124 @@ async function withModels(preferred, defaults, fn) {
   throw lastErr || new Error('No model available');
 }
 
-async function writeBrief({ apiKey, text, model }) {
-  return withModels(model, TEXT_MODELS, async (m) => {
-    const payload = {
-      model: m,
-      messages: [
-        { role: 'system', content: BRIEF_SYSTEM },
-        { role: 'user', content: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }
-      ],
-      max_completion_tokens: 800
-    };
-    if (/^gpt-5|^o\d/.test(m)) payload.reasoning_effort = 'low';
-    const body = await call('/chat/completions', apiKey, payload);
-    const out = body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
-    if (!out || !out.trim()) throw new Error('The model returned an empty brief');
-    return out.trim();
-  });
+// ---------------------------------------------------------------------------
+// OpenAI — and anything that speaks its dialect (xAI does)
+// ---------------------------------------------------------------------------
+
+function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, tokenParam }) {
+  return {
+    async writeBrief({ apiKey, text, model }) {
+      return withModels(model, textModels, async (m) => {
+        const payload = {
+          model: m,
+          messages: [
+            { role: 'system', content: BRIEF_SYSTEM },
+            { role: 'user', content: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }
+          ],
+          [tokenParam || 'max_completion_tokens']: 800
+        };
+        if (/^gpt-5|^o\d/.test(m)) payload.reasoning_effort = 'low';
+        const body = await post(base + '/chat/completions', { Authorization: 'Bearer ' + apiKey }, payload);
+        const out = body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
+        if (!out || !out.trim()) throw new Error('The model returned an empty brief');
+        return out.trim();
+      });
+    },
+    async paint({ apiKey, brief, model, quality }) {
+      return withModels(model, imageModels, async (m) => {
+        const payload = { model: m, prompt: brief + PAINT_SUFFIX, n: 1, ...imageExtras };
+        if (sizeParams) Object.assign(payload, { size: '1024x1536', quality: quality || 'medium' });
+        const body = await post(base + '/images/generations', { Authorization: 'Bearer ' + apiKey }, payload);
+        const b64 = body.data && body.data[0] && body.data[0].b64_json;
+        if (!b64) throw new Error('The image model returned no picture');
+        return { buffer: Buffer.from(b64, 'base64'), ext: 'jpg' };
+      });
+    }
+  };
 }
 
-async function paint({ apiKey, brief, model, quality }) {
-  return withModels(model, IMAGE_MODELS, async (m) => {
-    const body = await call('/images/generations', apiKey, {
-      model: m,
-      prompt: brief + PAINT_SUFFIX,
-      n: 1,
-      size: '1024x1536',
-      quality: quality || 'medium',
-      output_format: 'jpeg'
+const openai = openaiStyle({
+  base: 'https://api.openai.com/v1',
+  textModels: ['gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini'],
+  imageModels: ['gpt-image-1-mini', 'gpt-image-1'],
+  imageExtras: { output_format: 'jpeg' },
+  sizeParams: true
+});
+
+// xAI's image endpoint takes no size or quality; it returns a landscape
+// frame that the shelf crops to portrait. Fine for a thumbnail.
+const xai = openaiStyle({
+  base: 'https://api.x.ai/v1',
+  textModels: ['grok-4-fast', 'grok-4', 'grok-3-mini', 'grok-3'],
+  imageModels: ['grok-2-image-1212', 'grok-2-image'],
+  imageExtras: { response_format: 'b64_json' },
+  sizeParams: false,
+  tokenParam: 'max_tokens'
+});
+
+// ---------------------------------------------------------------------------
+// Google Gemini — one AI Studio key for both the brief and the picture
+// ---------------------------------------------------------------------------
+
+const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models/';
+
+const gemini = {
+  textModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
+  imageModels: ['gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview', 'gemini-2.0-flash-preview-image-generation'],
+
+  async writeBrief({ apiKey, text, model }) {
+    return withModels(model, gemini.textModels, async (m) => {
+      const body = await post(`${GEMINI}${m}:generateContent`, { 'x-goog-api-key': apiKey }, {
+        systemInstruction: { parts: [{ text: BRIEF_SYSTEM }] },
+        contents: [{ role: 'user', parts: [{ text: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }] }],
+        generationConfig: { maxOutputTokens: 800 }
+      });
+      const parts = body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts;
+      const out = (parts || []).map((p) => p.text || '').join('').trim();
+      if (!out) throw new Error('The model returned an empty brief');
+      return out;
     });
-    const b64 = body.data && body.data[0] && body.data[0].b64_json;
-    if (!b64) throw new Error('The image model returned no picture');
-    return Buffer.from(b64, 'base64');
-  });
+  },
+
+  async paint({ apiKey, brief, model }) {
+    return withModels(model, gemini.imageModels, async (m) => {
+      const ask = (withAspect) => post(`${GEMINI}${m}:generateContent`, { 'x-goog-api-key': apiKey }, {
+        contents: [{ role: 'user', parts: [{ text: brief + PAINT_SUFFIX }] }],
+        generationConfig: withAspect
+          ? { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '2:3' } }
+          : { responseModalities: ['IMAGE', 'TEXT'] }
+      });
+      let body;
+      try {
+        body = await ask(true);
+      } catch (err) {
+        // older image models reject imageConfig; ask again the plain way
+        if (err.status === 400 && !err.modelProblem) body = await ask(false);
+        else throw err;
+      }
+      const parts = (body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts) || [];
+      const img = parts.find((p) => p.inlineData && p.inlineData.data);
+      if (!img) {
+        const why = body.promptFeedback && body.promptFeedback.blockReason;
+        throw new Error(why ? 'Gemini declined to paint this one (' + why + ')' : 'The image model returned no picture');
+      }
+      const mime = img.inlineData.mimeType || 'image/png';
+      return { buffer: Buffer.from(img.inlineData.data, 'base64'), ext: /jpe?g/.test(mime) ? 'jpg' : 'png' };
+    });
+  }
+};
+
+// ---------------------------------------------------------------------------
+
+const PROVIDERS = { openai, gemini, xai };
+
+// The whole job: text in, { buffer, ext, brief, textModel, imageModel } out.
+async function paintCover({ provider, apiKey, text, textModel, imageModel, quality }) {
+  const p = PROVIDERS[provider || 'openai'];
+  if (!p) throw new Error('Unknown cover-art provider: ' + provider);
+  const b = await p.writeBrief({ apiKey, text, model: textModel });
+  const i = await p.paint({ apiKey, brief: b.result, model: imageModel, quality });
+  return { buffer: i.result.buffer, ext: i.result.ext, brief: b.result, textModel: b.model, imageModel: i.model };
 }
 
-// The whole job: text in, { buffer, brief, textModel, imageModel } out.
-async function paintCover({ apiKey, text, textModel, imageModel, quality }) {
-  const b = await writeBrief({ apiKey, text, model: textModel });
-  const p = await paint({ apiKey, brief: b.result, model: imageModel, quality });
-  return { buffer: p.result, brief: b.result, textModel: b.model, imageModel: p.model };
-}
-
-module.exports = { paintCover, writeBrief, paint, excerpt };
+module.exports = { paintCover, excerpt, PROVIDERS };

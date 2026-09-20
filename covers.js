@@ -66,7 +66,7 @@ const NeoCovers = (() => {
 
   // ---------- painting ----------
   function grain(ctx, r, amount) {
-    const img = ctx.getImageData(0, 0, W, H);
+    const img = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
     const d = img.data;
     for (let i = 0; i < d.length; i += 4) {
       const n = (r() - 0.5) * amount;
@@ -224,18 +224,30 @@ const NeoCovers = (() => {
 
   const cache = new Map(); // seed -> { url, canvas }
 
-  // Paint (or fetch from cache) the abstract for a seed string.
-  function paintAbstract(seed) {
-    if (cache.has(seed)) return cache.get(seed);
-    const h = hash(seed);
-    const r = rng(h);
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
+  // Paint the abstract for a seed onto a canvas of any size: the styles draw
+  // in tile coordinates under a scale, so a KDP-sized export is the same
+  // picture, crisp, not a blown-up thumbnail.
+  function paintInto(canvas, seed) {
     const ctx = canvas.getContext('2d');
+    const r = rng(hash(seed));
     const p = palette(r);
     const style = pick(r, Object.keys(STYLES));
+    ctx.save();
+    ctx.scale(canvas.width / W, canvas.height / H);
     STYLES[style](ctx, r, p);
-    grain(ctx, r, between(r, 6, 22));
+    ctx.restore();
+    const amount = between(r, 6, 22);
+    // full-size grain is subtler per pixel, so it reads the same at a glance
+    grain(ctx, r, amount * Math.min(1, W / canvas.width * 2));
+    return style;
+  }
+
+  // Paint (or fetch from cache) the tile-sized abstract for a seed string.
+  function paintAbstract(seed) {
+    if (cache.has(seed)) return cache.get(seed);
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const style = paintInto(canvas, seed);
     const entry = { url: canvas.toDataURL('image/png'), canvas, style };
     cache.set(seed, entry);
     return entry;
@@ -434,7 +446,118 @@ const NeoCovers = (() => {
     }
   }
 
+
+  // ---------- full-size rendering (exports) ----------
+  // The shelf composites art and type with CSS; exports need one picture.
+  // This draws the same plan — same art, same lines, same ink — onto a
+  // canvas the size of a KDP cover. `imageUrl` (optional) is the writer's
+  // own cover image; the abstract is used otherwise. NEO's paintings are
+  // never passed here: they are for the shelf, not for files that travel.
+  function renderFull(meta, opts = {}) {
+    const OW = opts.width || 1600, OH = opts.height || 2560;
+    const canvas = document.createElement('canvas');
+    canvas.width = OW; canvas.height = OH;
+    const ctx = canvas.getContext('2d');
+    const seed = String(meta.coverSeed || meta.id);
+    let art = null;
+    if (opts.image) {
+      const img = opts.image;
+      const k = Math.max(OW / img.width, OH / img.height);
+      ctx.drawImage(img, (OW - img.width * k) / 2, (OH - img.height * k) / 2, img.width * k, img.height * k);
+      // a tile-sized copy for the ink sampler
+      const small = document.createElement('canvas');
+      small.width = W; small.height = H;
+      small.getContext('2d').drawImage(canvas, 0, 0, W, H);
+      art = { canvas: small, url: '' };
+    } else {
+      paintInto(canvas, seed);
+    }
+    if (opts.artOnly) return canvas;
+
+    const planned = plan(meta, art);
+    const t = TEMPLATES.find((x) => x.id === planned.template);
+    const s = OW / TILE_W; // tile px → export px; everything below is in tile px
+    ctx.save();
+    ctx.scale(s, s);
+    const light = planned.ink.light;
+    const ink = light ? '#ffffff' : '#141414';
+    const auInk = planned.authorInk.light ? '#ffffff' : '#141414';
+
+    // block metrics
+    const lineH = (ln) => ln.size * (ln.small ? 1.4 : t.lead);
+    const blockH = planned.lines.reduce((n, ln) => n + lineH(ln), 0);
+    const AU = 7.5, AU_GAP = 7;
+    const left = t.anchor === 'top' && !t.band;
+    let top;
+    if (t.anchor === 'top') top = 10 + (t.rule ? 11 : 0);
+    else if (t.anchor === 'bottom') top = TILE_H - 10 - AU - AU_GAP - blockH;
+    else top = (TILE_H - (t.band ? blockH + AU + AU_GAP + 6 : blockH)) / 2 - (t.band ? 0 : 2);
+
+    // veils and plates go under the type
+    if (t.band) {
+      ctx.fillStyle = light ? 'rgba(10,10,10,0.78)' : 'rgba(255,255,255,0.86)';
+      ctx.fillRect(0, top - 9, TILE_W, blockH + 6 + AU_GAP + AU + 17);
+    } else if (planned.ink.scrim) {
+      const dark = light ? [0, 0, 0] : [255, 255, 255];
+      const rgba = (a) => `rgba(${dark[0]},${dark[1]},${dark[2]},${a})`;
+      let g;
+      if (t.anchor === 'top') { g = ctx.createLinearGradient(0, TILE_H * 0.7, 0, 0); g.addColorStop(0, rgba(0)); g.addColorStop(1, rgba(0.6)); ctx.fillStyle = g; ctx.fillRect(0, 0, TILE_W, TILE_H * 0.7); }
+      else if (t.anchor === 'bottom') { g = ctx.createLinearGradient(0, TILE_H * 0.3, 0, TILE_H); g.addColorStop(0, rgba(0)); g.addColorStop(1, rgba(0.65)); ctx.fillStyle = g; ctx.fillRect(0, TILE_H * 0.3, TILE_W, TILE_H * 0.7); }
+      else { g = ctx.createRadialGradient(TILE_W / 2, TILE_H / 2, 0, TILE_W / 2, TILE_H / 2, TILE_H * 0.5); g.addColorStop(0, rgba(0.5)); g.addColorStop(0.72, rgba(0)); ctx.fillStyle = g; ctx.fillRect(0, 0, TILE_W, TILE_H); }
+    }
+    if (t.frame) {
+      ctx.strokeStyle = ink; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.5;
+      ctx.strokeRect(5, 5, TILE_W - 10, TILE_H - 10); ctx.globalAlpha = 1;
+    }
+    if (t.rule) { ctx.fillStyle = ink; ctx.fillRect(PAD, 10, 26, 4); }
+
+    // the title lines
+    ctx.textBaseline = 'top';
+    ctx.textAlign = left ? 'left' : 'center';
+    const x = left ? PAD : TILE_W / 2;
+    let y = top;
+    for (const ln of planned.lines) {
+      ctx.font = `${ln.italic ? 'italic ' : ''}${ln.italic ? 900 : t.weight} ${ln.size}px "${ln.italic ? 'NEO Playfair' : t.family}"`;
+      ctx.fillStyle = ink;
+      if (!t.band) { ctx.shadowColor = light ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.3)'; ctx.shadowBlur = 6 * s; ctx.shadowOffsetY = 1 * s; }
+      const spacing = ln.small ? (t.id === 'bebas' ? 3 : t.id === 'cinzel' ? 2.5 : 2) : (t.id === 'band' ? 0.8 : t.id === 'cinzel' ? 0.5 : t.id === 'stack' ? 0.3 : t.id === 'bebas' ? 0.5 : 0);
+      try { ctx.letterSpacing = spacing + 'px'; } catch { /* older engines */ }
+      // CSS line-height centres the glyphs in the line box; nudge to match
+      ctx.fillText(ln.text, x, y + (lineH(ln) - ln.size) / 2);
+      y += lineH(ln);
+    }
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    if (t.band) { ctx.fillStyle = ink; ctx.globalAlpha = 0.7; ctx.fillRect(TILE_W / 2 - 8, y + 6, 16, 1.5); ctx.globalAlpha = 1; y += 8; }
+
+    // the author line
+    const author = String(meta.author || '').toUpperCase();
+    if (author) {
+      const longAu = author.length > 16;
+      let auSize = longAu ? 6.5 : AU;
+      ctx.font = `600 ${auSize}px "NEO Josefin"`;
+      try { ctx.letterSpacing = (longAu ? 0.8 : 1.6) + 'px'; } catch { /* older engines */ }
+      let aw = ctx.measureText(author).width;
+      if (aw > AVAIL_W) { // the shelf wraps a long name; here it steps down to fit
+        auSize = Math.max(4.5, auSize * AVAIL_W / aw);
+        ctx.font = `600 ${auSize}px "NEO Josefin"`;
+        aw = ctx.measureText(author).width;
+      }
+      const ay = t.anchor === 'top' ? TILE_H - 9 - AU : y + AU_GAP;
+      if (planned.authorInk.scrim && !t.band) {
+        ctx.fillStyle = planned.authorInk.light ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
+        const px = left ? PAD : TILE_W / 2 - aw / 2;
+        ctx.fillRect(px - 6, ay - 3, aw + 12, AU + 6);
+      }
+      ctx.fillStyle = t.band ? ink : auInk;
+      ctx.globalAlpha = t.band ? 0.9 : 0.9;
+      ctx.fillText(author, x, ay);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+    return canvas;
+  }
+
   function forget(key) { cache.delete(key); }
 
-  return { plan, dress, paintAbstract, fitImage, forget, hash, ready, TEMPLATES };
+  return { plan, dress, paintAbstract, paintInto, renderFull, fitImage, forget, hash, ready, TEMPLATES };
 })();

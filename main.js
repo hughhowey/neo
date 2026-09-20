@@ -314,13 +314,15 @@ const paintJobs = new Map();
 ipcMain.handle('cover:paint', (_e, bookId, text, options) => {
   if (paintJobs.has(bookId)) return paintJobs.get(bookId);
   const job = (async () => {
-    const apiKey = readSecret('openai');
-    if (!apiKey) return { error: 'No OpenAI key — add one under Goals & Settings' };
+    const provider = (options && options.provider) || 'openai';
+    const apiKey = readSecret(provider);
+    if (!apiKey) return { error: 'No API key for ' + provider + ' — add one under File → Cover Art…' };
     const dir = bookDir(bookId);
     if (!fs.existsSync(dir)) return { error: 'Book folder is missing' };
     try {
       const art = require('./art.js');
       const out = await art.paintCover({
+        provider,
         apiKey,
         text: String(text || ''),
         textModel: options && options.textModel,
@@ -331,12 +333,13 @@ ipcMain.handle('cover:paint', (_e, bookId, text, options) => {
       for (const f of fs.readdirSync(dir)) {
         if (/^art-\d+\.(png|jpg|webp)$/.test(f)) fs.unlinkSync(path.join(dir, f));
       }
-      const fname = 'art-' + Date.now() + '.jpg';
+      const fname = 'art-' + Date.now() + '.' + (out.ext || 'jpg');
       fs.writeFileSync(path.join(dir, fname), out.buffer);
       // the brief sits beside the picture, so a future repaint can start from it
       writeJSON(path.join(dir, 'art.json'), {
         file: fname,
         brief: out.brief,
+        provider,
         textModel: out.textModel,
         imageModel: out.imageModel,
         painted: new Date().toISOString()
@@ -766,7 +769,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'emailDraft' })
         },
         { label: 'Email Settings…', click: () => sendToWindow({ type: 'emailSettings' }) },
-        { label: 'Cover Art…', click: () => sendToWindow({ type: 'stats', focus: 'covers' }) },
+        { label: 'Cover Art…', click: () => sendToWindow({ type: 'coverArt' }) },
         {
           label: isMac ? 'Goals & Settings…' : 'Goals && Settings…',
           accelerator: 'CmdOrCtrl+,',
