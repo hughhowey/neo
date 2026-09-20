@@ -1,0 +1,8 @@
+{
+  "appId": "com.hughhowey.neopocket",
+  "appName": "NEO Pocket",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  }
+}

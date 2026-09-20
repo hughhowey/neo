@@ -83,7 +83,15 @@
     "nsis": {
       "oneClick": true,
       "deleteAppDataOnUninstall": false
-    }
+    },
+    "files": [
+      "**/*",
+      "!pocket/**",
+      "!dist/**",
+      "!Backups/**",
+      "!*.md",
+      "!.github/**"
+    ]
   },
   "author": "Hugh Howey",
   "license": "MIT",

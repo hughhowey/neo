@@ -2,20 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>NEO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>NEO Pocket</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="pocket.css" />
 </head>
 <body>
-  <!-- Draggable strip so the frameless window can be moved -->
-  <div id="dragstrip"></div>
-
   <!-- ======================= BOOKSHELF ======================= -->
   <div id="bookshelf-view">
     <header id="shelf-header">
       <h1>NEO</h1>
       <div class="shelf-header-right">
         <span id="author-chip" title="Click to change your author name"></span>
-        <button id="import-btn" title="Import .docx, .txt, or .md manuscripts">&#8681; Import</button>
+        <button id="import-btn" hidden>&#8681; Import</button>
         <button id="add-shelf-btn" title="Add a shelf">+ Shelf</button>
       </div>
     </header>
@@ -68,6 +67,8 @@
   <!-- ======================= EDITOR ======================= -->
   <div id="editor-view" hidden>
 
+    <button id="pocket-chapters" title="Chapters">&#9776;</button>
+
     <!-- Left hover zone: chapter navigation -->
     <div id="nav-hotzone"></div>
     <nav id="nav-pane">
@@ -117,7 +118,7 @@
         <span id="goal-counter" title="Today's words — click for goals, sprints, and your progress chart"></span>
         <span id="pos-counter"></span>
         <span id="word-counter" title="Click to cycle book / chapter word count"></span>
-        <span id="zoom-control" title="Scroll to zoom, or pinch / Ctrl+Scroll anywhere on the page"><button id="zoom-out" title="Zoom out">&#8722;</button><span id="zoom-level" title="Click to reset to 100%">100%</span><button id="zoom-in" title="Zoom in">+</button></span>
+        <span id="zoom-control" hidden><button id="zoom-out">&#8722;</button><span id="zoom-level">100%</span><button id="zoom-in">+</button></span>
       </div>
     </footer>
 
@@ -138,7 +139,17 @@
   <!-- Toast — lives at body level so it shows over both views -->
   <div id="hint" hidden></div>
 
-  <script src="covers.js"></script>
+  <script src="pocket-bridge.js"></script>
   <script src="app.js"></script>
+  <script>
+    // the ☰ button stands in for the desktop's hover-to-reveal chapter pane
+    document.getElementById('pocket-chapters').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('nav-pane').classList.toggle('open');
+    });
+    document.getElementById('paper-scroll').addEventListener('touchstart', () => {
+      document.getElementById('nav-pane').classList.remove('open');
+    });
+  </script>
 </body>
 </html>

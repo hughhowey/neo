@@ -124,6 +124,10 @@ function chapterWords(chId) {
 let libraryDirPath = '';
 
 function coverUrl(meta) {
+  // Pocket serves the library through a URL; desktop hands a plain path
+  if (/^[a-z]+:\/\//.test(libraryDirPath)) {
+    return libraryDirPath + '/' + encodeURIComponent(meta.id) + '/' + encodeURIComponent(meta.coverImage);
+  }
   const p = (libraryDirPath + '/' + meta.id + '/' + meta.coverImage).replace(/\\/g, '/');
   return encodeURI('file://' + (p.startsWith('/') ? '' : '/') + p);
 }
@@ -4410,7 +4414,7 @@ async function showAbout() {
     <div class="modal" style="width:340px;text-align:center">
       <h2 style="font-size:22px;letter-spacing:6px">NEO</h2>
       <p style="color:#999">Version ${v}</p>
-      <p style="font-size:13px;color:#777">A word processor for authors.<br>Free, open source, yours.</p>
+      <p style="font-size:13px;color:#777">A word processor for authors.</p>
       <div style="margin-top:16px">
         <button class="m-ok btn-gold">Back to writing</button>
       </div>
