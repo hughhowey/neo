@@ -3523,10 +3523,13 @@ function statsChartSvg() {
 // One key per provider. The brief and the painting always come from the
 // same provider, so a writer only ever needs one account.
 const COVER_PROVIDERS = {
-  openai: { name: 'OpenAI', keyHint: 'sk-…', keyTest: /^sk-[A-Za-z0-9_-]{20,}$/, where: 'platform.openai.com → API keys', text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: 'a few cents a picture' },
-  gemini: { name: 'Google Gemini', keyHint: 'AIza…', keyTest: /^AIza[A-Za-z0-9_-]{20,}$/, where: 'aistudio.google.com → Get API key', text: 'gemini-2.5-flash', image: 'gemini-2.5-flash-image', quality: false, cost: 'free tier available, rate-limited' },
-  xai: { name: 'xAI Grok', keyHint: 'xai-…', keyTest: /^xai-[A-Za-z0-9_-]{20,}$/, where: 'console.x.ai → API keys', text: 'grok-4-fast', image: 'grok-2-image', quality: false, cost: 'a few cents a picture' }
+  openai: { name: 'OpenAI', keyHint: 'sk-…', where: 'platform.openai.com → API keys', text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: 'a few cents a picture' },
+  gemini: { name: 'Google Gemini', keyHint: 'AQ… or AIza…', where: 'aistudio.google.com → Get API key', text: 'gemini-2.5-flash', image: 'gemini-2.5-flash-image', quality: false, cost: 'free tier available, rate-limited' },
+  xai: { name: 'xAI Grok', keyHint: 'xai-…', where: 'console.x.ai → API keys', text: 'grok-4-fast', image: 'grok-2-image', quality: false, cost: 'a few cents a picture' }
 };
+// Key formats change under us (Google's moved from AIza… to AQ… in 2026), so
+// the only test is "one token, long enough" — the provider does the rest.
+const looksLikeKey = (k) => /^\S{20,}$/.test(k);
 const coverSettings = () => library.coverArt || {};
 const coverProvider = () => (COVER_PROVIDERS[coverSettings().provider] ? coverSettings().provider : 'openai');
 
@@ -3595,7 +3598,7 @@ function openCoverArt() {
     const id = sel.value, p = COVER_PROVIDERS[id];
     const k = key.value.trim();
     if (k === 'remove') await window.neo.setSecret(id, '');
-    else if (k && !p.keyTest.test(k)) { toast(`That doesn\u2019t look like a ${p.name} key (they start with ${p.keyHint.replace('…', '')}) \u2014 not saved`, 6000); return; }
+    else if (k && !looksLikeKey(k)) { toast(`That doesn\u2019t look like an API key (${p.name} keys look like ${p.keyHint}) \u2014 not saved`, 6000); return; }
     else if (k) await window.neo.setSecret(id, k);
     models[id] = {
       text: bd.querySelector('#ca-tmodel').value.trim() || undefined,
