@@ -42,7 +42,7 @@ function excerpt(text) {
 function isModelError(status, body) {
   const code = body && body.error && (body.error.code || body.error.type || body.error.status || '');
   const msg = (body && body.error && body.error.message) || '';
-  return status === 404 || /model/i.test(String(code)) || /model|not (found|supported|exist)|deprecated/i.test(msg);
+  return status === 404 || /model/i.test(String(code)) || /model|not (found|supported|exist|available)|no longer|deprecated|retired/i.test(msg);
 }
 
 async function post(url, headers, payload) {
@@ -139,12 +139,43 @@ const xai = openaiStyle({
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
+// Google retires model names quickly (2.0 → 2.5 → 3.x within a year), so
+// instead of trusting a list, ask the key what it can use and pick the newest
+// Flash for the brief and the newest image-capable model for the painting.
+// The static lists below are only the fallback when the listing fails.
+let geminiCatalog = null; // { at, text: [...], image: [...] }
+
+async function geminiModels(apiKey) {
+  if (geminiCatalog && Date.now() - geminiCatalog.at < 6 * 3600 * 1000) return geminiCatalog;
+  const res = await fetch(GEMINI.replace(/\/$/, '') + '?pageSize=200', { headers: { 'x-goog-api-key': apiKey } });
+  if (!res.ok) throw new Error('Could not list Gemini models (' + res.status + ')');
+  const body = await res.json();
+  const all = (body.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''));
+  const version = (n) => { const v = n.match(/gemini-(\d+)(?:\.(\d+))?/); return v ? (+v[1]) * 100 + (+(v[2] || 0)) : 0; };
+  const preview = (n) => /preview|exp|latest/.test(n) ? 1 : 0; // stable names first
+  const byNewest = (a, b) => version(b) - version(a) || preview(a) - preview(b) || a.localeCompare(b);
+  const image = all.filter((n) => /image/.test(n) && !/imagen|embed/.test(n)).sort(byNewest);
+  const text = all.filter((n) => /flash/.test(n) && !/image|lite|live|audio|tts|embed|native/.test(n)).sort(byNewest);
+  geminiCatalog = { at: Date.now(), text, image };
+  return geminiCatalog;
+}
+
 const gemini = {
-  textModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
-  imageModels: ['gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview', 'gemini-2.0-flash-preview-image-generation'],
+  textModels: ['gemini-3.6-flash', 'gemini-3-flash', 'gemini-2.5-flash'],
+  imageModels: ['gemini-3.6-flash-image', 'gemini-3-flash-image', 'gemini-2.5-flash-image'],
+
+  async candidates(apiKey, kind) {
+    try {
+      const cat = await geminiModels(apiKey);
+      if (cat[kind].length) return cat[kind].slice(0, 4);
+    } catch { /* fall back to the list */ }
+    return kind === 'text' ? gemini.textModels : gemini.imageModels;
+  },
 
   async writeBrief({ apiKey, text, model }) {
-    return withModels(model, gemini.textModels, async (m) => {
+    return withModels(model, await gemini.candidates(apiKey, 'text'), async (m) => {
       const body = await post(`${GEMINI}${m}:generateContent`, { 'x-goog-api-key': apiKey }, {
         systemInstruction: { parts: [{ text: BRIEF_SYSTEM }] },
         contents: [{ role: 'user', parts: [{ text: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }] }],
@@ -158,7 +189,7 @@ const gemini = {
   },
 
   async paint({ apiKey, brief, model }) {
-    return withModels(model, gemini.imageModels, async (m) => {
+    return withModels(model, await gemini.candidates(apiKey, 'image'), async (m) => {
       const ask = (withAspect) => post(`${GEMINI}${m}:generateContent`, { 'x-goog-api-key': apiKey }, {
         contents: [{ role: 'user', parts: [{ text: brief + PAINT_SUFFIX }] }],
         generationConfig: withAspect
@@ -169,7 +200,7 @@ const gemini = {
       try {
         body = await ask(true);
       } catch (err) {
-        // older image models reject imageConfig; ask again the plain way
+        // some image models reject imageConfig; ask again the plain way
         if (err.status === 400 && !err.modelProblem) body = await ask(false);
         else throw err;
       }

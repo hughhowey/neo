@@ -3524,7 +3524,7 @@ function statsChartSvg() {
 // same provider, so a writer only ever needs one account.
 const COVER_PROVIDERS = {
   openai: { name: 'OpenAI', keyHint: 'sk-…', where: 'platform.openai.com → API keys', text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: 'a few cents a picture' },
-  gemini: { name: 'Google Gemini', keyHint: 'AQ… or AIza…', where: 'aistudio.google.com → Get API key', text: 'gemini-2.5-flash', image: 'gemini-2.5-flash-image', quality: false, cost: 'free tier available, rate-limited' },
+  gemini: { name: 'Google Gemini', keyHint: 'AQ… or AIza…', where: 'aistudio.google.com → Get API key', text: 'newest Flash (auto)', image: 'newest Flash Image (auto)', quality: false, cost: 'free tier available, rate-limited' },
   xai: { name: 'xAI Grok', keyHint: 'xai-…', where: 'console.x.ai → API keys', text: 'grok-4-fast', image: 'grok-2-image', quality: false, cost: 'a few cents a picture' }
 };
 // Key formats change under us (Google's moved from AIza… to AQ… in 2026), so
