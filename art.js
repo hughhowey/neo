@@ -8,9 +8,9 @@
 // never in the picture — the shelf sets those in real type on top (see
 // covers.js). Paintings live on the shelf only; exports never carry them.
 //
-// Three providers, one key each: OpenAI, Google Gemini, xAI Grok. Each is a
-// pair of functions — writeBrief and paint — so adding a fourth is a matter
-// of writing two more.
+// One provider, OpenAI. The provider is a pair of functions — writeBrief and
+// paint — behind a small interface, so another vendor would be two more
+// functions; for now one that works beats three that drift.
 
 'use strict';
 
@@ -82,10 +82,35 @@ async function withModels(preferred, defaults, fn) {
 // OpenAI — and anything that speaks its dialect (xAI does)
 // ---------------------------------------------------------------------------
 
+// If every name on our list has been retired, ask the key what it can use:
+// the newest small GPT for the brief, the newest gpt-image for the painting.
+let openaiCatalog = null;
+async function openaiModels(base, apiKey) {
+  if (openaiCatalog && Date.now() - openaiCatalog.at < 6 * 3600 * 1000) return openaiCatalog;
+  const res = await fetch(base + '/models', { headers: { Authorization: 'Bearer ' + apiKey } });
+  if (!res.ok) throw new Error('Could not list models (' + res.status + ')');
+  const ids = ((await res.json()).data || []).map((m) => String(m.id || ''));
+  const ver = (n) => { const v = n.match(/(\d+)(?:\.(\d+))?/); return v ? (+v[1]) * 100 + (+(v[2] || 0)) : 0; };
+  const newest = (a, b) => ver(b) - ver(a) || a.length - b.length;
+  const text = ids.filter((n) => /^gpt-\d+(\.\d+)?-mini$/.test(n)).sort(newest);
+  const image = ids.filter((n) => /^gpt-image-\d+(\.\d+)?(-mini)?$/.test(n)).sort((a, b) => newest(a, b) || (/mini/.test(b) ? 1 : -1));
+  openaiCatalog = { at: Date.now(), text, image };
+  return openaiCatalog;
+}
+
+async function candidates(base, apiKey, preferred, defaults, kind) {
+  const list = [...defaults];
+  try {
+    const cat = await openaiModels(base, apiKey);
+    for (const n of cat[kind]) if (!list.includes(n)) list.push(n);
+  } catch { /* the static list will have to do */ }
+  return list;
+}
+
 function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, tokenParam }) {
   return {
     async writeBrief({ apiKey, text, model }) {
-      return withModels(model, textModels, async (m) => {
+      return withModels(model, await candidates(base, apiKey, model, textModels, 'text'), async (m) => {
         const payload = {
           model: m,
           messages: [
@@ -102,7 +127,7 @@ function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, t
       });
     },
     async paint({ apiKey, brief, model, quality }) {
-      return withModels(model, imageModels, async (m) => {
+      return withModels(model, await candidates(base, apiKey, model, imageModels, 'image'), async (m) => {
         const payload = { model: m, prompt: brief + PAINT_SUFFIX, n: 1, ...imageExtras };
         if (sizeParams) Object.assign(payload, { size: '1024x1536', quality: quality || 'medium' });
         const body = await post(base + '/images/generations', { Authorization: 'Bearer ' + apiKey }, payload);
@@ -122,103 +147,9 @@ const openai = openaiStyle({
   sizeParams: true
 });
 
-// xAI's image endpoint takes no size or quality; it returns a landscape
-// frame that the shelf crops to portrait. Fine for a thumbnail.
-const xai = openaiStyle({
-  base: 'https://api.x.ai/v1',
-  textModels: ['grok-4-fast', 'grok-4', 'grok-3-mini', 'grok-3'],
-  imageModels: ['grok-2-image-1212', 'grok-2-image'],
-  imageExtras: { response_format: 'b64_json' },
-  sizeParams: false,
-  tokenParam: 'max_tokens'
-});
-
-// ---------------------------------------------------------------------------
-// Google Gemini — one AI Studio key for both the brief and the picture
 // ---------------------------------------------------------------------------
 
-const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models/';
-
-// Google retires model names quickly (2.0 → 2.5 → 3.x within a year), so
-// instead of trusting a list, ask the key what it can use and pick the newest
-// Flash for the brief and the newest image-capable model for the painting.
-// The static lists below are only the fallback when the listing fails.
-let geminiCatalog = null; // { at, text: [...], image: [...] }
-
-async function geminiModels(apiKey) {
-  if (geminiCatalog && Date.now() - geminiCatalog.at < 6 * 3600 * 1000) return geminiCatalog;
-  const res = await fetch(GEMINI.replace(/\/$/, '') + '?pageSize=200', { headers: { 'x-goog-api-key': apiKey } });
-  if (!res.ok) throw new Error('Could not list Gemini models (' + res.status + ')');
-  const body = await res.json();
-  const all = (body.models || [])
-    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
-    .map((m) => String(m.name || '').replace(/^models\//, ''));
-  const version = (n) => { const v = n.match(/gemini-(\d+)(?:\.(\d+))?/); return v ? (+v[1]) * 100 + (+(v[2] || 0)) : 0; };
-  const preview = (n) => /preview|exp|latest/.test(n) ? 1 : 0; // stable names first
-  const byNewest = (a, b) => version(b) - version(a) || preview(a) - preview(b) || a.localeCompare(b);
-  const image = all.filter((n) => /image/.test(n) && !/imagen|embed/.test(n)).sort(byNewest);
-  const text = all.filter((n) => /flash/.test(n) && !/image|lite|live|audio|tts|embed|native/.test(n)).sort(byNewest);
-  geminiCatalog = { at: Date.now(), text, image };
-  return geminiCatalog;
-}
-
-const gemini = {
-  textModels: ['gemini-3.6-flash', 'gemini-3-flash', 'gemini-2.5-flash'],
-  imageModels: ['gemini-3.6-flash-image', 'gemini-3-flash-image', 'gemini-2.5-flash-image'],
-
-  async candidates(apiKey, kind) {
-    try {
-      const cat = await geminiModels(apiKey);
-      if (cat[kind].length) return cat[kind].slice(0, 4);
-    } catch { /* fall back to the list */ }
-    return kind === 'text' ? gemini.textModels : gemini.imageModels;
-  },
-
-  async writeBrief({ apiKey, text, model }) {
-    return withModels(model, await gemini.candidates(apiKey, 'text'), async (m) => {
-      const body = await post(`${GEMINI}${m}:generateContent`, { 'x-goog-api-key': apiKey }, {
-        systemInstruction: { parts: [{ text: BRIEF_SYSTEM }] },
-        contents: [{ role: 'user', parts: [{ text: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }] }],
-        generationConfig: { maxOutputTokens: 800 }
-      });
-      const parts = body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts;
-      const out = (parts || []).map((p) => p.text || '').join('').trim();
-      if (!out) throw new Error('The model returned an empty brief');
-      return out;
-    });
-  },
-
-  async paint({ apiKey, brief, model }) {
-    return withModels(model, await gemini.candidates(apiKey, 'image'), async (m) => {
-      const ask = (withAspect) => post(`${GEMINI}${m}:generateContent`, { 'x-goog-api-key': apiKey }, {
-        contents: [{ role: 'user', parts: [{ text: brief + PAINT_SUFFIX }] }],
-        generationConfig: withAspect
-          ? { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '2:3' } }
-          : { responseModalities: ['IMAGE', 'TEXT'] }
-      });
-      let body;
-      try {
-        body = await ask(true);
-      } catch (err) {
-        // some image models reject imageConfig; ask again the plain way
-        if (err.status === 400 && !err.modelProblem) body = await ask(false);
-        else throw err;
-      }
-      const parts = (body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts) || [];
-      const img = parts.find((p) => p.inlineData && p.inlineData.data);
-      if (!img) {
-        const why = body.promptFeedback && body.promptFeedback.blockReason;
-        throw new Error(why ? 'Gemini declined to paint this one (' + why + ')' : 'The image model returned no picture');
-      }
-      const mime = img.inlineData.mimeType || 'image/png';
-      return { buffer: Buffer.from(img.inlineData.data, 'base64'), ext: /jpe?g/.test(mime) ? 'jpg' : 'png' };
-    });
-  }
-};
-
-// ---------------------------------------------------------------------------
-
-const PROVIDERS = { openai, gemini, xai };
+const PROVIDERS = { openai };
 
 // The whole job: text in, { buffer, ext, brief, textModel, imageModel } out.
 async function paintCover({ provider, apiKey, text, textModel, imageModel, quality }) {
