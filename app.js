@@ -3439,10 +3439,17 @@ function showSpellMenu(x, y, word, suggestions, actions) {
 }
 
 let typewriterEnabled = false;
+// The page needs empty room beneath its last line, or the caret can't be held
+// at the centre once the end of the draft scrolls into view (body.typewriter
+// deepens #paper's bottom margin; see styles.css).
+function applyTypewriter() {
+  document.body.classList.toggle('typewriter', typewriterEnabled);
+}
 function toggleTypewriter() {
   typewriterEnabled = !typewriterEnabled;
   library.typewriter = typewriterEnabled;
   window.neo.writeLibrary(library);
+  applyTypewriter();
   toast(typewriterEnabled ? 'Typewriter scrolling ON — your line stays centered' : 'Typewriter scrolling off');
 }
 
@@ -4494,4 +4501,5 @@ window.addEventListener('unhandledrejection', (e) => reportError('Unhandled: ' +
 loadLibrary().then(() => {
   applyFonts();
   typewriterEnabled = !!library.typewriter;
+  applyTypewriter();
 });

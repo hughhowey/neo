@@ -365,6 +365,8 @@ body.night #aux-editor * { color: inherit; }
   width: calc(680px * var(--page-zoom, 1)); max-width: 92%;
   margin: 40px auto 120px;
 }
+/* typewriter scrolling: room below the last line so it can sit mid-screen */
+body.typewriter #paper { margin-bottom: 60vh; }
 .sheet {
   background: var(--paper); color: var(--ink);
   padding: 70px 72px 90px;
