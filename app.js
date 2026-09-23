@@ -843,6 +843,7 @@ $('#author-chip').onclick = async () => {
 /* ================================================================== */
 
 async function openBook(bookId) {
+  tabPlaces = {}; // a fresh book starts with fresh places
   book = await window.neo.readBookMeta(bookId);
   if (!book) return;
   currentChapterId = null; // never carry a chapter reference across books
@@ -2283,7 +2284,18 @@ function darlingFromKeyboard() {
   moveSelectionToDarlings(holder.innerHTML, sel.toString());
 }
 
+// Every tab shares one scroller, so leaving a tab used to lose its place.
+// Each tab now remembers where it was — the manuscript keeps its caret as
+// well — for as long as the book is open.
+let tabPlaces = {};
+
 function switchTab(name) {
+  const scroller = $('#paper-scroll');
+  if (book && currentTab && currentTab !== name) {
+    tabPlaces[currentTab] = currentTab === 'manuscript'
+      ? { caret: captureCaret(), scroll: scroller.scrollTop }
+      : { scroll: scroller.scrollTop };
+  }
   currentTab = name;
   $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   if (spellOn) setTimeout(scanSpellingHere, 0);
@@ -2292,6 +2304,8 @@ function switchTab(name) {
   const auxEditor = $('#aux-editor');
   const dList = $('#darlings-list');
   const oList = $('#outline-list');
+  const back = tabPlaces[name];
+  const returnTo = () => { if (back && typeof back.scroll === 'number') scroller.scrollTop = back.scroll; };
 
   // stash whatever aux content was open
   flushAux();
@@ -2299,6 +2313,8 @@ function switchTab(name) {
   if (name === 'manuscript') {
     paper.hidden = false;
     aux.hidden = true;
+    if (back && back.caret) restoreCaret(back.caret); // brings the scroll along
+    else returnTo();
     return;
   }
   paper.hidden = true;
@@ -2311,18 +2327,21 @@ function switchTab(name) {
     $('#aux-title').textContent = 'Darlings';
     dList.hidden = false;
     renderDarlings();
+    returnTo();
   } else if (name === 'outline') {
     $('#aux-title').textContent = book.tabNames.outline;
     oList.hidden = false;
     if (book.chapterOrder.length === 0) createChapterAt(0);
     renderOutline();
+    returnTo();
   } else {
     $('#aux-title').textContent = book.tabNames[name] || name;
     auxEditor.hidden = false;
     auxEditor.dataset.kind = name;
     window.neo.readAux(book.id, name).then((html) => {
       auxEditor.innerHTML = html || '';
-      auxEditor.focus();
+      auxEditor.focus({ preventScroll: true });
+      returnTo();
     });
   }
 }
@@ -2839,6 +2858,7 @@ setInterval(() => { if (book) flushAllSaves(); }, 20000);
 
 async function backToShelf() {
   flushAllSaves();
+  tabPlaces = {};
   book = null;
   currentChapterId = null;
   undoStack = [];
