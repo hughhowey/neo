@@ -238,7 +238,9 @@ async function renderShelves() {
   const keepScroll = view.scrollTop; // re-rendering must not move the page
   $('#author-chip').textContent = displayAuthor();
   const wrap = $('#shelves');
-  wrap.innerHTML = '';
+  // the new shelves are built off-screen and swapped in whole, so the page
+  // never goes blank while books are read from disk — no flash on a drop
+  const built = document.createDocumentFragment();
   // shelves drag by their grip to reorder, with a gold bar showing the drop spot
   if (!wrap.dataset.dndWired) {
     wrap.dataset.dndWired = '1';
@@ -431,8 +433,9 @@ async function renderShelves() {
 
     sec.appendChild(label);
     sec.appendChild(row);
-    wrap.appendChild(sec);
+    built.appendChild(sec);
   }
+  wrap.replaceChildren(built);
   view.scrollTop = keepScroll;
 }
 
@@ -490,14 +493,15 @@ function dressTile(el, meta) {
     el.style.background = `#1d1d1d url("${coverUrl(meta)}") center / cover no-repeat`;
     return;
   }
-  // the abstract shows instantly; painted art replaces it once decoded.
-  // The tile may not be on the page yet when the art arrives (the shelf
-  // attaches tiles after reading every book), so the only staleness check
-  // is whether this tile has been dressed again since we started.
-  NeoCovers.dress(el, NeoCovers.plan(meta));
   el.classList.toggle('cv-painting', !!(meta.coverArt && meta.coverArt.status === 'pending'));
   const token = (el._dressToken = (el._dressToken || 0) + 1);
-  if (mode !== 'painted') return;
+  // a painting already decoded is drawn straight away; otherwise the
+  // abstract shows instantly and the painting replaces it once read.
+  // The tile may not be on the page yet when the art arrives, so the only
+  // staleness check is whether this tile has been dressed again since.
+  const cached = mode === 'painted' && artCache.get(meta.id + '/' + meta.coverArt.file);
+  NeoCovers.dress(el, NeoCovers.plan(meta, cached || undefined));
+  if (mode !== 'painted' || cached) return;
   paintedArt(meta).then((art) => {
     if (art && el._dressToken === token) NeoCovers.dress(el, NeoCovers.plan(meta, art));
   });
