@@ -282,13 +282,19 @@ async function renderShelves() {
       library.shelves = library.shelves.filter((s) => s.id !== shelfId);
       library.shelves.splice(index, 0, moving);
       await window.neo.writeLibrary(library);
-      renderShelves();
+      // move the shelf on screen rather than redrawing everything
+      const secs = [...wrap.querySelectorAll('.shelf')];
+      const movingSec = secs.find((el) => el.dataset.shelfId === shelfId);
+      const others = secs.filter((el) => el !== movingSec);
+      if (movingSec) wrap.insertBefore(movingSec, others[index] || null);
+      else renderShelves();
     });
   }
 
   for (const shelf of shelvesFor(currentAuthor().id)) {
     const sec = document.createElement('section');
     sec.className = 'shelf';
+    sec.dataset.shelfId = shelf.id;
 
     const grip = document.createElement('span');
     grip.className = 'shelf-grip';
@@ -414,7 +420,13 @@ async function renderShelves() {
       for (const s of library.shelves) s.bookIds = s.bookIds.filter((b) => b !== bookId);
       shelf.bookIds.splice(index, 0, bookId);
       await window.neo.writeLibrary(library);
-      renderShelves();
+      // slide the tile into place; the shelf itself is not redrawn
+      const tile = document.querySelector(`.book[data-book-id="${bookId}"]`);
+      if (tile) {
+        const others = [...row.querySelectorAll('.book')].filter((b) => b !== tile);
+        row.insertBefore(tile, others[index] || row.querySelector('.new-book'));
+        tile.classList.remove('dragging');
+      } else renderShelves();
     });
 
     for (const bookId of shelf.bookIds) {
