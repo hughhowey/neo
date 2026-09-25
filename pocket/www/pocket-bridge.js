@@ -210,12 +210,47 @@
     onMenu: () => { /* no menu bar in your pocket */ }
   };
 
+  // Pocket is written on a real keyboard, so Android's on-screen one stays
+  // down: every editable field gets inputmode="none", which keeps the caret
+  // and hardware typing but never summons the soft keyboard. Long-press the
+  // ☰ button to bring it back for an emergency (and again to send it away).
+  const EDITABLE = '[contenteditable], input, textarea';
+  let softKeyboard = false;
+  try { softKeyboard = localStorage.getItem('pocket-soft-keyboard') === 'on'; } catch { /* fine */ }
+  function applyKeyboardMode(root) {
+    const els = root.matches && root.matches(EDITABLE) ? [root] : [];
+    (root.querySelectorAll ? [...els, ...root.querySelectorAll(EDITABLE)] : els).forEach((el) => {
+      if (softKeyboard) el.removeAttribute('inputmode');
+      else el.setAttribute('inputmode', 'none');
+    });
+  }
+  window.pocketToggleSoftKeyboard = () => {
+    softKeyboard = !softKeyboard;
+    try { localStorage.setItem('pocket-soft-keyboard', softKeyboard ? 'on' : 'off'); } catch { /* fine */ }
+    applyKeyboardMode(document);
+    if (softKeyboard && document.activeElement) { document.activeElement.blur(); }
+    if (typeof toast === 'function') toast(softKeyboard ? 'On-screen keyboard on' : 'On-screen keyboard off — long-press ☰ to bring it back');
+    return softKeyboard;
+  };
+  document.addEventListener('DOMContentLoaded', () => {
+    applyKeyboardMode(document);
+    new MutationObserver((muts) => {
+      muts.forEach((m) => {
+        m.addedNodes.forEach((n) => { if (n.nodeType === 1) applyKeyboardMode(n); });
+        if (m.type === 'attributes' && m.target.nodeType === 1) applyKeyboardMode(m.target);
+      });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['contenteditable'] });
+  });
+  document.addEventListener('focusin', (e) => { if (e.target && e.target.matches && e.target.matches(EDITABLE)) applyKeyboardMode(e.target); }, true);
+
   // Android's back gesture / Esc lands here (see MainActivity). Returns true
   // when the page handled it, false to let Android background the app.
   window.pocketBack = () => {
     try {
       const nav = document.getElementById('nav-pane');
       if (nav && nav.classList.contains('open')) { nav.classList.remove('open'); return true; }
+      const side = document.getElementById('side-pane');
+      if (side && side.classList.contains('open')) { side.classList.remove('open'); return true; }
       const modal = document.querySelector('.modal-backdrop:not([hidden])');
       if (modal) { modal.hidden = true; return true; }
       const editor = document.getElementById('editor-view');

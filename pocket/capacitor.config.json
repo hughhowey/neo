@@ -9,7 +9,8 @@
   "plugins": {
     "SystemBars": {
       "insetsHandling": "native",
-      "style": "DARK"
+      "style": "DARK",
+      "hidden": true
     }
   }
 }

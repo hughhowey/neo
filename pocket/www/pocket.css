@@ -6,7 +6,7 @@
 #paper, #aux-paper { width: 100%; max-width: 100%; margin: 0 0 80px; }
 .sheet, #aux-paper { padding: 34px 26px 60px; box-shadow: none; border: none; min-height: 92vh; }
 
-/* touch has no hover: edge-sneak panels retire; the ☰ button serves instead */
+/* touch has no hover: the panes open on an edge swipe (see index.html) or the ☰ button */
 #nav-hotzone, #side-hotzone { display: none; }
 #pocket-chapters {
   position: fixed; top: 12px; left: 12px; z-index: 500;
@@ -17,7 +17,8 @@
 #nav-pane.open { transform: translateX(0); }
 
 /* desktop-only powers stay out of sight */
-#import-btn, #zoom-control, #side-pane, #dragstrip { display: none !important; }
+#import-btn, #zoom-control, #dragstrip, #side-pin { display: none !important; }
+#nav-pane, #side-pane { bottom: 52px; }
 
 /* the bottom bar is always present — nothing to hover with — and tall enough for thumbs */
 #bottombar { opacity: 1 !important; height: 52px; }

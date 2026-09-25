@@ -35,7 +35,10 @@ robot build (or vice versa).
 ## Status — early alpha
 
 Working: bookshelf, opening books, writing (hardware keyboard), autosave to
-the shared library, pen-name switching, chapter list via the ☰ button.
+the shared library, pen-name switching, chapter list via the ☰ button or a
+swipe from the left edge, Notes & Comments via a swipe from the right edge.
+Android's bars stay hidden (swipe an edge to peek), the back gesture returns
+to the shelf, and the on-screen keyboard stays down — long-press ☰ to summon it.
 
 Punch list, in rough order:
 - Verify pocket-v0.1.5 fixed: dead Shelf button + system bars overlapping

@@ -145,13 +145,48 @@
   <script src="app.js"></script>
   <script>
     // the ☰ button stands in for the desktop's hover-to-reveal chapter pane
-    document.getElementById('pocket-chapters').addEventListener('click', (e) => {
+    // tap ☰ for chapters; long-press it to toggle the on-screen keyboard
+    const menuBtn = document.getElementById('pocket-chapters');
+    let pressTimer = null, longPressed = false;
+    menuBtn.addEventListener('touchstart', () => {
+      longPressed = false;
+      pressTimer = setTimeout(() => { longPressed = true; window.pocketToggleSoftKeyboard(); }, 600);
+    }, { passive: true });
+    menuBtn.addEventListener('touchend', () => clearTimeout(pressTimer));
+    menuBtn.addEventListener('touchcancel', () => clearTimeout(pressTimer));
+    menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (longPressed) { longPressed = false; return; }
+      document.getElementById('side-pane').classList.remove('open');
       document.getElementById('nav-pane').classList.toggle('open');
     });
-    document.getElementById('paper-scroll').addEventListener('touchstart', () => {
-      document.getElementById('nav-pane').classList.remove('open');
-    });
+    // Edge swipes stand in for the desktop's mouse-over: from the left edge
+    // for chapters, from the right edge for Notes & Comments. Swiping a pane
+    // back toward its edge, or touching the page, closes it.
+    const nav = document.getElementById('nav-pane');
+    const side = document.getElementById('side-pane');
+    const EDGE = 28, PULL = 40;
+    let start = null;
+    document.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      start = { x: t.clientX, y: t.clientY, fromLeft: t.clientX < EDGE, fromRight: t.clientX > window.innerWidth - EDGE };
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      if (!start) return;
+      const t = e.touches[0];
+      const dx = t.clientX - start.x, dy = Math.abs(t.clientY - start.y);
+      if (Math.abs(dx) < PULL || dy > Math.abs(dx)) return;
+      if (start.fromLeft && dx > 0) nav.classList.add('open');
+      else if (start.fromRight && dx < 0) side.classList.add('open');
+      else if (dx < 0 && nav.classList.contains('open')) nav.classList.remove('open');
+      else if (dx > 0 && side.classList.contains('open')) side.classList.remove('open');
+      start = null;
+    }, { passive: true });
+    document.getElementById('paper-scroll').addEventListener('touchstart', (e) => {
+      if (e.touches[0].clientX < EDGE || e.touches[0].clientX > window.innerWidth - EDGE) return;
+      nav.classList.remove('open');
+      side.classList.remove('open');
+    }, { passive: true });
   </script>
 </body>
 </html>

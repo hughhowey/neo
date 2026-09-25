@@ -8,6 +8,9 @@ import android.os.Environment;
 import android.provider.Settings;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -27,6 +30,16 @@ public class MainActivity extends BridgeActivity {
             openFilesAccessSettings();
         }
         wireBackGesture();
+        giveNeoTheWholeScreen();
+    }
+
+    // NEO's philosophy: nothing on screen but the page. Android's status and
+    // navigation bars stay hidden; a swipe from the top or bottom edge peeks
+    // them for a moment, then they slide away again.
+    private void giveNeoTheWholeScreen() {
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        bars.hide(WindowInsetsCompat.Type.systemBars());
     }
 
     // Android's back gesture (and Esc on a hardware keyboard, which Android
@@ -53,6 +66,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        giveNeoTheWholeScreen();
         // Back from the Settings page with the toggle now on: reload so the
         // bookshelf appears instead of the "no permission" note.
         if (askedForFilesAccess && hasFilesAccess()) {
