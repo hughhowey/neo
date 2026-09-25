@@ -7,8 +7,9 @@ android {
         applicationId "com.hughhowey.neopocket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI passes these in (see .github/workflows/pocket.yml); local builds get 1 / "local".
+        versionCode = (System.getenv("POCKET_VERSION_CODE") ?: "1").toInteger()
+        versionName = System.getenv("POCKET_VERSION_NAME") ?: "local"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One stable signing key, supplied by CI through env vars, so every build
+    // installs over the last. Without the env vars, release falls back to the
+    // debug key so local builds still work.
+    signingConfigs {
+        pocket {
+            def ksFile = System.getenv("POCKET_KEYSTORE_FILE")
+            if (ksFile && file(ksFile).exists()) {
+                storeFile file(ksFile)
+                storePassword System.getenv("POCKET_KEYSTORE_PASSWORD")
+                keyAlias "neopocket"
+                keyPassword System.getenv("POCKET_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            def ksFile = System.getenv("POCKET_KEYSTORE_FILE")
+            signingConfig = (ksFile && file(ksFile).exists()) ? signingConfigs.pocket : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

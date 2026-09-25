@@ -9,13 +9,28 @@ Syncthing — same plain files, no cloud, no accounts.
 
 ## Building
 
-Robots build it: push a `pocket-v*` tag (or run the "Build NEO Pocket"
-workflow) and download the `neo-pocket-apk` artifact. Sideload onto Android;
-grant **All files access** (Settings → Apps → NEO Pocket).
+Robots build it. Every push to `main` that touches `pocket/`, `app.js`, or
+`styles.css` produces a fresh, signed APK and drops it on the rolling
+**pocket-latest** pre-release:
+
+    https://github.com/hughhowey/neo/releases/download/pocket-latest/neo-pocket.apk
+
+Bookmark that on the phone. Tap it, open the download, and it installs over
+the previous build — same signing key every time, so no uninstalling and no
+lost settings. The build takes about five minutes after the push. Pushing a
+`pocket-v*` tag additionally publishes a numbered release for that version.
+
+The signing key lives in two repo secrets (`POCKET_KEYSTORE_BASE64`,
+`POCKET_KEYSTORE_PASSWORD`). If they ever change, the phone will need one
+uninstall/reinstall.
+
+First install only: sideload, then grant **All files access**
+(Settings → Apps → NEO Pocket).
 
 Local builds need Android Studio and: `cd pocket && npm install`, copy
 `../app.js` and `../styles.css` into `www/`, `npx cap sync android`, then
-build from `android/`.
+build from `android/`. Local builds are debug-signed and won't install over a
+robot build (or vice versa).
 
 ## Status — early alpha
 

@@ -1,16 +1,39 @@
-# Builds the NEO Pocket Android APK (debug-signed, for sideloading).
-# Runs on pocket-v* tags or by hand from the Actions tab.
+# Builds the NEO Pocket Android APK, signed with one stable key so every
+# build installs straight over the previous one — no uninstalling.
+#
+# Runs on every push to main that touches Pocket (or the desktop files it
+# borrows), on pocket-v* tags, and by hand from the Actions tab.
+#
+#   push to main  -> refreshes the rolling "pocket-latest" pre-release; the
+#                    APK link stays the same forever, so bookmark it on the phone
+#   pocket-v* tag -> also publishes a numbered release for that version
+#
+# Needs two repo secrets (Settings -> Secrets and variables -> Actions):
+#   POCKET_KEYSTORE_BASE64    the keystore file, base64-encoded
+#   POCKET_KEYSTORE_PASSWORD  its password (store and key use the same one)
+# Without them the build still runs but falls back to a debug-signed APK,
+# which will NOT install over a properly signed one.
 
 name: Build NEO Pocket
 
 on:
   push:
+    branches: [main]
+    paths:
+      - 'pocket/**'
+      - 'app.js'
+      - 'styles.css'
+      - '.github/workflows/pocket.yml'
     tags:
       - 'pocket-v*'
   workflow_dispatch: {}
 
 permissions:
   contents: write
+
+concurrency:
+  group: pocket-build
+  cancel-in-progress: true
 
 jobs:
   android:
@@ -24,6 +47,18 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Work out version numbers
+        id: ver
+        run: |
+          # versionCode must climb with every build or Android refuses the update.
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.ref }}" == refs/tags/pocket-v* ]]; then
+            echo "name=${GITHUB_REF_NAME#pocket-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=dev-$(date -u +%Y%m%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install and assemble web assets
         run: |
           cd pocket
@@ -31,12 +66,46 @@ jobs:
           cp ../app.js www/app.js
           cp ../styles.css www/styles.css
           npx cap sync android
-      - name: Build APK
+
+      - name: Restore signing key
+        if: ${{ secrets.POCKET_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.POCKET_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/neo-pocket.jks"
+
+      - name: Build signed APK
+        env:
+          POCKET_VERSION_CODE: ${{ steps.ver.outputs.code }}
+          POCKET_VERSION_NAME: ${{ steps.ver.outputs.name }}
+          POCKET_KEYSTORE_FILE: ${{ runner.temp }}/neo-pocket.jks
+          POCKET_KEYSTORE_PASSWORD: ${{ secrets.POCKET_KEYSTORE_PASSWORD }}
         run: |
           cd pocket/android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/neo-pocket.apk"
+          ls -la "$RUNNER_TEMP/neo-pocket.apk"
+
       - uses: actions/upload-artifact@v4
         with:
           name: neo-pocket-apk
-          path: pocket/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ runner.temp }}/neo-pocket.apk
+
+      - name: Refresh the rolling pocket-latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pocket-latest
+          name: NEO Pocket — latest build
+          prerelease: true
+          body: |
+            Rolling build of NEO Pocket from `main` — ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.code }}).
+            Download `neo-pocket.apk` on the phone and open it; it installs over whatever's there.
+          files: ${{ runner.temp }}/neo-pocket.apk
+
+      - name: Publish numbered release for this tag
+        if: startsWith(github.ref, 'refs/tags/pocket-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NEO Pocket ${{ steps.ver.outputs.name }}
+          prerelease: true
+          files: ${{ runner.temp }}/neo-pocket.apk
