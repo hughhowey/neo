@@ -203,6 +203,9 @@ function showFirstRun() {
   $('#fr-done').onclick = async () => {
     library.fonts = { body: picked.body, dropcap: picked.dropcap };
     library.firstRunDone = true;
+    // the shelf was drawn (and the author record seeded as Anonymous) before
+    // the name was typed — carry the name across
+    currentAuthor().name = library.authorName || (library.penNames || [])[0] || 'Anonymous';
     await window.neo.writeLibrary(library);
     applyFonts();
     fr.hidden = true;
@@ -2131,16 +2134,23 @@ $$('.tab').forEach((tab) => {
 
 // Darlings tab is a drop target for selected text
 const darlingsTab = $('.tab.darlings');
+// The selection usually collapses by the time a drag lands on the Darlings
+// tab, so the range is remembered at dragstart and the cut is made by NEO
+// itself (dropEffect 'copy' keeps Chromium from moving the text on its own).
+let draggedRange = null;
 document.addEventListener('dragstart', (e) => {
   // any text drag inside the manuscript lights up the bottom bar
   if (currentTab === 'manuscript' && e.target.closest && e.target.closest('.chapter-body')) {
     $('#bottombar').classList.add('attn');
+    const sel = window.getSelection();
+    draggedRange = sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0).cloneRange() : null;
   }
 });
-document.addEventListener('dragend', () => $('#bottombar').classList.remove('attn'));
+document.addEventListener('dragend', () => { $('#bottombar').classList.remove('attn'); draggedRange = null; });
 
 darlingsTab.addEventListener('dragover', (e) => {
   e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
   darlingsTab.classList.add('drag-over');
 });
 darlingsTab.addEventListener('dragleave', () => darlingsTab.classList.remove('drag-over'));
@@ -2203,8 +2213,12 @@ function findDarlingPosition(body, d) {
 async function moveSelectionToDarlings(html, text) {
   if (!text || !text.trim() || !book) return;
   const sel = window.getSelection();
-  const srcChapter = sel.rangeCount
-    ? sel.getRangeAt(0).startContainer.parentElement?.closest?.('.chapter')
+  // the live selection if it survived the drag, else the one saved at dragstart
+  const live = sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0) : null;
+  const range = live || draggedRange;
+  draggedRange = null;
+  const srcChapter = range
+    ? range.startContainer.parentElement?.closest?.('.chapter')
     : null;
   const chId = srcChapter ? srcChapter.dataset.id : currentChapterId;
   const chIdx = book.chapterOrder.indexOf(chId);
@@ -2214,9 +2228,22 @@ async function moveSelectionToDarlings(html, text) {
 
   let anchorPrefix = null;
   let anchorSuffix = null;
-  if (sel.rangeCount && !sel.isCollapsed) {
-    sel.deleteFromDocument();
-    const r = sel.getRangeAt(0);
+  if (range) {
+    const startNode = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+    const startBlock = startNode && startNode.closest ? startNode.closest('p') : null;
+    range.deleteContents();
+    // a whole paragraph dragged away leaves its empty shell behind: remove it
+    // and park the caret at the end of the paragraph before (or start of after)
+    if (startBlock && !startBlock.textContent.trim() && !startBlock.querySelector('span')
+        && startBlock.parentElement && startBlock.parentElement.children.length > 1) {
+      const prev = startBlock.previousElementSibling;
+      const next = startBlock.nextElementSibling;
+      startBlock.remove();
+      if (prev) { range.selectNodeContents(prev); range.collapse(false); }
+      else if (next) { range.selectNodeContents(next); range.collapse(true); }
+    }
+    sel.removeAllRanges(); sel.addRange(range);
+    const r = range;
     const body = r.startContainer.parentElement?.closest?.('.chapter-body');
     if (body) {
       const pre = document.createRange();
@@ -2238,9 +2265,16 @@ async function moveSelectionToDarlings(html, text) {
     }
   }
 
+  // Chromium's drag html carries inline font/colour/background styles;
+  // keep only the prose (paragraphs when the drag spanned more than one)
+  let cleanHtml = null;
+  if (html) {
+    const cleaned = cleanPasteHtml(html);
+    cleanHtml = /\n/.test(text.trim()) && !/<p[\s>]/i.test(cleaned) ? '<p>' + cleaned + '</p>' : cleaned;
+  }
   darlings.unshift({
     id: did,
-    html: html || null,
+    html: cleanHtml,
     text: text,
     chapterId: chId || null,
     chapterLabel: chIdx >= 0 ? 'Chapter ' + (chIdx + 1) : 'Manuscript',
@@ -3894,6 +3928,12 @@ function safeName(s) {
 function parasFromHtml(html) {
   const holder = document.createElement('div');
   holder.innerHTML = html || '';
+  // an unwritten outline section is a ghost paragraph plus the scene break
+  // NEO planted for it; neither belongs in a book
+  holder.querySelectorAll('p.ghost[data-sec-id]').forEach((g) => {
+    const brk = holder.querySelector(`p.scene-break[data-sec-brk="${g.dataset.secId}"]`);
+    if (brk) brk.remove();
+  });
   holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
   return [...holder.querySelectorAll('p')].map((p) => {
     const sceneBreak = p.classList.contains('scene-break');
