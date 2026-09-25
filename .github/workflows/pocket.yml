@@ -68,10 +68,15 @@ jobs:
           npx cap sync android
 
       - name: Restore signing key
-        if: ${{ secrets.POCKET_KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_B64: ${{ secrets.POCKET_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/neo-pocket.jks"
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/neo-pocket.jks"
+            echo "Signing key restored."
+          else
+            echo "::warning::No POCKET_KEYSTORE_BASE64 secret — falling back to debug signing."
+          fi
 
       - name: Build signed APK
         env:
