@@ -28,7 +28,7 @@ First install only: sideload, then grant **All files access**
 (Settings → Apps → NEO Pocket).
 
 Local builds need Android Studio and: `cd pocket && npm install`, copy
-`../app.js` and `../styles.css` into `www/`, `npx cap sync android`, then
+`../app.js`, `../covers.js` and `../styles.css` into `www/`, `npx cap sync android`, then
 build from `android/`. Local builds are debug-signed and won't install over a
 robot build (or vice versa).
 

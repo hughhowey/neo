@@ -22,6 +22,7 @@ on:
     paths:
       - 'pocket/**'
       - 'app.js'
+      - 'covers.js'
       - 'styles.css'
       - '.github/workflows/pocket.yml'
     tags:
@@ -64,6 +65,7 @@ jobs:
           cd pocket
           npm install
           cp ../app.js www/app.js
+          cp ../covers.js www/covers.js
           cp ../styles.css www/styles.css
           npx cap sync android
 

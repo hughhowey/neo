@@ -40,7 +40,7 @@
       'display:flex;align-items:center;justify-content:center;padding:40px;text-align:center';
     bd.innerHTML = '<div style="max-width:420px"><h2 style="letter-spacing:5px">NEO POCKET</h2>' +
       '<p style="line-height:1.6;margin-top:16px">Pocket can see the NEO Library folder but Android is blocking it from reading files that other apps (like Syncthing) created.</p>' +
-      '<p style="line-height:1.6;color:#999;margin-top:12px">Open Android Settings → Apps → NEO Pocket → Permissions, and allow <b>All files access</b>. Then reopen Pocket.</p></div>';
+      '<p style="line-height:1.6;color:#999;margin-top:12px">The switch is not on the app\'s own Permissions page. Open Android Settings, search for <b>All files access</b> (or Apps → Special app access → All files access), turn it on for NEO Pocket, then come back here.</p></div>';
     document.body.appendChild(bd);
   }
 
