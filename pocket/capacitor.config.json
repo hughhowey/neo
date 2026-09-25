@@ -4,5 +4,12 @@
   "webDir": "www",
   "android": {
     "allowMixedContent": false
+  },
+  "backgroundColor": "#191919",
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "DARK"
+    }
   }
 }

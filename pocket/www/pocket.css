@@ -19,9 +19,11 @@
 /* desktop-only powers stay out of sight */
 #import-btn, #zoom-control, #side-pane, #dragstrip { display: none !important; }
 
-/* the bottom bar is always present — nothing to hover with */
-#bottombar { opacity: 1 !important; }
+/* the bottom bar is always present — nothing to hover with — and tall enough for thumbs */
+#bottombar { opacity: 1 !important; height: 52px; }
+#paper-scroll { bottom: 52px; }
 .tab { padding: 12px 16px; font-size: 15px; }
+#back-to-shelf { font-size: 15px; }
 
 /* bookshelf breathing room on a narrow screen */
 #bookshelf-view { padding: 20px 18px 60px; }

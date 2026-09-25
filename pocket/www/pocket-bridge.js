@@ -44,6 +44,24 @@
     document.body.appendChild(bd);
   }
 
+  // On a phone there's no easy way to open the log, so show the error itself.
+  // Long-press the box to copy it; tap to dismiss.
+  function showErrorDetail(msg) {
+    try {
+      let box = document.getElementById('pocket-error-detail');
+      if (!box) {
+        box = document.createElement('pre');
+        box.id = 'pocket-error-detail';
+        box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;max-height:40vh;overflow:auto;' +
+          'margin:0;padding:12px;background:#2a1d1d;color:#e8c9c9;font:12px/1.5 monospace;' +
+          'white-space:pre-wrap;word-break:break-word;border-radius:8px;z-index:9998;user-select:text';
+        box.addEventListener('click', () => box.remove());
+        document.body.appendChild(box);
+      }
+      box.textContent = String(msg).slice(0, 2000) + '\n\n(tap to dismiss)';
+    } catch { /* never let the reporter itself hiccup */ }
+  }
+
   async function readJSONFile(path, fallback) {
     try { return JSON.parse(await readText(path)); } catch { return fallback; }
   }
@@ -187,7 +205,22 @@
         const line = `[${new Date().toISOString()}] [pocket] ${msg}\n`;
         await writeText(p('neo-errors.log'), (prior + line).slice(-100000));
       } catch { console.error(msg); }
+      showErrorDetail(msg);
     },
     onMenu: () => { /* no menu bar in your pocket */ }
+  };
+
+  // Android's back gesture / Esc lands here (see MainActivity). Returns true
+  // when the page handled it, false to let Android background the app.
+  window.pocketBack = () => {
+    try {
+      const nav = document.getElementById('nav-pane');
+      if (nav && nav.classList.contains('open')) { nav.classList.remove('open'); return true; }
+      const modal = document.querySelector('.modal-backdrop:not([hidden])');
+      if (modal) { modal.hidden = true; return true; }
+      const editor = document.getElementById('editor-view');
+      if (editor && !editor.hidden && typeof backToShelf === 'function') { backToShelf(); return true; }
+    } catch (err) { console.error(err); }
+    return false;
   };
 })();

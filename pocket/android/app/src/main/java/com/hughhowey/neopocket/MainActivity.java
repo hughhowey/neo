@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
 
+import androidx.activity.OnBackPressedCallback;
+
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -24,6 +26,28 @@ public class MainActivity extends BridgeActivity {
             askedForFilesAccess = true;
             openFilesAccessSettings();
         }
+        wireBackGesture();
+    }
+
+    // Android's back gesture (and Esc on a hardware keyboard, which Android
+    // treats as Back) asks the page first: in a book it returns to the shelf;
+    // on the shelf it lets Android send the app to the background as usual.
+    private void wireBackGesture() {
+        OnBackPressedCallback callback = new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                getBridge().getWebView().evaluateJavascript(
+                    "(window.pocketBack ? window.pocketBack() : false)",
+                    handled -> {
+                        if (!"true".equals(handled)) {
+                            setEnabled(false);
+                            getOnBackPressedDispatcher().onBackPressed();
+                            setEnabled(true);
+                        }
+                    });
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, callback);
     }
 
     @Override
