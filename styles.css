@@ -309,6 +309,16 @@ button { font: inherit; cursor: pointer; }
 .fr-font:hover { border-color: #666; }
 .fr-font.sel { border-color: var(--accent); color: var(--accent); }
 .fr-font .fr-cap { font-size: 20px; margin-right: 7px; }
+.font-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 50vh; overflow-y: auto; margin-top: 12px; padding-right: 10px;
+}
+.font-list .fr-font { text-align: left; font-size: 16px; }
+/* the font picker keeps the page in view, so hovering previews on real text */
+.modal-backdrop.font-picker {
+  background: none; align-items: flex-start; justify-content: flex-end; padding: 44px 20px;
+}
+.font-picker .modal { padding: 24px 26px; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
 .fr-choice {
   flex: 1; text-align: left; background: var(--bg); border: 1px solid #3a3a3a;
   border-radius: 8px; padding: 14px; color: #ddd;
