@@ -167,7 +167,7 @@ function showFirstRun() {
   function buildFontStep() {
     const bodyRow = $('#fr-bodyfonts');
     bodyRow.innerHTML = '';
-    for (const name of Object.keys(BODY_FONTS)) {
+    for (const name of BODY_FONT_CHOICES) {
       const b = document.createElement('button');
       b.className = 'fr-font' + (picked.body === name ? ' sel' : '');
       b.textContent = name;
@@ -3793,10 +3793,19 @@ const DROPCAP_FONTS = {
 const BODY_FONTS = {
   'Georgia': 'Georgia, "Times New Roman", serif',
   'Palatino': '"Palatino", "Palatino Linotype", serif',
-  'Baskerville': 'Baskerville, Georgia, serif',
+  'Baskerville': 'Baskerville, "Baskerville Old Face", Georgia, serif',
   'Hoefler Text': '"Hoefler Text", Georgia, serif',
-  'Iowan Old Style': '"Iowan Old Style", Georgia, serif'
+  'Iowan Old Style': '"Iowan Old Style", Georgia, serif',
+  'Cambria': 'Cambria, Georgia, serif',
+  'Constantia': 'Constantia, Georgia, serif'
 };
+
+// Hoefler Text and Iowan Old Style ship only with macOS; elsewhere they
+// would fall back to Georgia, so offer the fonts Windows actually has.
+// Keep in step with bodyFonts in main.js.
+const BODY_FONT_CHOICES = IS_MAC
+  ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
+  : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
 
 function applyFonts() {
   const f = library.fonts || {};
