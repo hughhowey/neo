@@ -6,6 +6,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electro
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { resolveInterfaceLanguage } = require('./interface-language');
 
 // macOS Chromium's "smart delete" also removes whitespace around a deleted
 // selection, and that pass can duplicate characters. Deletes stay literal.
@@ -739,8 +740,35 @@ function sendToWindow(msg) {
   if (w) w.webContents.send('menu', msg);
 }
 
+let interfaceLanguage = null;
+
+function getInterfaceLanguage() {
+  if (interfaceLanguage) return interfaceLanguage;
+  const preferencesFile = path.join(app.getPath('userData'), 'preferences.json');
+  const preferences = readJSON(preferencesFile, {});
+  interfaceLanguage = resolveInterfaceLanguage(preferences, app.getLocale());
+  try {
+    writeJSON(preferencesFile, { ...preferences, interfaceLanguage });
+  } catch (err) {
+    logError('language-preference', err);
+  }
+  return interfaceLanguage;
+}
+
+function setInterfaceLanguage(language) {
+  if (language !== 'en' && language !== 'pt-BR') return;
+  interfaceLanguage = language;
+  const preferencesFile = path.join(app.getPath('userData'), 'preferences.json');
+  const preferences = readJSON(preferencesFile, {});
+  writeJSON(preferencesFile, { ...preferences, interfaceLanguage });
+  buildMenu();
+  sendToWindow({ type: 'language', value: interfaceLanguage });
+}
+
 function buildMenu() {
   const isMac = process.platform === 'darwin';
+  const isPortuguese = getInterfaceLanguage() === 'pt-BR';
+  const t = (english, portuguese) => isPortuguese ? portuguese : english;
   const bodyFonts = isMac
     ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
     : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
@@ -749,14 +777,14 @@ function buildMenu() {
     // which is exactly what kept NEO from ever opening a window there
     ...(isMac ? [{ role: 'appMenu' }] : []),
     {
-      label: 'File',
+      label: t('File', 'Arquivo'),
       submenu: [
         {
-          label: 'Export',
+          label: t('Export', 'Exportar'),
           submenu: [
-            { label: 'Plain Text (.txt)', click: () => sendToWindow({ type: 'export', format: 'txt' }) },
+            { label: t('Plain Text (.txt)', 'Texto simples (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
             { label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
-            { label: 'Web Page (.html)', click: () => sendToWindow({ type: 'export', format: 'html' }) },
+            { label: t('Web Page (.html)', 'Página web (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
             { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
             { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
             { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) }
@@ -764,20 +792,20 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
-          label: 'Email Draft to Myself',
+          label: t('Email Draft to Myself', 'Enviar rascunho por e-mail'),
           accelerator: 'CmdOrCtrl+E',
           click: () => sendToWindow({ type: 'emailDraft' })
         },
-        { label: 'Email Settings…', click: () => sendToWindow({ type: 'emailSettings' }) },
-        { label: 'Cover Art…', click: () => sendToWindow({ type: 'coverArt' }) },
+        { label: t('Email Settings…', 'Configurações de e-mail…'), click: () => sendToWindow({ type: 'emailSettings' }) },
+        { label: t('Cover Art…', 'Capa…'), click: () => sendToWindow({ type: 'coverArt' }) },
         {
-          label: isMac ? 'Goals & Settings…' : 'Goals && Settings…',
+          label: t(isMac ? 'Goals & Settings…' : 'Goals && Settings…', 'Metas e configurações…'),
           accelerator: 'CmdOrCtrl+,',
           click: () => sendToWindow({ type: 'stats' })
         },
         { type: 'separator' },
         {
-          label: 'Import Manuscripts…',
+          label: t('Import Manuscripts…', 'Importar manuscritos…'),
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => sendToWindow({ type: 'import' })
         },
@@ -786,7 +814,7 @@ function buildMenu() {
       ]
     },
     {
-      label: 'Edit',
+      label: t('Edit', 'Editar'),
       submenu: [
         { role: 'undo' }, { role: 'redo' },
         { type: 'separator' },
@@ -794,61 +822,61 @@ function buildMenu() {
         { role: 'pasteAndMatchStyle' }, { role: 'selectAll' },
         { type: 'separator' },
         {
-          label: isMac ? 'Find & Replace' : 'Find && Replace',
+          label: t(isMac ? 'Find & Replace' : 'Find && Replace', 'Localizar e substituir'),
           accelerator: 'CmdOrCtrl+F',
           click: () => sendToWindow({ type: 'find' })
         },
         {
-          label: 'Spellcheck Pass',
+          label: t('Spellcheck Pass', 'Verificar ortografia'),
           accelerator: 'CmdOrCtrl+;',
           click: () => sendToWindow({ type: 'spellcheck' })
         }
       ]
     },
     {
-      label: 'Format',
+      label: t('Format', 'Formato'),
       submenu: [
         {
-          label: 'Body Font',
+          label: t('Body Font', 'Fonte do texto'),
           submenu: bodyFonts.map((f) => ({
             label: f,
             click: () => sendToWindow({ type: 'bodyFont', value: f })
           }))
         },
         {
-          label: 'Drop Cap Style',
+          label: t('Drop Cap Style', 'Estilo da capitular'),
           submenu: [
-            { label: 'Literary', click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
-            { label: 'Fantasy', click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
-            { label: 'Sci-Fi', click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) }
+            { label: t('Literary', 'Literário'), click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
+            { label: t('Fantasy', 'Fantasia'), click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
+            { label: t('Sci-Fi', 'Ficção científica'), click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) }
           ]
         },
         {
-          label: 'Align Paragraph',
+          label: t('Align Paragraph', 'Alinhar parágrafo'),
           submenu: [
-            { label: 'Left', click: () => sendToWindow({ type: 'align', value: 'left' }) },
-            { label: 'Center', click: () => sendToWindow({ type: 'align', value: 'center' }) },
-            { label: 'Right', click: () => sendToWindow({ type: 'align', value: 'right' }) },
-            { label: 'Justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
+            { label: t('Left', 'À esquerda'), click: () => sendToWindow({ type: 'align', value: 'left' }) },
+            { label: t('Center', 'Centralizado'), click: () => sendToWindow({ type: 'align', value: 'center' }) },
+            { label: t('Right', 'À direita'), click: () => sendToWindow({ type: 'align', value: 'right' }) },
+            { label: t('Justify', 'Justificado'), click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
         { type: 'separator' },
-        { label: 'Larger Text', accelerator: 'CmdOrCtrl+=', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
-        { label: 'Smaller Text', accelerator: 'CmdOrCtrl+-', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
-        { label: 'Reset Text Size', accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
+        { label: t('Larger Text', 'Aumentar texto'), accelerator: 'CmdOrCtrl+=', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
+        { label: t('Smaller Text', 'Diminuir texto'), accelerator: 'CmdOrCtrl+-', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
+        { label: t('Reset Text Size', 'Redefinir tamanho do texto'), accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
         { type: 'separator' },
         {
-          label: 'Typewriter Scrolling',
+          label: t('Typewriter Scrolling', 'Rolagem de máquina de escrever'),
           accelerator: 'CmdOrCtrl+Shift+T',
           click: () => sendToWindow({ type: 'typewriter' })
         }
       ]
     },
     {
-      label: 'View',
+      label: t('View', 'Visualização'),
       submenu: [
         {
-          label: 'Full Screen',
+          label: t('Full Screen', 'Tela cheia'),
           accelerator: 'CmdOrCtrl+Shift+F',
           click: () => {
             const w = BrowserWindow.getFocusedWindow();
@@ -857,34 +885,41 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
-          label: 'Page',
+          label: t('Page', 'Página'),
           submenu: [
-            { label: 'Night', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
-            { label: 'Paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) }
+            { label: t('Night', 'Noturna'), click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
+            { label: t('Paper', 'Papel'), click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) }
           ]
         },
         {
-          label: 'Brighter Interface',
+          label: t('Brighter Interface', 'Interface mais clara'),
           click: () => sendToWindow({ type: 'uiBright' })
+        },
+        {
+          label: t('Interface Language', 'Idioma da interface'),
+          submenu: [
+            { label: 'English', type: 'radio', checked: !isPortuguese, click: () => setInterfaceLanguage('en') },
+            { label: 'Português (Brasil)', type: 'radio', checked: isPortuguese, click: () => setInterfaceLanguage('pt-BR') }
+          ]
         }
       ]
     },
     { role: 'windowMenu' },
     {
-      label: 'Help',
+      label: t('Help', 'Ajuda'),
       submenu: [
         {
-          label: 'NEO Shortcuts',
+          label: t('NEO Shortcuts', 'Atalhos do NEO'),
           accelerator: 'CmdOrCtrl+/',
           click: () => sendToWindow({ type: 'help' })
         },
         { type: 'separator' },
         {
-          label: 'About NEO',
+          label: t('About NEO', 'Sobre o NEO'),
           click: () => sendToWindow({ type: 'about' })
         },
         {
-          label: 'Check for Update…',
+          label: t('Check for Update…', 'Verificar atualizações…'),
           click: () => sendToWindow({ type: 'checkUpdate' })
         }
       ]
@@ -909,6 +944,7 @@ function compareVersions(a, b) {
 
 // toggling at the session level forces the engine to re-scan visible text —
 // newer Chromium ignores attribute changes on text it has already looked at
+ipcMain.handle('app:language:get', () => getInterfaceLanguage());
 ipcMain.handle('app:version', () => app.getVersion());
 
 ipcMain.handle('update:check', async () => {

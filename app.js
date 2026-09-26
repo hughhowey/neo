@@ -93,7 +93,7 @@ function optionModal(title, message, options) {
 
 function toast(msg, ms = 4000) {
   const h = $('#hint');
-  h.textContent = msg;
+  h.textContent = window.neoI18n ? window.neoI18n.translate(msg) : msg;
   h.hidden = false;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => { h.hidden = true; }, ms);
@@ -133,6 +133,7 @@ function coverUrl(meta) {
 }
 
 async function loadLibrary() {
+  if (window.neoI18n) window.neoI18n.setLocale(await window.neo.getLanguage());
   libraryDirPath = await window.neo.libraryPath();
   library = await window.neo.readLibrary();
   if (!library.firstRunDone) {
@@ -881,8 +882,11 @@ async function openBook(bookId) {
   $('#tp-title').textContent = book.title === 'Untitled' ? '' : book.title;
   $('#tp-subtitle').textContent = book.subtitle || '';
   $('#tp-author').textContent = book.author || 'Anonymous';
-  $$('.tab[data-tab="notes"]')[0].textContent = book.tabNames.notes;
-  $$('.tab[data-tab="outline"]')[0].textContent = book.tabNames.outline;
+  for (const kind of ['notes', 'outline']) {
+    const tab = $(`.tab[data-tab="${kind}"]`);
+    tab.classList.toggle('writer-label', book.tabNames[kind] !== (kind === 'notes' ? 'Notes' : 'Outline'));
+    tab.textContent = book.tabNames[kind];
+  }
 
   renderChapters();
   renderStickies();
@@ -1952,9 +1956,19 @@ function renderNav() {
     item.dataset.id = chId;
     item.innerHTML = `<div class="n-row" title="Drag to reorder chapters"><span class="n-label"></span>
       <span style="display:flex;align-items:center"><span class="n-words">${words.toLocaleString()}</span>${flagged ? '<span class="n-flag" title="Unresolved placeholder"></span>' : ''}</span></div>`;
-    item.querySelector('.n-label').textContent = book.chapterOrder.length === 1
-      ? (book.title || 'The story')
-      : (chTitle ? `${i + 1} · ${chTitle}` : `Chapter ${i + 1}`);
+    const navLabel = item.querySelector('.n-label');
+    if (book.chapterOrder.length === 1) {
+      navLabel.classList.add('writer-label');
+      navLabel.textContent = book.title || 'The story';
+    } else if (chTitle) {
+      navLabel.append(document.createTextNode(`${i + 1} · `));
+      const title = document.createElement('span');
+      title.className = 'writer-label';
+      title.textContent = chTitle;
+      navLabel.appendChild(title);
+    } else {
+      navLabel.textContent = `Chapter ${i + 1}`;
+    }
 
     // the row is the drag handle, so the note below stays freely editable
     const rowEl = item.querySelector('.n-row');
@@ -2123,6 +2137,7 @@ $$('.tab').forEach((tab) => {
     const name = await askInput('Rename tab', 'New tab name', book.tabNames[kind]);
     if (!name) return;
     book.tabNames[kind] = name;
+    tab.classList.add('writer-label');
     tab.textContent = name;
     saveMeta();
     // Renamed tabs become the default for future books
@@ -2374,17 +2389,20 @@ function switchTab(name) {
   oList.hidden = true;
 
   if (name === 'darlings') {
+    $('#aux-title').classList.remove('writer-label');
     $('#aux-title').textContent = 'Darlings';
     dList.hidden = false;
     renderDarlings();
     returnTo();
   } else if (name === 'outline') {
+    $('#aux-title').classList.toggle('writer-label', book.tabNames.outline !== 'Outline');
     $('#aux-title').textContent = book.tabNames.outline;
     oList.hidden = false;
     if (book.chapterOrder.length === 0) createChapterAt(0);
     renderOutline();
     returnTo();
   } else {
+    $('#aux-title').classList.toggle('writer-label', name === 'notes' && book.tabNames.notes !== 'Notes');
     $('#aux-title').textContent = book.tabNames[name] || name;
     auxEditor.hidden = false;
     auxEditor.dataset.kind = name;
@@ -2675,11 +2693,12 @@ function renderDarlings() {
     const el = document.createElement('div');
     el.className = 'darling';
     const content = document.createElement('div');
+    content.className = 'darling-content';
     if (d.html) content.innerHTML = d.html;
     else content.textContent = d.text;
     const meta = document.createElement('div');
     meta.className = 'd-meta';
-    const when = new Date(d.date).toLocaleDateString();
+    const when = new Date(d.date).toLocaleDateString(window.neoI18n ? window.neoI18n.getLocale() : undefined);
     meta.innerHTML = `<span>from ${d.chapterLabel} · ${when} · ${countWords(d.text).toLocaleString()} words</span>
       <span><button class="d-restore">Restore</button> <button class="d-del">Delete forever</button></span>`;
     meta.querySelector('.d-restore').onclick = () => restoreDarling(d.id);
@@ -4528,6 +4547,7 @@ async function showAbout() {
 }
 
 window.neo.onMenu(async (msg) => {
+  if (msg.type === 'language') window.neoI18n.setLocale(msg.value);
   if (msg.type === 'help') showHelp();
   if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();
