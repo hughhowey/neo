@@ -104,10 +104,10 @@
   window.neo = {
     /* ---------- library ---------- */
     readLibrary: async () => {
-      if (!(await checkAccess())) return { authorName: '', penNames: [], firstRunDone: false, shelves: [{ id: 'shelf-1', name: 'Works in Progress', bookIds: [] }] };
+      if (!(await checkAccess())) return { authorName: '', penNames: [], firstRunDone: false, shelves: [{ id: 'shelf-1', name: 'Em andamento', bookIds: [] }] };
       return readJSONFile(p('library.json'), {
         authorName: '', penNames: [], firstRunDone: false, pageTheme: 'night',
-        shelves: [{ id: 'shelf-1', name: 'Works in Progress', bookIds: [] }]
+        shelves: [{ id: 'shelf-1', name: 'Em andamento', bookIds: [] }]
       });
     },
     writeLibrary: async (data) => { await writeJSONFile(p('library.json'), data); return true; },

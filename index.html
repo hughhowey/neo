@@ -14,9 +14,9 @@
     <header id="shelf-header">
       <h1>NEO</h1>
       <div class="shelf-header-right">
-        <span id="author-chip" title="Click to change your author name"></span>
-        <button id="import-btn" title="Import .docx, .txt, or .md manuscripts">&#8681; Import</button>
-        <button id="add-shelf-btn" title="Add a shelf">+ Shelf</button>
+        <span id="author-chip" title="Clique para alterar o nome do autor"></span>
+        <button id="import-btn" title="Importar manuscritos .docx, .txt ou .md">&#8681; Importar</button>
+        <button id="add-shelf-btn" title="Adicionar biblioteca">+ Biblioteca</button>
       </div>
     </header>
     <div id="shelves"></div>
@@ -26,40 +26,40 @@
   <div id="firstrun" class="modal-backdrop" hidden>
     <div class="modal">
       <div id="fr-step1">
-        <h2>Welcome to NEO</h2>
-        <p>NEO knows you're writing books. A few quick questions and it will never ask anything again.</p>
-        <label>Your name <span class="soft">(appears as the author on every document — leave blank for “Anonymous”)</span>
+        <h2>Bem-vindo ao NEO</h2>
+        <p>O NEO sabe que você está escrevendo livros. Responda a algumas perguntas rápidas e ele não perguntará novamente.</p>
+        <label>Seu nome <span class="soft">(aparecerá como autor em todos os documentos — deixe em branco para “Anônimo”)</span>
           <input id="fr-name" type="text" autocomplete="off" spellcheck="false" />
         </label>
-        <label>Pen name <span class="soft">(optional — used on title pages if set)</span>
+        <label>Pseudônimo <span class="soft">(opcional — usado nas páginas de rosto, se preenchido)</span>
           <input id="fr-pen" type="text" autocomplete="off" spellcheck="false" />
         </label>
         <div class="fr-style">
-          <p>Are you a pantser or a plotter?</p>
+          <p>Você escreve de forma intuitiva ou planeja antes?</p>
           <div class="fr-choices">
             <button class="fr-choice" data-style="pantser">
-              <strong>Pantser</strong>
-              <span>I write by the seat of my pants. New books open on a blank page.</span>
+              <strong>Intuitivo</strong>
+              <span>Escrevo sem planejar. Livros novos abrem em uma página em branco.</span>
             </button>
             <button class="fr-choice" data-style="plotter">
-              <strong>Plotter</strong>
-              <span>I outline first. New books open in the Outline tab.</span>
+              <strong>Planejador</strong>
+              <span>Faço um esboço primeiro. Livros novos abrem na aba Esboço.</span>
             </button>
           </div>
         </div>
       </div>
       <div id="fr-step2" hidden>
-        <h2>How should the page look?</h2>
-        <p>Pick a typeface and a drop-cap style. The sample below shows exactly what you'll get. (Changeable anytime in the Format menu.)</p>
+        <h2>Como a página deve ficar?</h2>
+        <p>Escolha uma fonte e um estilo de capitular. A amostra abaixo mostra exatamente o que você vai receber. (Pode mudar a qualquer momento no menu Formato.)</p>
         <div id="fr-sample">
-          <p id="fr-sample-text">It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief…</p>
+          <p id="fr-sample-text">Foi o melhor dos tempos, foi o pior dos tempos, foi a era da sabedoria, foi a era da tolice, foi a época da crença…</p>
         </div>
-        <p style="margin-bottom:6px">Body typeface</p>
+        <p style="margin-bottom:6px">Fonte do texto</p>
         <div id="fr-bodyfonts" class="fr-fontrow"></div>
-        <p style="margin-bottom:6px">Drop cap</p>
+        <p style="margin-bottom:6px">Capitular</p>
         <div id="fr-dropcaps" class="fr-fontrow"></div>
         <div style="text-align:right;margin-top:20px">
-          <button id="fr-done" class="btn-gold">Start writing</button>
+          <button id="fr-done" class="btn-gold">Começar a escrever</button>
         </div>
       </div>
     </div>
@@ -72,7 +72,7 @@
     <div id="nav-hotzone"></div>
     <nav id="nav-pane">
       <div id="nav-list"></div>
-      <button id="nav-add" title="Add a chapter at the end">+ Chapter</button>
+      <button id="nav-add" title="Adicionar capítulo ao final">+ Capítulo</button>
     </nav>
 
     <!-- Right hover zone: notes & comments -->
@@ -106,7 +106,7 @@
 
     <!-- Bottom bar: tabs + counters -->
     <footer id="bottombar">
-      <button id="back-to-shelf" title="Back to your bookshelf">&#8676; Shelf</button>
+      <button id="back-to-shelf" title="Voltar para a biblioteca">&#8676; Biblioteca</button>
       <div id="tabs">
         <div class="tab active" data-tab="manuscript">Manuscript</div>
         <div class="tab" data-tab="notes">Notes</div>

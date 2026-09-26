@@ -303,7 +303,7 @@ async function renderShelves() {
     const grip = document.createElement('span');
     grip.className = 'shelf-grip';
     grip.textContent = '⠿';
-    grip.title = 'Drag to reorder shelves';
+    grip.title = 'Arraste para reordenar as bibliotecas';
     grip.draggable = true;
     grip.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('application/x-neo-shelf', shelf.id);
@@ -321,7 +321,7 @@ async function renderShelves() {
     label.contentEditable = 'true';
     label.spellcheck = false;
     label.textContent = shelf.name;
-    label.title = 'Click to rename · right-click to export or delete';
+    label.title = 'Clique para renomear · clique com o botão direito para exportar ou excluir';
     label.addEventListener('blur', async () => {
       shelf.name = label.textContent.trim() || shelf.name;
       label.textContent = shelf.name;
@@ -333,20 +333,20 @@ async function renderShelves() {
     // right-click a shelf label: publish it as one book, or delete it
     label.addEventListener('contextmenu', async (e) => {
       e.preventDefault();
-      const choice = await optionModal(`Shelf “${shelf.name}”`, null, [
+      const choice = await optionModal(`Biblioteca “${shelf.name}”`, null, [
         {
-          label: 'Export shelf as anthology…',
-          desc: `Collect ${shelf.bookIds.length ? 'its ' + shelf.bookIds.length : 'the'} work${shelf.bookIds.length === 1 ? '' : 's'}, in shelf order, into a single book with a table of contents.`,
+          label: 'Exportar biblioteca como coletânea…',
+          desc: `Reúna ${shelf.bookIds.length ? 'os ' + shelf.bookIds.length : 'os'} trabalhos${shelf.bookIds.length === 1 ? '' : 's'}, na ordem da biblioteca, em um único livro com sumário.`,
           value: 'anthology'
         },
-        { label: 'Delete shelf', desc: 'Books move to another shelf. Nothing is deleted from disk.', danger: true, value: 'del' }
+        { label: 'Excluir biblioteca', desc: 'Os livros são movidos para outra biblioteca. Nada é apagado do disco.', danger: true, value: 'del' }
       ]);
       if (choice === 'anthology') {
         await exportShelfAnthology(shelf);
       } else if (choice === 'del') {
         const mine = shelvesFor(currentAuthor().id);
         if (mine.length === 1) {
-          toast('This is your only shelf — add another before deleting this one');
+          toast('Esta é sua única biblioteca — adicione outra antes de excluí-la');
           return;
         }
         const other = mine.find((s) => s.id !== shelf.id);
@@ -799,7 +799,7 @@ function shelfAutoScrollStep() {
 $('#add-shelf-btn').onclick = async () => {
   library.shelves.push({
     id: 'shelf-' + Date.now().toString(36),
-    name: 'New Shelf',
+    name: 'Nova biblioteca',
     bookIds: [],
     authorId: currentAuthor().id
   });
@@ -812,36 +812,36 @@ $('#author-chip').onclick = async () => {
   const opts = [];
   for (const a of library.authors) {
     if (a.id !== cur.id) {
-      opts.push({ label: 'Write as ' + a.name, desc: 'Switch to this name’s shelves', value: 'sw:' + a.id });
+      opts.push({ label: 'Escrever como ' + a.name, desc: 'Alternar para as bibliotecas deste nome', value: 'sw:' + a.id });
     }
   }
-  opts.push({ label: 'Rename ' + cur.name, value: 'rename' });
-  opts.push({ label: 'Add a pen name…', desc: 'A separate set of shelves under another name', value: 'add' });
+  opts.push({ label: 'Renomear ' + cur.name, value: 'rename' });
+  opts.push({ label: 'Adicionar pseudônimo…', desc: 'Um conjunto separado de bibliotecas para outro nome', value: 'add' });
   if (library.authors.length > 1) {
     opts.push({
-      label: 'Remove ' + cur.name,
-      desc: 'These shelves and books move to your other name. Nothing is deleted from disk.',
+      label: 'Remover ' + cur.name,
+      desc: 'Estas bibliotecas e livros vão para o seu outro nome. Nada é apagado do disco.',
       danger: true, value: 'del'
     });
   }
-  const pick = await optionModal('Writing as ' + cur.name, null, opts);
+  const pick = await optionModal('Escrevendo como ' + cur.name, null, opts);
   if (!pick) return;
   if (pick.startsWith('sw:')) {
     library.currentAuthorId = pick.slice(3);
   } else if (pick === 'rename') {
-    const name = await askInput('Author name', 'Shown on your title pages', cur.name);
+    const name = await askInput('Nome do autor', 'Será exibido nas páginas de rosto', cur.name);
     if (name === null) return;
     cur.name = name || cur.name;
     library.authorName = library.authors[0].name; // legacy field follows the first name
   } else if (pick === 'add') {
-    const name = await askInput('New pen name', 'Shown on that name’s title pages', '');
+    const name = await askInput('Novo pseudônimo', 'Será exibido nas páginas de rosto deste nome', '');
     if (!name) return;
     const a = { id: 'a-' + Date.now().toString(36), name };
     library.authors.push(a);
     library.currentAuthorId = a.id;
     library.shelves.push({
       id: 'shelf-' + Date.now().toString(36),
-      name: 'Works in Progress', bookIds: [], authorId: a.id
+      name: 'Em andamento', bookIds: [], authorId: a.id
     });
   } else if (pick === 'del') {
     const homeId = library.authors[0].id;

@@ -28,7 +28,7 @@ function ensureLibrary() {
       penNames: [],
       firstRunDone: false,
       pageTheme: 'night',
-      shelves: [{ id: 'shelf-1', name: 'Works in Progress', bookIds: [] }]
+      shelves: [{ id: 'shelf-1', name: 'Em andamento', bookIds: [] }]
     };
     fs.writeFileSync(LIBRARY_FILE, JSON.stringify(seed, null, 2));
   }
