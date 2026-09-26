@@ -309,6 +309,16 @@ button { font: inherit; cursor: pointer; }
 .fr-font:hover { border-color: #666; }
 .fr-font.sel { border-color: var(--accent); color: var(--accent); }
 .fr-font .fr-cap { font-size: 20px; margin-right: 7px; }
+.font-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 50vh; overflow-y: auto; margin-top: 12px; padding-right: 10px;
+}
+.font-list .fr-font { text-align: left; font-size: 16px; }
+/* the font picker keeps the page in view, so hovering previews on real text */
+.modal-backdrop.font-picker {
+  background: none; align-items: flex-start; justify-content: flex-end; padding: 44px 20px;
+}
+.font-picker .modal { padding: 24px 26px; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
 .fr-choice {
   flex: 1; text-align: left; background: var(--bg); border: 1px solid #3a3a3a;
   border-radius: 8px; padding: 14px; color: #ddd;
@@ -507,7 +517,10 @@ body.bright .spell-menu button { color: #eee; }
 #aux-editor:empty::before { content: 'Write freely…'; color: #b9b4a8; font-style: italic; }
 
 /* --- Structured outline tab --- */
-.ol-line { display: flex; gap: 12px; align-items: baseline; padding: 3px 0; }
+.ol-line {
+  display: flex; gap: 12px; align-items: baseline; padding: 3px 0;
+  font-size: calc(var(--editor-size, 17px) * 15 / 17 * var(--page-zoom, 1));
+}
 .ol-chapter { margin-top: 18px; }
 .ol-section { margin-left: 40px; }
 .ol-num {
@@ -516,7 +529,7 @@ body.bright .spell-menu button { color: #eee; }
 }
 .ol-chapter .ol-num { font-weight: 700; color: #6b6455; }
 .ol-text {
-  flex: 1; outline: none; font-family: Georgia, serif; font-size: 15px;
+  flex: 1; outline: none; font-family: Georgia, serif;
   line-height: 1.5; min-height: 20px; border-bottom: 1px dashed transparent;
 }
 .ol-text:focus { border-bottom-color: #d8d2c2; }

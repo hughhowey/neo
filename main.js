@@ -819,10 +819,14 @@ function buildMenu() {
       submenu: [
         {
           label: 'Body Font',
-          submenu: bodyFonts.map((f) => ({
-            label: f,
-            click: () => sendToWindow({ type: 'bodyFont', value: f })
-          }))
+          submenu: [
+            ...bodyFonts.map((f) => ({
+              label: f,
+              click: () => sendToWindow({ type: 'bodyFont', value: f })
+            })),
+            { type: 'separator' },
+            { label: 'Other Font…', click: () => sendToWindow({ type: 'bodyFontPick' }) }
+          ]
         },
         {
           label: 'Drop Cap Style',

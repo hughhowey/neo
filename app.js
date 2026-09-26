@@ -167,7 +167,7 @@ function showFirstRun() {
   function buildFontStep() {
     const bodyRow = $('#fr-bodyfonts');
     bodyRow.innerHTML = '';
-    for (const name of Object.keys(BODY_FONTS)) {
+    for (const name of BODY_FONT_CHOICES) {
       const b = document.createElement('button');
       b.className = 'fr-font' + (picked.body === name ? ' sel' : '');
       b.textContent = name;
@@ -4001,15 +4001,24 @@ const DROPCAP_FONTS = {
 const BODY_FONTS = {
   'Georgia': 'Georgia, "Times New Roman", serif',
   'Palatino': '"Palatino", "Palatino Linotype", serif',
-  'Baskerville': 'Baskerville, Georgia, serif',
+  'Baskerville': 'Baskerville, "Baskerville Old Face", Georgia, serif',
   'Hoefler Text': '"Hoefler Text", Georgia, serif',
-  'Iowan Old Style': '"Iowan Old Style", Georgia, serif'
+  'Iowan Old Style': '"Iowan Old Style", Georgia, serif',
+  'Cambria': 'Cambria, Georgia, serif',
+  'Constantia': 'Constantia, Georgia, serif'
 };
+
+// Hoefler Text and Iowan Old Style ship only with macOS; elsewhere they
+// would fall back to Georgia, so offer the fonts Windows actually has.
+// Keep in step with bodyFonts in main.js.
+const BODY_FONT_CHOICES = IS_MAC
+  ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
+  : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
 
 function applyFonts() {
   const f = library.fonts || {};
-  if (f.body && BODY_FONTS[f.body]) {
-    document.documentElement.style.setProperty('--body-font', BODY_FONTS[f.body]);
+  if (f.body && typeof f.body === 'string') {
+    document.documentElement.style.setProperty('--body-font', bodyFontStack(f.body));
   }
   if (f.dropcap && DROPCAP_FONTS[f.dropcap]) {
     document.documentElement.style.setProperty('--dropcap-font', DROPCAP_FONTS[f.dropcap]);
@@ -4021,6 +4030,73 @@ function applyFonts() {
   const zoom = Math.min(1.6, Math.max(0.75, library.pageZoom || 1));
   document.documentElement.style.setProperty('--page-zoom', zoom);
   updateZoomDisplay();
+}
+
+// A built-in choice, or a font the writer picked from their own computer.
+// A library opened where that font is missing simply reads in Georgia.
+function bodyFontStack(name) {
+  return Object.hasOwn(BODY_FONTS, name) ? BODY_FONTS[name] : `"${name.replace(/["\\]/g, '')}", Georgia, serif`;
+}
+
+// Format → Body Font → Other Font…: every font installed on this computer,
+// each shown in its own face. The panel sits top right, off the undimmed
+// page, so hovering previews the font on the writer's own words. Resolves
+// to a family name, or null on cancel.
+async function pickLocalFont() {
+  let families = [];
+  try {
+    // one entry per style; names starting with "." are the system's hidden fonts
+    const faces = await window.queryLocalFonts();
+    families = [...new Set(faces.map((f) => f.family))]
+      .filter((n) => n && !n.startsWith('.'))
+      .sort((a, b) => a.localeCompare(b));
+  } catch {}
+  if (!families.length) { toast('NEO couldn’t read the fonts on this computer'); return null; }
+  return new Promise((resolve) => {
+    const bd = document.createElement('div');
+    bd.className = 'modal-backdrop font-picker';
+    bd.innerHTML = `
+      <div class="modal" style="width:320px">
+        <h2 style="font-size:16px">Other font</h2>
+        <p class="font-now" style="font-size:13px;color:var(--muted);margin-bottom:10px"></p>
+        <input type="text" spellcheck="false" placeholder="Search ${families.length} installed fonts" />
+        <div class="font-list"></div>
+        <div style="text-align:right;margin-top:14px">
+          <button class="m-cancel btn-quiet">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bd);
+    const input = bd.querySelector('input');
+    const list = bd.querySelector('.font-list');
+    const current = (library.fonts || {}).body || 'Georgia';
+    bd.querySelector('.font-now').textContent = 'Now: ' + current;
+    const done = (val) => { bd.remove(); resolve(val); };
+    const render = () => {
+      const q = input.value.trim().toLowerCase();
+      list.innerHTML = '';
+      for (const name of families) {
+        if (q && !name.toLowerCase().includes(q)) continue;
+        const b = document.createElement('button');
+        b.className = 'fr-font' + (name === current ? ' sel' : '');
+        b.textContent = name;
+        b.style.fontFamily = bodyFontStack(name);
+        b.onmouseenter = () => { document.documentElement.style.setProperty('--body-font', bodyFontStack(name)); };
+        b.onclick = () => done(name);
+        list.appendChild(b);
+      }
+    };
+    list.onmouseleave = applyFonts; // back to the saved font
+    input.oninput = render;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter' && list.firstChild) done(list.firstChild.textContent);
+      if (e.key === 'Escape') done(null);
+    };
+    bd.querySelector('.m-cancel').onclick = () => done(null);
+    render();
+    const sel = list.querySelector('.sel');
+    if (sel) sel.scrollIntoView({ block: 'center' });
+    input.focus();
+  });
 }
 
 // Pinch (trackpad) or Ctrl+scroll: page and text zoom together.
@@ -4781,6 +4857,15 @@ window.neo.onMenu(async (msg) => {
     if (msg.value === 0) library.pageZoom = 1; // ⌘0 resets pinch zoom too
     await window.neo.writeLibrary(library);
     applyFonts();
+  }
+  if (msg.type === 'bodyFontPick') {
+    const name = await pickLocalFont();
+    if (name) {
+      library.fonts = library.fonts || {};
+      library.fonts.body = name;
+      await window.neo.writeLibrary(library);
+    }
+    applyFonts(); // also undoes a hover preview after Cancel
   }
   if (msg.type === 'bodyFont') {
     library.fonts = library.fonts || {};
