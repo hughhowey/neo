@@ -26,13 +26,13 @@
     try {
       await FS().writeFile({ path, directory: DIR, data, encoding: 'utf8', recursive: true });
     } catch (err) {
-      showPermissionHelp();
+      showErrorDetail('Could not save ' + path + ': ' + (err && err.message || err));
       throw err;
     }
   }
 
   let permissionHelpShown = false;
-  function showPermissionHelp() {
+  function showPermissionHelp(err) {
     if (permissionHelpShown) return;
     permissionHelpShown = true;
     const bd = document.createElement('div');
@@ -40,7 +40,8 @@
       'display:flex;align-items:center;justify-content:center;padding:40px;text-align:center';
     bd.innerHTML = '<div style="max-width:420px"><h2 style="letter-spacing:5px">NEO POCKET</h2>' +
       '<p style="line-height:1.6;margin-top:16px">Pocket can see the NEO Library folder but Android is blocking it from reading files that other apps (like Syncthing) created.</p>' +
-      '<p style="line-height:1.6;color:#999;margin-top:12px">The switch is not on the app\'s own Permissions page. Open Android Settings, search for <b>All files access</b> (or Apps → Special app access → All files access), turn it on for NEO Pocket, then come back here.</p></div>';
+      '<p style="line-height:1.6;color:#999;margin-top:12px">The switch is not on the app\'s own Permissions page. Open Android Settings, search for <b>All files access</b> (or Apps → Special app access → All files access), turn it on for NEO Pocket, then come back here.</p>' +
+      '<p style="font:12px/1.5 monospace;color:#777;margin-top:20px;word-break:break-word">' + String(err && err.message || err || '') + '</p></div>';
     document.body.appendChild(bd);
   }
 
@@ -91,7 +92,7 @@
       }
       return true;
     } catch (err) {
-      showPermissionHelp();
+      showPermissionHelp(err);
       return false;
     }
   }
@@ -170,6 +171,11 @@
     writeAux: async (bookId, name, html) => { await writeText(p(bookId, name + '.html'), html); return true; },
     readJSON: (bookId, name, fallback) => readJSONFile(p(bookId, name + '.json'), fallback),
     writeJSON: async (bookId, name, data) => { await writeJSONFile(p(bookId, name + '.json'), data); return true; },
+
+    /* ---------- API keys & painting: desktop only ---------- */
+    hasSecret: async () => false,
+    setSecret: async () => false,
+    paintCover: async () => { throw new Error('Cover painting happens on the desktop'); },
 
     /* ---------- covers: shown if present, managed on the Mac ---------- */
     readCover: async (bookId, fname) => {
