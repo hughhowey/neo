@@ -508,7 +508,10 @@ body.bright .spell-menu button { color: #eee; }
 #aux-editor:empty::before { content: 'Write freely…'; color: #b9b4a8; font-style: italic; }
 
 /* --- Structured outline tab --- */
-.ol-line { display: flex; gap: 12px; align-items: baseline; padding: 3px 0; }
+.ol-line {
+  display: flex; gap: 12px; align-items: baseline; padding: 3px 0;
+  font-size: calc(var(--editor-size, 17px) * 15 / 17 * var(--page-zoom, 1));
+}
 .ol-chapter { margin-top: 18px; }
 .ol-section { margin-left: 40px; }
 .ol-num {
@@ -517,7 +520,7 @@ body.bright .spell-menu button { color: #eee; }
 }
 .ol-chapter .ol-num { font-weight: 700; color: #6b6455; }
 .ol-text {
-  flex: 1; outline: none; font-family: Georgia, serif; font-size: 15px;
+  flex: 1; outline: none; font-family: Georgia, serif;
   line-height: 1.5; min-height: 20px; border-bottom: 1px dashed transparent;
 }
 .ol-text:focus { border-bottom-color: #d8d2c2; }
