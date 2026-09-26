@@ -105,8 +105,13 @@ jobs:
           name: NEO Pocket — latest build
           prerelease: true
           body: |
-            Rolling build of NEO Pocket from `main` — ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.code }}).
-            Download `neo-pocket.apk` on the phone and open it; it installs over whatever's there.
+            NEO Pocket is an early alpha. It's an Android companion to NEO for writing on the go.
+
+            This is a rolling build from `main`, and it updates itself every time Pocket changes, so this link is always the newest.
+
+            To try it on your Android phone, download `neo-pocket.apk` below and open it (Android will warn about installing outside the Play Store). On first launch, Pocket asks for All files access so it can read the NEO Library folder. Your books live in `Documents/NEO Library`; to share them with desktop NEO, sync that folder with [Syncthing](https://syncthing.net). Updates install straight over the old version.
+
+            Meant for a hardware keyboard; the on-screen keyboard stays down (long-press ☰ to open it). Swipe from the left edge for chapters, from the right for Notes & Comments. It's rough; please report bugs in [Issues](https://github.com/hughhowey/neo/issues).
           files: ${{ runner.temp }}/neo-pocket.apk
 
       - name: Publish numbered release for this tag
