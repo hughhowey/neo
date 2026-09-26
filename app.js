@@ -2796,7 +2796,15 @@ function updateCounters() {
 }
 
 // ---- daily word tracking + goal display ----
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// The writing day follows the writer's own clock, and rolls over at
+// library.dayEndsAt (0 = midnight) so a session that runs past midnight
+// still counts toward the night it began.
+function writingDay(d = new Date()) {
+  d = new Date(d);
+  if (d.getHours() < (library.dayEndsAt || 0)) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const todayStr = () => writingDay();
 
 function trackDailyWords(total) {
   book.dailyCounts = book.dailyCounts || {};
@@ -3550,8 +3558,9 @@ function statsChartSvg() {
   const W = 520, H = 200, PAD = 6;
   const days = [];
   for (let i = 29; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000);
-    days.push(d.toISOString().slice(0, 10));
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(writingDay(d));
   }
   const counts = book.dailyCounts || {};
   const daily = days.map((d) => counts[d] ? Math.max(0, counts[d].end - counts[d].start) : 0);
@@ -3714,6 +3723,13 @@ function openStats() {
         <label>Daily goal <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
         ${hasBook ? `<label>Book goal <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
       </div>
+      <div class="stats-row">
+        <label>My writing day ends at
+          <select id="st-dayends">
+            ${[0, 1, 2, 3, 4, 5, 6].map((h) => `<option value="${h}"${(library.dayEndsAt || 0) === h ? ' selected' : ''}>${h ? h + ' am' : 'midnight'}</option>`).join('')}
+          </select>
+        </label>
+      </div>
       ${hasBook ? `
       <div class="stats-row">
         <label>Sprint <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/> words</label>
@@ -3735,6 +3751,7 @@ function openStats() {
   document.body.appendChild(bd);
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
+    library.dayEndsAt = parseInt(bd.querySelector('#st-dayends').value, 10) || 0;
     library.writingStyle = bd.querySelector('#st-style').value;
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
