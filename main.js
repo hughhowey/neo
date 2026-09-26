@@ -696,26 +696,53 @@ function createWindow() {
 }
 
 // ---------------------------------------------------------------------------
-// Spellcheck: NEO's own dictionary (Hunspell en-US via nspell), identical on
-// every platform. The renderer paints the squiggles and asks for suggestions.
+// Spellcheck: bundled Hunspell dictionaries via nspell, identical on every
+// platform. The renderer paints the squiggles and asks for suggestions.
 // ---------------------------------------------------------------------------
 let neoSpell = null;
+let spellLoadId = 0;
+const DEFAULT_SPELL_LANGUAGE = 'en-US';
+const SPELL_LANGUAGES = {
+  'en-US': { label: 'English (United States)', dictionary: 'dictionary-en-us' },
+  'en-GB': { label: 'English (United Kingdom)', dictionary: 'dictionary-en-gb' },
+  'en-CA': { label: 'English (Canada)', dictionary: 'dictionary-en-ca' },
+  'en-AU': { label: 'English (Australia)', dictionary: 'dictionary-en-au' },
+  fr: { label: 'French', dictionary: 'dictionary-fr' },
+  es: { label: 'Spanish', dictionary: 'dictionary-es' },
+  de: { label: 'German', dictionary: 'dictionary-de' }
+};
 
-function initSpell() {
+async function loadSpellDictionary(language) {
+  const selected = SPELL_LANGUAGES[language] ? language : DEFAULT_SPELL_LANGUAGE;
+  const loadId = ++spellLoadId;
   try {
-    const nspell = require('nspell');
-    require('dictionary-en-us')((err, dict) => {
-      if (err) { logError('spell', err); return; }
-      neoSpell = nspell(dict);
-      try {
-        const lib = readJSON(LIBRARY_FILE, {});
-        for (const w of lib.customWords || []) neoSpell.add(w);
-      } catch { /* custom words are a nicety */ }
-    });
-  } catch (err) {
-    logError('spell', err);
+    let dict = (await import(SPELL_LANGUAGES[selected].dictionary)).default;
+    if (typeof dict === 'function') {
+      dict = await new Promise((resolve, reject) => {
+        dict((err, result) => err ? reject(err) : resolve(result));
+      });
+    }
+    if (loadId !== spellLoadId) return false;
+    const spell = require('nspell')(dict);
+    const lib = readJSON(LIBRARY_FILE, {});
+    for (const word of lib.customWords || []) spell.add(word);
+    neoSpell = spell;
+    return true;
+  } catch (error) {
+    if (loadId === spellLoadId) logError('spell', error);
+    return false;
   }
 }
+
+function initSpell() {
+  const lib = readJSON(LIBRARY_FILE, {});
+  loadSpellDictionary(lib.spellcheckLanguage || DEFAULT_SPELL_LANGUAGE);
+}
+
+ipcMain.handle('spell:setLanguage', (_e, language) => {
+  if (!SPELL_LANGUAGES[language]) return false;
+  return loadSpellDictionary(language);
+});
 
 ipcMain.handle('spell:check', (_e, words) => {
   const out = {};
@@ -744,6 +771,8 @@ function buildMenu() {
   const bodyFonts = isMac
     ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
     : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
+  const savedSpellLanguage = readJSON(LIBRARY_FILE, {}).spellcheckLanguage;
+  const selectedSpellLanguage = SPELL_LANGUAGES[savedSpellLanguage] ? savedSpellLanguage : DEFAULT_SPELL_LANGUAGE;
   const template = [
     // appMenu exists only on macOS — including it on Windows throws,
     // which is exactly what kept NEO from ever opening a window there
@@ -802,6 +831,15 @@ function buildMenu() {
           label: 'Spellcheck Pass',
           accelerator: 'CmdOrCtrl+;',
           click: () => sendToWindow({ type: 'spellcheck' })
+        },
+        {
+          label: 'Spellcheck Language',
+          submenu: Object.entries(SPELL_LANGUAGES).map(([value, language]) => ({
+            label: language.label,
+            type: 'radio',
+            checked: selectedSpellLanguage === value,
+            click: () => sendToWindow({ type: 'spellLanguage', value })
+          }))
         }
       ]
     },

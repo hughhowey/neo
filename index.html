@@ -1,13 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <title>NEO</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
   <!-- Draggable strip so the frameless window can be moved -->
-  <div id="dragstrip"></div>
+  <div id="dragstrip">
+    <select id="spell-language-select" aria-label="Spellcheck language" title="Spellcheck language">
+      <option value="en-US">English (US)</option>
+      <option value="en-GB">English (UK)</option>
+      <option value="en-CA">English (Canada)</option>
+      <option value="en-AU">English (Australia)</option>
+      <option value="fr">French</option>
+      <option value="es">Spanish</option>
+      <option value="de">German</option>
+    </select>
+  </div>
 
   <!-- ======================= BOOKSHELF ======================= -->
   <div id="bookshelf-view">
@@ -28,7 +40,8 @@
       <div id="fr-step1">
         <h2>Welcome to NEO</h2>
         <p>NEO knows you're writing books. A few quick questions and it will never ask anything again.</p>
-        <label>Your name <span class="soft">(appears as the author on every document — leave blank for “Anonymous”)</span>
+        <label>Your name <span class="soft">(appears as the author on every document — leave blank for
+            “Anonymous”)</span>
           <input id="fr-name" type="text" autocomplete="off" spellcheck="false" />
         </label>
         <label>Pen name <span class="soft">(optional — used on title pages if set)</span>
@@ -50,9 +63,11 @@
       </div>
       <div id="fr-step2" hidden>
         <h2>How should the page look?</h2>
-        <p>Pick a typeface and a drop-cap style. The sample below shows exactly what you'll get. (Changeable anytime in the Format menu.)</p>
+        <p>Pick a typeface and a drop-cap style. The sample below shows exactly what you'll get. (Changeable anytime in
+          the Format menu.)</p>
         <div id="fr-sample">
-          <p id="fr-sample-text">It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief…</p>
+          <p id="fr-sample-text">It was the best of times, it was the worst of times, it was the age of wisdom, it was
+            the age of foolishness, it was the epoch of belief…</p>
         </div>
         <p style="margin-bottom:6px">Body typeface</p>
         <div id="fr-bodyfonts" class="fr-fontrow"></div>
@@ -111,13 +126,16 @@
         <div class="tab active" data-tab="manuscript">Manuscript</div>
         <div class="tab" data-tab="notes">Notes</div>
         <div class="tab" data-tab="outline">Outline</div>
-        <div class="tab darlings" data-tab="darlings" title="Drag any selection here. It's saved, not gone.">Darlings</div>
+        <div class="tab darlings" data-tab="darlings" title="Drag any selection here. It's saved, not gone.">Darlings
+        </div>
       </div>
       <div id="counters">
         <span id="goal-counter" title="Today's words — click for goals, sprints, and your progress chart"></span>
         <span id="pos-counter"></span>
         <span id="word-counter" title="Click to cycle book / chapter word count"></span>
-        <span id="zoom-control" title="Scroll to zoom, or pinch / Ctrl+Scroll anywhere on the page"><button id="zoom-out" title="Zoom out">&#8722;</button><span id="zoom-level" title="Click to reset to 100%">100%</span><button id="zoom-in" title="Zoom in">+</button></span>
+        <span id="zoom-control" title="Scroll to zoom, or pinch / Ctrl+Scroll anywhere on the page"><button
+            id="zoom-out" title="Zoom out">&#8722;</button><span id="zoom-level"
+            title="Click to reset to 100%">100%</span><button id="zoom-in" title="Zoom in">+</button></span>
       </div>
     </footer>
 
@@ -141,4 +159,5 @@
   <script src="covers.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>

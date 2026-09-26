@@ -135,6 +135,9 @@ function coverUrl(meta) {
 async function loadLibrary() {
   libraryDirPath = await window.neo.libraryPath();
   library = await window.neo.readLibrary();
+  const spellLanguageSelect = $('#spell-language-select');
+  spellLanguageSelect.value = library.spellcheckLanguage || 'en-US';
+  if (!spellLanguageSelect.value) spellLanguageSelect.value = 'en-US';
   if (!library.firstRunDone) {
     showFirstRun();
   }
@@ -248,22 +251,22 @@ async function renderShelves() {
   if (!wrap.dataset.dndWired) {
     wrap.dataset.dndWired = '1';
     wrap.addEventListener('dragover', (e) => {
-    if (!e.dataTransfer.types.includes('application/x-neo-shelf')) return;
-    e.preventDefault();
-    let ind = wrap.querySelector('.shelf-drop-ind');
-    if (!ind) {
-      ind = document.createElement('div');
-      ind.className = 'shelf-drop-ind';
-    }
-    let placed = false;
-    for (const s of wrap.querySelectorAll('.shelf:not(.dragging)')) {
-      const r = s.getBoundingClientRect();
-      if (e.clientY < r.top + r.height / 2) {
-        wrap.insertBefore(ind, s);
-        placed = true;
-        break;
+      if (!e.dataTransfer.types.includes('application/x-neo-shelf')) return;
+      e.preventDefault();
+      let ind = wrap.querySelector('.shelf-drop-ind');
+      if (!ind) {
+        ind = document.createElement('div');
+        ind.className = 'shelf-drop-ind';
       }
-    }
+      let placed = false;
+      for (const s of wrap.querySelectorAll('.shelf:not(.dragging)')) {
+        const r = s.getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) {
+          wrap.insertBefore(ind, s);
+          placed = true;
+          break;
+        }
+      }
       if (!placed) wrap.appendChild(ind);
     });
     wrap.addEventListener('drop', async (e) => {
@@ -1246,7 +1249,7 @@ function handleTabSpacing(e) {
     if (node.nodeType === Node.TEXT_NODE) {
       let n = 0;
       while (n < 2 && r.startOffset - n > 0 &&
-             node.textContent[r.startOffset - n - 1] === ' ') n++;
+        node.textContent[r.startOffset - n - 1] === ' ') n++;
       if (n > 0) {
         const del = document.createRange();
         del.setStart(node, r.startOffset - n);
@@ -1915,7 +1918,7 @@ function resolveSticky(sid) {
     if (next && next.nodeType === Node.TEXT_NODE) next.data = next.data.replace(/^\u00a0/, ' ');
     if (prev && prev.nodeType === Node.TEXT_NODE) prev.data = prev.data.replace(/\u00a0$/, ' ');
     if (prev && next && prev.nodeType === Node.TEXT_NODE && next.nodeType === Node.TEXT_NODE &&
-        / $/.test(prev.data) && /^ /.test(next.data)) {
+      / $/.test(prev.data) && /^ /.test(next.data)) {
       next.data = next.data.slice(1);
     }
     const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
@@ -2235,7 +2238,7 @@ async function moveSelectionToDarlings(html, text) {
     // a whole paragraph dragged away leaves its empty shell behind: remove it
     // and park the caret at the end of the paragraph before (or start of after)
     if (startBlock && !startBlock.textContent.trim() && !startBlock.querySelector('span')
-        && startBlock.parentElement && startBlock.parentElement.children.length > 1) {
+      && startBlock.parentElement && startBlock.parentElement.children.length > 1) {
       const prev = startBlock.previousElementSibling;
       const next = startBlock.nextElementSibling;
       startBlock.remove();
@@ -3336,6 +3339,7 @@ async function importBooks() {
 }
 
 $('#import-btn').onclick = importBooks;
+$('#spell-language-select').onchange = (event) => changeSpellLanguage(event.target.value);
 
 /* ================================================================== */
 /*  SPELLCHECK PASS + TYPEWRITER SCROLLING                             */
@@ -3363,7 +3367,7 @@ async function spellScanEl(el, key) {
   spellScanned.add(key);
   const occurrences = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  const re = /[A-Za-z'’]+/g;
+  const re = /[\p{L}\p{M}'’]+/gu;
   let n;
   while ((n = walker.nextNode())) {
     const p = n.parentElement;
@@ -3373,7 +3377,7 @@ async function spellScanEl(el, key) {
     while ((m = re.exec(n.data))) {
       const word = spellNorm(m[0]);
       if (word.length < 2) continue;
-      if (/^[A-Z'’]+$/.test(m[0])) continue; // acronyms and shouting are legal
+      if (/^[\p{Lu}'’]+$/u.test(m[0])) continue; // acronyms and shouting are legal
       occurrences.push({ node: n, start: m.index, end: m.index + m[0].length, word });
     }
   }
@@ -3438,6 +3442,25 @@ function toggleSpellcheck() {
   toast(spellOn ? 'Spellcheck on' : 'Spellcheck off');
 }
 
+async function changeSpellLanguage(language) {
+  const select = $('#spell-language-select');
+  const ok = await window.neo.setSpellLanguage(language);
+  if (!ok) {
+    select.value = library.spellcheckLanguage || 'en-US';
+    toast('Could not load that spellcheck language');
+    return;
+  }
+  library.spellcheckLanguage = language;
+  await window.neo.writeLibrary(library);
+  select.value = language;
+  spellCache.clear();
+  spellScanned = new Set();
+  spellRanges = new Map();
+  CSS.highlights.delete('neo-spell');
+  if (spellOn) scanSpellingHere();
+  toast('Spellcheck language changed');
+}
+
 // right-click a flagged word for suggestions
 document.addEventListener('contextmenu', async (e) => {
   if (!spellOn) return;
@@ -3447,11 +3470,16 @@ document.addEventListener('contextmenu', async (e) => {
   if (!pos || pos.startContainer.nodeType !== Node.TEXT_NODE) return;
   const node = pos.startContainer;
   const text = node.data;
-  const isW = (c) => /[A-Za-z'’]/.test(c);
-  let a = pos.startOffset, b = pos.startOffset;
-  while (a > 0 && isW(text[a - 1])) a--;
-  while (b < text.length && isW(text[b])) b++;
-  if (a === b) return;
+  const wordRe = /[\p{L}\p{M}'’]+/gu;
+  let a = -1, b = -1, match;
+  while ((match = wordRe.exec(text))) {
+    if (pos.startOffset >= match.index && pos.startOffset <= match.index + match[0].length) {
+      a = match.index;
+      b = match.index + match[0].length;
+      break;
+    }
+  }
+  if (a < 0) return;
   const word = spellNorm(text.slice(a, b));
   if (spellCache.get(word) !== false) return; // only flagged words get our menu
   e.preventDefault();
@@ -4168,18 +4196,21 @@ function buildDocxEntries(data) {
 <w:pPrDefault><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 </w:styles>`;
   return [
-    { path: '[Content_Types].xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    {
+      path: '[Content_Types].xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>` },
-    { path: '_rels/.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    {
+      path: '_rels/.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>` },
-    { path: 'word/_rels/document.xml.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    {
+      path: 'word/_rels/document.xml.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>` },
@@ -4249,11 +4280,13 @@ async function buildEpubEntries(data) {
 
   const entries = [
     { path: 'mimetype', content: 'application/epub+zip', store: true },
-    { path: 'META-INF/container.xml', content: `<?xml version="1.0" encoding="UTF-8"?>
+    {
+      path: 'META-INF/container.xml', content: `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
 <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
 </container>` },
-    { path: 'OEBPS/content.opf', content: `<?xml version="1.0" encoding="utf-8"?>
+    {
+      path: 'OEBPS/content.opf', content: `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="bookid">${uuid}</dc:identifier>
@@ -4284,7 +4317,8 @@ ${chSpine}
 <reference type="text" title="Beginning" href="ch1.xhtml"/>
 </guide>
 </package>` },
-    { path: 'OEBPS/nav.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
+    {
+      path: 'OEBPS/nav.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>Table of Contents</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
@@ -4299,14 +4333,16 @@ ${navPoints}
 <li><a epub:type="bodymatter" href="ch1.xhtml">Beginning</a></li>
 </ol></nav>
 </body></html>` },
-    { path: 'OEBPS/toc.ncx', content: `<?xml version="1.0" encoding="utf-8"?>
+    {
+      path: 'OEBPS/toc.ncx', content: `<?xml version="1.0" encoding="utf-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
 <head><meta name="dtb:uid" content="${uuid}"/></head>
 <docTitle><text>${escXml(d.title)}</text></docTitle>
 <navMap>
 <navPoint id="titlepage" playOrder="1"><navLabel><text>Title Page</text></navLabel><content src="title.xhtml"/></navPoint>${ncxPoints}
 </navMap></ncx>` },
-    { path: 'OEBPS/style.css', content: `body { font-family: serif; line-height: 1.5; margin: 1em; }
+    {
+      path: 'OEBPS/style.css', content: `body { font-family: serif; line-height: 1.5; margin: 1em; }
 h1 { text-align: center; font-weight: normal; letter-spacing: 0.2em; text-transform: uppercase; font-size: 1.2em; margin: 3em 0 2em; }
 p { text-indent: 1.2em; margin: 0; }
 p.first, p.brk + p { text-indent: 0; }
@@ -4319,18 +4355,22 @@ p.brk { text-align: center; text-indent: 0; margin: 2.5em 0; letter-spacing: 0.5
 .titlepage .auth { margin-top: 4em; letter-spacing: 0.3em; text-transform: uppercase; }
 .coverimg { text-align: center; margin: 0; padding: 0; }
 .coverimg img { max-width: 100%; max-height: 100%; }` },
-    { path: 'OEBPS/cover.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
+    {
+      path: 'OEBPS/cover.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>Cover</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body><div class="coverimg"><img src="${coverName}" alt="${escXml(d.title)}"/></div></body></html>` },
-    { path: 'OEBPS/title.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
+<body><div class="coverimg"><img src="${coverName}" alt="${escXml(d.title)}"/></div></body></html>`
+    },
+    {
+      path: 'OEBPS/title.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>${escXml(d.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body><div class="titlepage"><h2>${escXml(d.title)}</h2>
 ${d.subtitle ? `<p class="sub">${escXml(d.subtitle)}</p>` : ''}
-<p class="auth">${escXml(d.author)}</p></div></body></html>` },
+<p class="auth">${escXml(d.author)}</p></div></body></html>`
+    },
     { path: 'OEBPS/' + coverName, content: coverContent, base64: true }
   ];
   for (const ch of chapters) {
@@ -4536,6 +4576,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'emailSettings') emailSettings();
   if (msg.type === 'find') openSearch();
   if (msg.type === 'spellcheck') toggleSpellcheck();
+  if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
   if (msg.type === 'typewriter') toggleTypewriter();
   if (msg.type === 'import') importBooks();
   if (msg.type === 'stats') openStats();
