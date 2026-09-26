@@ -949,7 +949,11 @@ function renderChapters() {
       head.classList.toggle('has-title', titleSpan.textContent.trim() !== '');
     });
     titleSpan.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); titleSpan.blur(); }
+      if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        titleSpan.blur();
+        poetryUnderHeading(sec.querySelector('.chapter-body'), chId);
+      } else if (e.key === 'Enter') { e.preventDefault(); titleSpan.blur(); }
       e.stopPropagation();
     });
     titleSpan.addEventListener('blur', () => {
@@ -1085,6 +1089,8 @@ function wireChapterBody(body, chId) {
       if (destructive) healSelectionSeams(body);
     }
     if (styleKeepScroll(e)) return;
+    if (handlePoetry(e, body, chId)) return;
+    if (poetryBackspace(e, body, chId)) return;
     if (sceneBreakDelete(e, body, chId)) return;
     if (spaceSafeDelete(e, body, chId)) return;
     if (emptyChapterBackspace(e, body, chId)) return;
@@ -1451,6 +1457,32 @@ function handleEnter(e, body, chId) {
   const block = el && el.closest ? el.closest('p') : null;
   if (!block || !body.contains(block)) return false;
   if (block.classList.contains('scene-break')) { e.preventDefault(); return true; } // Enter on a *** line: nothing
+  // Enter in a poetry paragraph steps back into prose: an empty line becomes
+  // an ordinary paragraph in place; otherwise the line splits and the new
+  // paragraph is plain (⇧Enter is how the poem continues)
+  if (block.classList.contains('poetry')) {
+    e.preventDefault();
+    enterRun = 0;
+    if (block.textContent.trim() === '') {
+      snapshotStructure('poetry paragraph to prose');
+      block.classList.remove('poetry');
+      romanize(block);
+      placeCaret(block, 0);
+      syncChapter(body, chId);
+      resetNativeUndo();
+      breakRun++;
+      return true;
+    }
+    document.execCommand('insertParagraph');
+    const cur = caretBlock(body);
+    if (cur && cur !== block) {
+      cur.classList.remove('poetry');
+      romanize(cur);
+      placeCaret(cur, 0);
+    }
+    syncChapter(body, chId);
+    return true;
+  }
   const prev = block.previousElementSibling;
 
   if (block.textContent.trim() !== '') {
@@ -1535,6 +1567,175 @@ function handleEnter(e, body, chId) {
   return false;
 }
 
+/* ================================================================== */
+/*  POETRY PARAGRAPHS — ⇧Enter                                         */
+/*  A paragraph pulled in from the margins, italic: a stanza of verse,  */
+/*  a quote, a POV name under the chapter heading. One class, one key.  */
+/* ================================================================== */
+
+// the paragraph holding the caret, if it belongs to this chapter body
+function caretBlock(body) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  let el = sel.anchorNode;
+  if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const block = el && el.closest ? el.closest('p') : null;
+  return block && body.contains(block) ? block : null;
+}
+
+// A poetry paragraph is born italic — real <i> markup, so ⌘I can take it
+// off a word — and sheds that default italic when it returns to prose.
+function italicize(p) {
+  if (p.textContent.trim() === '') { p.innerHTML = '<i><br></i>'; return; }
+  const kids = [...p.childNodes].filter((n) => !(n.nodeType === Node.TEXT_NODE && !n.textContent.trim()));
+  if (kids.length === 1 && kids[0].nodeType === Node.ELEMENT_NODE && kids[0].tagName === 'I') return;
+  const i = document.createElement('i');
+  while (p.firstChild) i.appendChild(p.firstChild);
+  p.appendChild(i);
+}
+function romanize(p) {
+  const kids = [...p.childNodes].filter((n) => !(n.nodeType === Node.TEXT_NODE && !n.textContent.trim()));
+  if (kids.length !== 1 || kids[0].nodeType !== Node.ELEMENT_NODE || kids[0].tagName !== 'I') return;
+  const i = kids[0];
+  while (i.firstChild) i.before(i.firstChild);
+  i.remove();
+  if (p.textContent.trim() === '' && !p.querySelector('br')) p.innerHTML = '<br>';
+}
+// caret at the start of a paragraph's text — inside its italic when it has one
+function caretIntoStart(p) {
+  const i = p.firstElementChild && p.firstElementChild.tagName === 'I' ? p.firstElementChild : p;
+  placeCaret(i, 0);
+}
+
+function placeCaret(node, offset) {
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.setStart(node, offset);
+  r.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
+// ⇧Enter. At the end of a paragraph: a new poetry paragraph beneath it.
+// Mid-paragraph: the text after the caret becomes one. Inside a poetry
+// paragraph: another line of it, so verse flows. On a *** line: nothing.
+function handlePoetry(e, body, chId) {
+  if (e.key !== 'Enter' || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const block = caretBlock(body);
+  if (!block) return false;
+  e.preventDefault();
+  if (block.classList.contains('scene-break')) return true;
+
+  if (block.classList.contains('poetry')) {
+    // the engine's own split keeps the class on the new line, and ⌘Z sees it
+    if (block.querySelector('span:not(.ph-mark)')) stripJunkSpans(block);
+    document.execCommand('insertParagraph');
+    const cur = caretBlock(body);
+    if (cur) {
+      cur.classList.add('poetry');
+      if (cur.textContent.trim() === '' && !cur.querySelector('i')) { italicize(cur); caretIntoStart(cur); }
+    }
+    syncChapter(body, chId);
+    return true;
+  }
+
+  snapshotStructure('poetry paragraph');
+  const r = sel.getRangeAt(0);
+  const tail = document.createRange();
+  tail.selectNodeContents(block);
+  try { tail.setStart(r.startContainer, r.startOffset); } catch { return true; }
+  const after = tail.toString();
+  const empty = block.textContent.trim() === '';
+  const atStart = after.length === block.textContent.length;
+  if (empty || atStart) {
+    // an empty paragraph, or the caret at its very start: the whole paragraph turns to poetry
+    block.classList.add('poetry');
+    italicize(block);
+    caretIntoStart(block);
+  } else {
+    const line = document.createElement('p');
+    line.className = 'poetry';
+    if (after.trim() !== '') {
+      line.appendChild(tail.extractContents());
+      for (const junk of line.querySelectorAll('br')) junk.remove();
+      if (!block.textContent.trim()) block.innerHTML = '<br>';
+    }
+    italicize(line);
+    block.after(line);
+    caretIntoStart(line);
+  }
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+
+// Backspace at the very start of a poetry paragraph makes it prose again —
+// the second Backspace then merges it upward like any paragraph
+function poetryBackspace(e, body, chId) {
+  if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const block = caretBlock(body);
+  if (!block || !block.classList.contains('poetry')) return false;
+  const r = sel.getRangeAt(0);
+  const head = document.createRange();
+  head.selectNodeContents(block);
+  try { head.setEnd(r.startContainer, r.startOffset); } catch { return false; }
+  if (head.toString().length !== 0) return false;
+  e.preventDefault();
+  snapshotStructure('poetry paragraph to prose');
+  block.classList.remove('poetry');
+  romanize(block);
+  placeCaret(block, 0);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+
+// Format → Poetry Paragraph: toggles every paragraph the selection touches
+function togglePoetry() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) { toast('Click into a paragraph first'); return; }
+  const r = sel.getRangeAt(0);
+  let el = r.startContainer;
+  if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const body = el && el.closest ? el.closest('.chapter-body') : null;
+  if (!body) { toast('Click into a paragraph first'); return; }
+  const chId = body.closest('.chapter').dataset.id;
+  const ps = [...body.querySelectorAll('p')].filter(
+    (p) => r.intersectsNode(p) && !p.classList.contains('scene-break')
+  );
+  if (!ps.length) return;
+  snapshotStructure('poetry paragraph');
+  const on = !ps.every((p) => p.classList.contains('poetry'));
+  for (const p of ps) {
+    p.classList.toggle('poetry', on);
+    if (on) italicize(p); else romanize(p);
+  }
+  caretIntoStart(ps[0]);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+}
+
+// ⇧Enter from the chapter title: a poetry paragraph above the opening one
+function poetryUnderHeading(body, chId) {
+  const line = document.createElement('p');
+  line.className = 'poetry';
+  italicize(line);
+  snapshotStructure('poetry paragraph');
+  body.prepend(line);
+  body.focus();
+  caretIntoStart(line);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+}
+
 // Backspace just below a *** (or Delete just above one) removes the break
 // itself — prose never merges into the break's styled paragraph
 function sceneBreakDelete(e, body, chId) {
@@ -1582,6 +1783,7 @@ function syncChapter(body, chId) {
 // Heal text-node fragmentation in each paragraph as the caret leaves it:
 let lastCaretPara = null;
 let capOffBody = null;
+let menuPoetryState = false;
 document.addEventListener('selectionchange', () => {
   if (!book || currentTab !== 'manuscript') return;
   const sel = window.getSelection();
@@ -1604,8 +1806,13 @@ document.addEventListener('selectionchange', () => {
     if (ch) scanSpellingIn(ch.querySelector('.chapter-body'), ch.dataset.id);
   }
   // the drop cap steps aside while the caret is in the first paragraph
+  const inPoetry = !!(caretP && caretP.classList.contains('poetry'));
+  if (inPoetry !== menuPoetryState && window.neo.poetryState) {
+    menuPoetryState = inPoetry;
+    window.neo.poetryState(inPoetry);
+  }
   const inFirst = caretP && caretP.parentElement &&
-    caretP === caretP.parentElement.querySelector('p');
+    caretP === caretP.parentElement.querySelector('p:not(.poetry)');
   const capBody = inFirst ? caretP.parentElement : null;
   if (capBody !== capOffBody) {
     if (capOffBody && capOffBody.isConnected) capOffBody.classList.remove('cap-off');
@@ -3070,6 +3277,7 @@ function rejoinAtCaret() {
   const prev = blk.previousElementSibling;
   if (!prev || prev.tagName !== 'P') return;
   if (prev.classList.contains('scene-break') || blk.classList.contains('scene-break')) return;
+  if (prev.classList.contains('poetry') !== blk.classList.contains('poetry')) return;
   const chId = body.closest('.chapter').dataset.id;
   const at = prev.textContent.length;
   if (blk.textContent.trim() === '') {
@@ -3880,6 +4088,7 @@ function showHelp() {
       <div class="help-grid">
         ${row('Enter ×2', 'Section break (***)')}
         ${row('Enter ×3', 'New chapter, auto-numbered')}
+        ${row('⇧Enter', 'Poetry paragraph — verse, a quote, a POV name; italic, set in from the margins. ⇧Enter again continues it; Enter returns to prose')}
         ${row(KPH, 'Placeholder note')}
         ${row(KDA, 'Send the selected passage to Darlings')}
         ${row(KZ, 'Undo big moves (chapter deletes, replace-all, darlings) when not mid-typing')}
@@ -3954,6 +4163,7 @@ function parasFromHtml(html) {
   holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
   return [...holder.querySelectorAll('p')].map((p) => {
     const sceneBreak = p.classList.contains('scene-break');
+    const poetry = p.classList.contains('poetry');
     const align = (p.style && p.style.textAlign) || '';
     const runs = paraRuns(p.innerHTML).filter((r) => r.text);
     const inner = runs.map((r) => {
@@ -3964,10 +4174,11 @@ function parasFromHtml(html) {
     }).join('');
     return {
       sceneBreak,
+      poetry,
       text: p.innerText.replace(/\u00a0/g, ' ').trim(),
       runs,
       align,
-      html: `<p${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
+      html: `<p${poetry ? ' class="poetry"' : ''}${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
     };
   }).filter((p) => p.sceneBreak || p.text);
 }
@@ -4007,7 +4218,7 @@ function buildTxt(data) {
   out += `by ${d.author}\n\n\n`;
   for (const ch of d.sections) {
     if (ch.heading) out += `${ch.heading.toUpperCase()}\n\n`;
-    for (const p of ch.paras) out += p.sceneBreak ? '\n***\n\n' : p.text + '\n\n';
+    for (const p of ch.paras) out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '    ' : '') + p.text + '\n\n';
     out += '\n';
   }
   return out;
@@ -4031,7 +4242,7 @@ function buildMd(data) {
   for (const ch of d.sections) {
     if (ch.heading) out += `\n## ${ch.heading}\n\n`;
     for (const p of ch.paras) {
-      out += p.sceneBreak ? '\n***\n\n' : p.runs.map(mdRun).join('') + '\n\n';
+      out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '> ' : '') + p.runs.map(mdRun).join('') + '\n\n';
     }
   }
   return out;
@@ -4047,6 +4258,7 @@ function buildHtml(data, opts = {}) {
     let first = true;
     const paras = ch.paras.map((p) => {
       if (p.sceneBreak) return '<p class="brk">***</p>';
+      if (p.poetry) return p.html;
       let html = p.html;
       if (first) {
         const h = document.createElement('div');
@@ -4081,8 +4293,11 @@ function buildHtml(data, opts = {}) {
   .chapter h2 + p, .brk + p, .chapter p.first { text-indent: 0; }
   /* an in-flow raised initial: stays inside its word for copy, search,
      and screen readers, unlike a floated drop cap */
-  .chapter h2 + p::first-letter, .chapter p.first::first-letter { font-size: 1.8em; line-height: 1; }
+  .chapter h2 + p:not(.poetry)::first-letter, .chapter p.first::first-letter { font-size: 1.8em; line-height: 1; }
   .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
+  .chapter p.poetry { text-indent: 0; margin: 0 2.5em; }
+  .chapter p:not(.poetry) + p.poetry, .chapter h2 + p.poetry { margin-top: 0.9em; }
+  .chapter p.poetry + p:not(.poetry) { margin-top: 0.9em; }
   .prov { margin-top: 80px; text-align: center; color: #999; font-size: 9pt; }
 </style></head><body>
 ${opts.cover ? `<div class="coverpage"><img src="data:${opts.cover.mime};base64,${opts.cover.base64}" alt="Cover"/></div>` : ''}
@@ -4130,6 +4345,7 @@ function docxP(runs, opts = {}) {
   if (opts.pageBreak) pPr.push('<w:pageBreakBefore/>');
   if (opts.align) pPr.push(`<w:jc w:val="${opts.align}"/>`);
   if (opts.indent) pPr.push('<w:ind w:firstLine="480"/>');
+  if (opts.poetry) pPr.push('<w:ind w:left="720" w:right="720"/>');
   if (opts.spaceBefore) pPr.push(`<w:spacing w:before="${opts.spaceBefore}" w:line="360" w:lineRule="auto"/>`);
   const rXml = runs.map((r) => {
     const rPr = (r.b ? '<w:b/>' : '') + (r.i ? '<w:i/>' : '') + (opts.size ? `<w:sz w:val="${opts.size}"/>` : '');
@@ -4154,6 +4370,7 @@ function buildDocxEntries(data) {
     }
     for (const p of ch.paras) {
       if (p.sceneBreak) body.push(docxP([{ text: '***' }], { align: 'center', spaceBefore: 240 }));
+      else if (p.poetry) body.push(docxP(paraRuns(p.html), { align: p.align === 'center' || p.align === 'right' ? p.align : '', poetry: true }));
       else if (p.align === 'center' || p.align === 'right') body.push(docxP(paraRuns(p.html), { align: p.align }));
       else body.push(docxP(paraRuns(p.html), { indent: true }));
     }
@@ -4208,10 +4425,11 @@ function chapterXhtml(ch, d) {
   const paras = ch.paras.map((p) => {
     if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
     const classes = [];
-    if (first) classes.push('first');
+    if (p.poetry) classes.push('poetry');
+    else if (first) classes.push('first');
     if (p.align === 'center' || p.align === 'right') classes.push(p.align);
     const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
-    first = false;
+    if (!p.poetry) first = false;
     const inner = paraRuns(p.html).map((r) => {
       let t = escXml(r.text);
       if (r.i) t = '<em>' + t + '</em>';
@@ -4313,6 +4531,9 @@ p.first, p.brk + p { text-indent: 0; }
 p.center { text-align: center; text-indent: 0; }
 p.right { text-align: right; text-indent: 0; }
 p.brk { text-align: center; text-indent: 0; margin: 2.5em 0; letter-spacing: 0.5em; }
+p.poetry { text-indent: 0; margin: 0 2em; }
+p:not(.poetry) + p.poetry, h1 + p.poetry { margin-top: 0.9em; }
+p.poetry + p:not(.poetry) { margin-top: 0.9em; }
 .titlepage { text-align: center; margin-top: 30%; }
 .titlepage h2 { font-size: 2em; margin: 0; }
 .titlepage .sub { font-style: italic; }
@@ -4543,6 +4764,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'align') {
     applyAlign(msg.value);
   }
+  if (msg.type === 'poetry') togglePoetry();
   if (msg.type === 'uiBright') {
     library.uiBright = !library.uiBright;
     await window.neo.writeLibrary(library);

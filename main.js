@@ -739,6 +739,15 @@ function sendToWindow(msg) {
   if (w) w.webContents.send('menu', msg);
 }
 
+// whether the caret is in a poetry paragraph — the Format menu's tick
+let poetryState = false;
+ipcMain.on('poetry:state', (_e, on) => {
+  on = !!on;
+  if (on === poetryState) return;
+  poetryState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
+
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const bodyFonts = isMac
@@ -841,6 +850,15 @@ function buildMenu() {
           label: 'Typewriter Scrolling',
           accelerator: 'CmdOrCtrl+Shift+T',
           click: () => sendToWindow({ type: 'typewriter' })
+        },
+        { type: 'separator' },
+        // ticks when the caret sits in a poetry paragraph; ⇧Enter is the
+        // editor's own key, so no accelerator here
+        {
+          label: 'Poetry Paragraph\t⇧Enter',
+          type: 'checkbox',
+          checked: poetryState,
+          click: () => sendToWindow({ type: 'poetry' })
         }
       ]
     },

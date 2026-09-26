@@ -435,11 +435,20 @@ body.typewriter #paper { margin-bottom: 60vh; }
    pass (the source of duplicated characters on delete) never runs */
 .chapter-body p { text-indent: 2em; margin: 0; white-space: pre-wrap; }
 #aux-editor p { white-space: pre-wrap; }
-.chapter-body p:first-of-type { text-indent: 0; }
+/* the chapter's opening paragraph: the first one that isn't poetry */
+.chapter-body p:not(.poetry):not(p:not(.poetry) ~ p) { text-indent: 0; }
+/* Poetry paragraphs (⇧Enter): a quote, a stanza, a POV name, a dateline —
+   pulled in from both margins, italic, no first-line indent, never a drop
+   cap. Consecutive lines make one block; the block breathes above and below.
+   The italic is real markup, laid in when the paragraph is made, so ⌘I
+   takes it off any word the writer wants roman. */
+.chapter-body p.poetry { margin: 0 2.5em; text-indent: 0; }
+.chapter-body p:not(.poetry) + p.poetry { margin-top: 0.9em; }
+.chapter-body p.poetry + p:not(.poetry) { margin-top: 0.9em; }
 /* cap-off while the caret is in the first paragraph: the rule must stop
    MATCHING entirely — a matching first-letter rule, even styled to nothing,
    makes the engine split the text internally, which corrupts deletes */
-.chapter-body:not(.cap-off) p:first-of-type::first-letter {
+.chapter-body:not(.cap-off) p:not(.poetry):not(p:not(.poetry) ~ p)::first-letter {
   font-size: 3.4em; float: left; line-height: 0.8;
   padding: 4px 8px 0 0; font-family: var(--dropcap-font);
 }

@@ -213,7 +213,8 @@
       } catch { console.error(msg); }
       showErrorDetail(msg);
     },
-    onMenu: () => { /* no menu bar in your pocket */ }
+    onMenu: () => { /* no menu bar in your pocket */ },
+    poetryState: () => { /* no Format menu to tick */ }
   };
 
   // Pocket is written on a real keyboard, so Android's on-screen one stays

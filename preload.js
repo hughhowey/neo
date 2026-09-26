@@ -42,5 +42,6 @@ contextBridge.exposeInMainWorld('neo', {
   appVersion: () => ipcRenderer.invoke('app:version'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
+  poetryState: (on) => ipcRenderer.send('poetry:state', on),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });
