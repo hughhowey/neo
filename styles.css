@@ -580,7 +580,7 @@ body.bright .spell-menu button { color: #eee; }
   margin-top: 4px; font-size: 12px; line-height: 1.45; color: #777;
   outline: none; min-height: 15px; cursor: text;
 }
-.nav-note:empty::before { content: 'What happens here…'; color: #4a4a4a; font-style: italic; }
+.nav-note:empty::before { content: 'O que acontece aqui…'; color: #4a4a4a; font-style: italic; }
 .nav-note:focus { color: #ccc; }
 #nav-add {
   display: block; width: calc(100% - 36px); margin: 14px 18px 0;

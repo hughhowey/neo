@@ -136,6 +136,15 @@ async function loadLibrary() {
   if (window.neoI18n) window.neoI18n.setLocale(await window.neo.getLanguage());
   libraryDirPath = await window.neo.libraryPath();
   library = await window.neo.readLibrary();
+  if (library && Array.isArray(library.shelves)) {
+    let changed = false;
+    library.shelves = library.shelves.map((shelf) => {
+      const name = shelf.name === 'Works in Progress' ? 'Em andamento' : shelf.name === 'New Shelf' ? 'Nova biblioteca' : shelf.name;
+      if (name !== shelf.name) changed = true;
+      return { ...shelf, name };
+    });
+    if (changed) await window.neo.writeLibrary(library);
+  }
   if (!library.firstRunDone) {
     showFirstRun();
   }
@@ -1850,9 +1859,9 @@ function renderStickies() {
     el.className = 'sticky unresolved';
     el.dataset.sid = s.id;
     el.innerHTML = `
-      <div class="s-ch">${chIdx >= 0 ? 'Chapter ' + (chIdx + 1) : 'Unplaced'}</div>
-      <textarea placeholder="What needs doing here?" spellcheck="false"></textarea>
-      <div class="s-actions"><button class="s-go">Go to</button> <button class="s-done">Resolve</button></div>`;
+      <div class="s-ch">${chIdx >= 0 ? 'Capítulo ' + (chIdx + 1) : 'Sem localização'}</div>
+      <textarea placeholder="O que precisa ser feito aqui?" spellcheck="false"></textarea>
+      <div class="s-actions"><button class="s-go">Ir para</button> <button class="s-done">Resolver</button></div>`;
     const ta = el.querySelector('textarea');
     ta.value = s.text;
     ta.addEventListener('input', () => {

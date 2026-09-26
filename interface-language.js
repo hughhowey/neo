@@ -6,4 +6,10 @@ function resolveInterfaceLanguage(preferences = {}, appLocale = '') {
   return /^pt-br$/i.test(appLocale) ? 'pt-BR' : 'pt-BR';
 }
 
-module.exports = { resolveInterfaceLanguage };
+function normalizeLegacyShelfName(name) {
+  if (name === 'Works in Progress') return 'Em andamento';
+  if (name === 'New Shelf') return 'Nova biblioteca';
+  return name;
+}
+
+module.exports = { resolveInterfaceLanguage, normalizeLegacyShelfName };
