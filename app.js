@@ -3733,7 +3733,7 @@ function openStats() {
       ${hasBook ? `
       <div class="stats-row">
         <label>Sprint <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/> words</label>
-        <button id="st-sprint-btn">${sprint && !sprint.done ? 'End sprint' : 'Start sprint'}</button>
+        <button id="st-sprint-btn" class="btn-gold">${sprint && !sprint.done ? 'End sprint' : 'Start sprint'}</button>
         <span id="st-sprint-info" class="soft">${sprint && !sprint.done ? 'sprint running…' : 'a small hill to charge up'}</span>
       </div>` : ''}
       <div class="stats-row">

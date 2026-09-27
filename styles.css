@@ -696,13 +696,17 @@ body.bright .spell-menu button { color: #eee; }
 .stats-row input:focus { outline: none; border-color: var(--accent); }
 .stats-row select {
   background: var(--bg); border: 1px solid #3a3a3a; border-radius: 5px;
-  color: #eee; padding: 6px 9px; font-size: 13px;
+  color: #eee; padding: 6px 9px; font-size: 13px; cursor: pointer;
+}
+.stats-row select option{
+  cursor: pointer;
 }
 .stats-row select:focus { outline: none; border-color: var(--accent); }
 .stats-row button {
   background: var(--accent); border: none; border-radius: 5px;
   padding: 6px 14px; color: #191919; font-size: 12px;
 }
+/* .stats-row button:hover{ filter: brightness(1.08) !important; } */
 #stats-chart { background: #1d1d1d; border-radius: 8px; padding: 10px; margin-top: 8px; }
 
 /* --- Help modal grid --- */
