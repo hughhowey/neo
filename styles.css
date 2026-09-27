@@ -590,6 +590,8 @@ body.bright .spell-menu button { color: #eee; }
 .ol-text:empty::before { color: #b9b4a8; font-style: italic; }
 .ol-chapter .ol-text:empty::before { content: 'What happens in this chapter…'; }
 .ol-section .ol-text:empty::before { content: 'What happens in this section…'; }
+html[lang="pt-BR"] .ol-chapter .ol-text:empty::before { content: 'O que acontece neste capítulo…'; }
+html[lang="pt-BR"] .ol-section .ol-text:empty::before { content: 'O que acontece nesta seção…'; }
 .ol-hint {
   margin-top: 40px; color: #b9b4a8; font-size: 12.5px; font-style: italic;
   line-height: 1.7; text-align: center;
