@@ -788,7 +788,15 @@ function buildMenu() {
             { label: 'Web Page (.html)', click: () => sendToWindow({ type: 'export', format: 'html' }) },
             { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
             { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
-            { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) }
+            { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) },
+            { type: 'separator' },
+            {
+              id: 'export-custom-chapter-titles',
+              label: 'Use custom chapter titles only',
+              type: 'checkbox',
+              checked: !!readJSON(LIBRARY_FILE, {}).exportCustomChapterTitles,
+              click: (item) => sendToWindow({ type: 'exportCustomChapterTitles', checked: item.checked })
+            }
           ]
         },
         { type: 'separator' },

@@ -4009,7 +4009,9 @@ function exportChapters() {
     // chapterless stories export as continuous text
     const heading = book.chapterOrder.length === 1
       ? ''
-      : 'Chapter ' + (i + 1) + (t ? ' — ' + t : '');
+      : library.exportCustomChapterTitles && t
+        ? t
+        : 'Chapter ' + (i + 1) + (t ? ' — ' + t : '');
     return { num: i + 1, heading, paras };
   });
 }
@@ -4572,6 +4574,10 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'export') doExport(msg.format);
+  if (msg.type === 'exportCustomChapterTitles') {
+    library.exportCustomChapterTitles = msg.checked;
+    await window.neo.writeLibrary(library);
+  }
   if (msg.type === 'emailDraft') doEmailDraft();
   if (msg.type === 'emailSettings') emailSettings();
   if (msg.type === 'find') openSearch();
