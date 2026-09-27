@@ -37,7 +37,15 @@ const note = new FakeElement('nav-note', {
   'data-ph': 'What happens here…'
 }, [noteText]);
 noteText.parentElement = note;
-const body = new FakeElement('', {}, [note]);
+const arrowText = { nodeType: 3, nodeValue: '⇦ ', parentElement: null };
+const shelfText = { nodeType: 3, nodeValue: 'Shelf', parentElement: null };
+const backButton = new FakeElement('', { title: 'Back to your bookshelf' }, [arrowText, shelfText]);
+arrowText.parentElement = backButton;
+shelfText.parentElement = backButton;
+const addShelfText = { nodeType: 3, nodeValue: '+ Shelf', parentElement: null };
+const addShelfButton = new FakeElement('', { title: 'Add a shelf' }, [addShelfText]);
+addShelfText.parentElement = addShelfButton;
+const body = new FakeElement('', {}, [note, backButton, addShelfButton]);
 const context = {
   Node: { ELEMENT_NODE: 1, TEXT_NODE: 3 },
   document: { body, documentElement: {} },
@@ -52,9 +60,17 @@ vm.runInNewContext(fs.readFileSync(require.resolve('../i18n'), 'utf8'), context)
 context.window.neoI18n.setLocale('pt-BR');
 assert.equal(note.getAttribute('data-ph'), 'O que acontece aqui…');
 assert.equal(noteText.nodeValue, 'Minha anotação');
+assert.equal(shelfText.nodeValue, 'Prateleira');
+assert.equal(backButton.getAttribute('title'), 'Voltar à prateleira');
+assert.equal(addShelfText.nodeValue, '+ Prateleira');
+assert.equal(addShelfButton.getAttribute('title'), 'Adicionar prateleira');
 
 context.window.neoI18n.setLocale('en');
 assert.equal(note.getAttribute('data-ph'), 'What happens here…');
 assert.equal(noteText.nodeValue, 'Minha anotação');
+assert.equal(shelfText.nodeValue, 'Shelf');
+assert.equal(backButton.getAttribute('title'), 'Back to your bookshelf');
+assert.equal(addShelfText.nodeValue, '+ Shelf');
+assert.equal(addShelfButton.getAttribute('title'), 'Add a shelf');
 
-console.log('sidebar hint localization tests passed');
+console.log('interface toggle localization tests passed');
