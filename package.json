@@ -7,7 +7,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/interface-language.test.js && node tests/spellcheck-words.test.js && node tests/spellcheck-dictionary.test.js",
+    "test": "node tests/interface-language.test.js && node tests/spellcheck-words.test.js && node tests/spellcheck-dictionary.test.js && node tests/i18n-sidebar.test.js",
     "build:dict:pt-br": "node scripts/build-pt-br-dictionary.js",
     "package": "electron-builder --mac",
     "package:win": "electron-builder --win",

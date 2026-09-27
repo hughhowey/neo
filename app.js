@@ -1944,6 +1944,16 @@ function focusSticky(sid) {
 /*  NAV PANE                                                           */
 /* ================================================================== */
 
+function navNoteHint(locale = window.neoI18n.getLocale()) {
+  return locale === 'pt-BR' ? 'O que acontece aqui…' : 'What happens here…';
+}
+
+function updateNavNoteHints(locale = window.neoI18n.getLocale()) {
+  $$('.nav-note').forEach((note) => {
+    note.dataset.ph = navNoteHint(locale);
+  });
+}
+
 function renderNav() {
   const list = $('#nav-list');
   list.innerHTML = '';
@@ -1989,7 +1999,7 @@ function renderNav() {
     note.className = 'nav-note';
     note.contentEditable = 'true';
     note.spellcheck = false;
-    note.dataset.ph = 'What happens here…';
+    note.dataset.ph = navNoteHint();
     note.textContent = book.chapterNotes[chId] || '';
     note.addEventListener('click', (e) => e.stopPropagation());
     note.addEventListener('keydown', (e) => {
@@ -4563,6 +4573,7 @@ async function showAbout() {
 window.neo.onMenu(async (msg) => {
   if (msg.type === 'language') {
     window.neoI18n.setLocale(msg.value);
+    updateNavNoteHints(msg.value);
     if (!$('#bookshelf-view').hidden) renderShelves();
     if (spellOn) {
       resetSpellState();

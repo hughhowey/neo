@@ -226,6 +226,11 @@
         if (attr === 'title' && node.matches('.book')) continue;
         if (!node.hasAttribute(attr)) continue;
         const value = node.getAttribute(attr);
+        if (attr === 'data-ph' && node.matches('.nav-note')) {
+          const hint = locale === 'pt-BR' ? 'O que acontece aqui…' : 'What happens here…';
+          if (value !== hint) node.setAttribute(attr, hint);
+          continue;
+        }
         const result = translate(value);
         if (result !== value) node.setAttribute(attr, result);
       }
