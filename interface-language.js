@@ -3,7 +3,7 @@ function resolveInterfaceLanguage(preferences = {}, appLocale = '') {
     return preferences.interfaceLanguage;
   }
 
-  return /^pt-br$/i.test(appLocale) ? 'pt-BR' : 'pt-BR';
+  return /^pt(?:-|$)/i.test(appLocale) ? 'pt-BR' : 'en';
 }
 
 function getSpellDictionaryConfig(locale = 'pt-BR') {
@@ -23,4 +23,8 @@ function normalizeLegacyShelfName(name) {
   return name;
 }
 
-module.exports = { resolveInterfaceLanguage, getSpellDictionaryConfig, normalizeLegacyShelfName };
+module.exports = {
+  resolveInterfaceLanguage,
+  getSpellDictionaryConfig,
+  normalizeLegacyShelfName,
+};

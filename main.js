@@ -28,7 +28,7 @@ function ensureLibrary() {
       penNames: [],
       firstRunDone: false,
       pageTheme: 'night',
-      shelves: [{ id: 'shelf-1', name: 'Em andamento', bookIds: [] }]
+      shelves: [{ id: 'shelf-1', name: 'Works in Progress', bookIds: [] }]
     };
     fs.writeFileSync(LIBRARY_FILE, JSON.stringify(seed, null, 2));
   }
@@ -943,10 +943,10 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'uiBright' })
         },
         {
-          label: t('Interface Language', 'Idioma da interface'),
+          label: t('Language', 'Idioma'),
           submenu: [
-            { label: 'English', type: 'radio', checked: !isPortuguese, click: () => setInterfaceLanguage('en') },
-            { label: 'Português (Brasil)', type: 'radio', checked: isPortuguese, click: () => setInterfaceLanguage('pt-BR') }
+            { label: 'English (en-us)', type: 'radio', checked: !isPortuguese, click: () => setInterfaceLanguage('en') },
+            { label: 'Português (pt-br)', type: 'radio', checked: isPortuguese, click: () => setInterfaceLanguage('pt-BR') }
           ]
         }
       ]

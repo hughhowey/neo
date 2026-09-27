@@ -136,15 +136,6 @@ async function loadLibrary() {
   if (window.neoI18n) window.neoI18n.setLocale(await window.neo.getLanguage());
   libraryDirPath = await window.neo.libraryPath();
   library = await window.neo.readLibrary();
-  if (library && Array.isArray(library.shelves)) {
-    let changed = false;
-    library.shelves = library.shelves.map((shelf) => {
-      const name = shelf.name === 'Works in Progress' ? 'Em andamento' : shelf.name === 'New Shelf' ? 'Nova biblioteca' : shelf.name;
-      if (name !== shelf.name) changed = true;
-      return { ...shelf, name };
-    });
-    if (changed) await window.neo.writeLibrary(library);
-  }
   if (!library.firstRunDone) {
     showFirstRun();
   }
@@ -329,11 +320,12 @@ async function renderShelves() {
     label.className = 'shelf-label';
     label.contentEditable = 'true';
     label.spellcheck = false;
-    label.textContent = shelf.name;
+    label.textContent = NeoShelfNames.display(shelf.name, window.neoI18n.getLocale());
     label.title = 'Clique para renomear · clique com o botão direito para exportar ou excluir';
     label.addEventListener('blur', async () => {
-      shelf.name = label.textContent.trim() || shelf.name;
-      label.textContent = shelf.name;
+      const typedName = label.textContent.trim();
+      shelf.name = NeoShelfNames.normalize(typedName || shelf.name);
+      label.textContent = NeoShelfNames.display(shelf.name, window.neoI18n.getLocale());
       await window.neo.writeLibrary(library);
     });
     label.addEventListener('keydown', (e) => {
@@ -808,7 +800,7 @@ function shelfAutoScrollStep() {
 $('#add-shelf-btn').onclick = async () => {
   library.shelves.push({
     id: 'shelf-' + Date.now().toString(36),
-    name: 'Nova biblioteca',
+    name: 'New Shelf',
     bookIds: [],
     authorId: currentAuthor().id
   });
@@ -850,7 +842,7 @@ $('#author-chip').onclick = async () => {
     library.currentAuthorId = a.id;
     library.shelves.push({
       id: 'shelf-' + Date.now().toString(36),
-      name: 'Em andamento', bookIds: [], authorId: a.id
+      name: 'Works in Progress', bookIds: [], authorId: a.id
     });
   } else if (pick === 'del') {
     const homeId = library.authors[0].id;
@@ -1997,6 +1989,7 @@ function renderNav() {
     note.className = 'nav-note';
     note.contentEditable = 'true';
     note.spellcheck = false;
+    note.dataset.ph = 'What happens here…';
     note.textContent = book.chapterNotes[chId] || '';
     note.addEventListener('click', (e) => e.stopPropagation());
     note.addEventListener('keydown', (e) => {
@@ -4570,6 +4563,7 @@ async function showAbout() {
 window.neo.onMenu(async (msg) => {
   if (msg.type === 'language') {
     window.neoI18n.setLocale(msg.value);
+    if (!$('#bookshelf-view').hidden) renderShelves();
     if (spellOn) {
       resetSpellState();
       scanSpellingHere();
