@@ -24,6 +24,7 @@
     'Are you a pantser or a plotter?': 'Você prefere escrever de forma intuitiva ou planejar antes?',
     'I write by the seat of my pants. New books open on a blank page.': 'Escrevo sem planejar. Livros novos abrem em uma página em branco.',
     'I outline first. New books open in the Outline tab.': 'Faço um esboço primeiro. Livros novos abrem na aba Esboço.',
+    'It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief…': 'Foi o melhor dos tempos, foi o pior dos tempos, foi a era da sabedoria, foi a era da tolice, foi a época da crença…',
     "Pick a typeface and a drop-cap style. The sample below shows exactly what you'll get. (Changeable anytime in the Format menu.)": 'Escolha uma fonte e um estilo de capitular. A amostra abaixo mostra o resultado. (Você pode alterar isso a qualquer momento no menu Formato.)',
     'How should the page look?': 'Qual deve ser a aparência da página?', 'Body typeface': 'Fonte do texto',
     'Drop cap': 'Capitular', 'Start writing': 'Começar a escrever', 'Untitled': 'Sem título',
