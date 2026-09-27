@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('neo', {
   writeLibrary: (data) => ipcRenderer.invoke('library:write', data),
 
   createBook: (meta) => ipcRenderer.invoke('book:create', meta),
+  listBooks: () => ipcRenderer.invoke('library:listBooks'),
   readBookMeta: (bookId) => ipcRenderer.invoke('book:readMeta', bookId),
   writeBookMeta: (bookId, meta) => ipcRenderer.invoke('book:writeMeta', bookId, meta),
   deleteBook: (bookId, title) => ipcRenderer.invoke('book:delete', bookId, title),
@@ -39,9 +40,15 @@ contextBridge.exposeInMainWorld('neo', {
   spellCheckWords: (words) => ipcRenderer.invoke('spell:check', words),
   spellSuggest: (word) => ipcRenderer.invoke('spell:suggest', word),
   spellLearn: (word) => ipcRenderer.invoke('spell:learn', word),
+  spellCheckWords: (words) => ipcRenderer.invoke('spell:check', words),
+  spellSuggest: (word) => ipcRenderer.invoke('spell:suggest', word),
+  spellLearn: (word) => ipcRenderer.invoke('spell:learn', word),
   getLanguage: () => ipcRenderer.invoke('app:language:get'),
+  setSpellLanguage: (code) => ipcRenderer.invoke('spell:setLanguage', code),
   appVersion: () => ipcRenderer.invoke('app:version'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
+  poetryState: (on) => ipcRenderer.send('poetry:state', on),
+  typewriterState: (st) => ipcRenderer.send('typewriter:state', st),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });

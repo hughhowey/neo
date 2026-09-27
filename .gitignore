@@ -19,3 +19,6 @@ pocket/node_modules/
 pocket/www/app.js
 pocket/www/covers.js
 pocket/www/styles.css
+
+# working files beside the repo, never part of it
+Claude outputs/

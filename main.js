@@ -2,7 +2,7 @@
 // Owns the window and all file-system access. The renderer talks to this
 // through the IPC handlers below (see preload.js for the exposed API).
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -19,6 +19,54 @@ app.commandLine.appendSwitch('blink-settings', 'smartInsertDeleteEnabled=false')
 // covers any early access and non-redirected setups.
 let LIBRARY_DIR = path.join(os.homedir(), 'Documents', 'NEO Library');
 let LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
+
+// NEO's few app-level settings (today: a custom library folder) live in the
+// system's per-app data folder, since they must exist before the library
+// is found. Everything about the writing stays in the library itself.
+function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
+function readSettings() {
+  try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { return {}; }
+}
+function writeSettings(obj) {
+  fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
+  fs.writeFileSync(settingsPath(), JSON.stringify(obj, null, 2));
+}
+
+// File → Library Folder…: point NEO at any folder, or back at the default.
+// The library is plain files, so the writer moves them; NEO only follows.
+async function chooseLibraryFolder() {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const defaultDir = path.join(app.getPath('documents'), 'NEO Library');
+  const custom = LIBRARY_DIR !== defaultDir;
+  const ask = await dialog.showMessageBox(win, {
+    type: 'question',
+    message: 'Library folder',
+    detail: `Your books live in:\n${LIBRARY_DIR}\n\nChoose another folder and NEO restarts there. Existing books stay where they are — move the files yourself if you want them along.`,
+    buttons: custom ? ['Choose Folder…', 'Use Default Folder', 'Cancel'] : ['Choose Folder…', 'Cancel'],
+    defaultId: 0,
+    cancelId: custom ? 2 : 1
+  });
+  let next = null;
+  if (ask.response === 0) {
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Choose a folder for your NEO library',
+      defaultPath: LIBRARY_DIR,
+      properties: ['openDirectory', 'createDirectory']
+    });
+    if (r.canceled || !r.filePaths[0]) return;
+    next = r.filePaths[0];
+  } else if (custom && ask.response === 1) {
+    next = null; // back to the default
+  } else {
+    return;
+  }
+  if (next === LIBRARY_DIR) return;
+  const settings = readSettings();
+  if (next) settings.libraryDir = next; else delete settings.libraryDir;
+  writeSettings(settings);
+  app.relaunch();
+  app.exit(0);
+}
 
 function ensureLibrary() {
   if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
@@ -125,6 +173,19 @@ ipcMain.handle('book:create', (_e, meta) => {
   writeJSON(path.join(dir, 'darlings.json'), []);
   writeJSON(path.join(dir, 'stickies.json'), []);
   return book;
+});
+
+// every book folder in the library, shelved or not — for File → Reshelve
+ipcMain.handle('library:listBooks', () => {
+  const out = [];
+  try {
+    for (const d of fs.readdirSync(LIBRARY_DIR)) {
+      if (!d.startsWith('book-')) continue;
+      const m = readJSON(path.join(LIBRARY_DIR, d, 'book.json'), null);
+      if (m && m.id) out.push({ id: m.id, title: m.title || 'Untitled', author: m.author || '', modified: m.modified || '' });
+    }
+  } catch (err) { logError('listBooks', err); }
+  return out;
 });
 
 ipcMain.handle('book:readMeta', (_e, bookId) => {
@@ -481,6 +542,50 @@ const decodeEntities = (s) => s
   .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   .replace(/&quot;/g, '"').replace(/&apos;/g, "'");
 
+// Check if a formatting tag (<w:b>, <w:i>) is actually ON
+function docxFormatOn(rpr, tag) {
+  const hit = rpr.match(new RegExp('<' + tag + '(?:\\s[^>]*)?/?>'));
+  if (!hit) return false;
+  const val = (hit[0].match(/w:val="([^"]*)"/) || [])[1];
+  return val === undefined || /^(true|1|on)$/i.test(val);
+}
+
+// Convert one Word paragraph's bold/italic XML into markdown text with bold/italic
+function docxParagraphToMarkdown(p) {
+  const pageBreak = /<w:br [^>]*w:type="page"/.test(p) || /<w:pageBreakBefore/.test(p);
+  // Word marks headings with a paragraph style such as <w:pStyle w:val="Heading1"/>.
+  // Any heading style (Heading1..9, or bare "Heading") starts a new chapter and
+  // gives it its title — regardless of locale, the underlying style id is
+  // always "Heading*".
+  const pStyle = (p.match(/<w:pStyle\s+w:val="([^"]*)"/) || [])[1] || '';
+  const heading = /^heading\d*$/i.test(pStyle);
+  // Google Docs exports each of a document's tabs under a "Title"-styled
+  // line, and the book's own title page uses the same style: the first one
+  // names the book, later ones start chapters (see chapterize)
+  const title = /^title$/i.test(pStyle);
+  const runs = [...p.matchAll(/<w:r[ >][\s\S]*?<\/w:r>/g)].map((rm) => {
+    const r = rm[0];
+    const rpr = (r.match(/<w:rPr>[\s\S]*?<\/w:rPr>/) || [''])[0];
+    const text = [...r.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
+      .map((t) => decodeEntities(t[1])).join('');
+    return { text, bold: docxFormatOn(rpr, 'w:b'), italic: docxFormatOn(rpr, 'w:i') };
+  });
+  // make sure **one**"+"**two**" becomes one "**onetwo**", not "**one****two**"
+  const merged = [];
+  for (const run of runs) {
+    const last = merged[merged.length - 1];
+    if (last && last.bold === run.bold && last.italic === run.italic) last.text += run.text;
+    else merged.push({ ...run });
+  }
+  const text = merged.map((run) => {
+    let t = run.text;
+    if (run.bold) t = '**' + t + '**';
+    if (run.italic) t = '*' + t + '*';
+    return t;
+  }).join('').trim();
+  return { text, pageBreak, heading, title };
+}
+
 async function importFile(fp) {
   const name = path.basename(fp).replace(/\.[^.]+$/, '');
   const ext = path.extname(fp).toLowerCase();
@@ -492,16 +597,8 @@ async function importFile(fp) {
     const docFile = zip.file('word/document.xml');
     if (!docFile) throw new Error('Not a valid .docx: ' + fp);
     const xml = await docFile.async('string');
-    paras = [...xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)].map((m) => {
-      const p = m[0];
-      // <w:t> or <w:t attr...> ONLY — never <w:tab>/<w:tabs>, which share
-      // the same first letters and once leaked raw XML into a manuscript
-      const text = [...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
-        .map((t) => decodeEntities(t[1])).join('');
-      const pageBreak = /<w:br [^>]*w:type="page"/.test(p) || /<w:pageBreakBefore/.test(p);
-      return { text: text.trim(), pageBreak };
-    });
-  } else {
+    paras = [...xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)]
+      .map((m) => docxParagraphToMarkdown(m[0]));  } else {
     const raw = fs.readFileSync(fp, 'utf8');
     paras = raw.split(/\r?\n\s*\r?\n/)
       .map((b) => ({ text: b.replace(/\s*\r?\n\s*/g, ' ').trim(), pageBreak: false }))
@@ -516,32 +613,66 @@ async function importFile(fp) {
   // Bare numbers only count as chapter markers when there's a ladder of them —
   // a story that merely OPENS with "Seven." keeps its seven.
   const numeralMode = paras.filter((p) => p.text && isNumeralish(p.text.trim())).length >= 2;
-  const isHeading = (t) => t && (
+  // A markdown heading: one or more "#" then text — any "size" (depth) counts.
+  const isMdHeading = (t) => /^#{1,6}\s+\S/.test(t);
+  const mdTitleOf = (t) => t.replace(/^#{1,6}\s*/, '').trim();
+  // A heading that is purely NEO's own numbering ("Chapter 2", "Prologue",
+  // bare "7") carries no title — NEO numbers chapters itself.
+  const isNumberedHeading = (t) => (
     (/^(chapter|prologue|epilogue|part)\b/i.test(t) && t.length < 60) ||
     (numeralMode && isNumeralish(t))
   );
+  const isHeading = (t) => t && (isMdHeading(t) || isNumberedHeading(t));
+  // The chapter title that a heading contributes. Markdown hashes and any
+  // emphasis markers are stripped, and pure numbering yields no title.
+  const titleOf = (t) => {
+    if (isMdHeading(t)) t = mdTitleOf(t);
+    t = t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/_([^_]+)_/g, '$1');
+    return isNumberedHeading(t) ? '' : t;
+  };
   const isBreak = (t) => /^\s*([*#•~⁂—–-]\s*){1,7}$/.test(t || '');
 
+  let styledTitle = null; // a Title-styled first line: the book's name
   const chapterize = (usePageBreaks) => {
     const chapters = [];
     let cur = [];
+    let curTitle = '';
+    let seenProse = false;
+    let lastWasHeading = false;
+    styledTitle = null;
+    const close = () => {
+      if (cur.length) chapters.push({ title: curTitle, paras: cur });
+      cur = [];
+      curTitle = '';
+    };
     for (const p of paras) {
       const brk = usePageBreaks && p.pageBreak;
-      if (!p.text && !brk) continue;
-      if ((brk || isHeading(p.text)) && cur.length) {
-        chapters.push(cur);
-        cur = [];
+      if (!p.text && !brk && !p.heading && !p.title) continue;
+      // a Title line before any prose is the book's title, not a chapter's
+      if (p.title && !seenProse && styledTitle === null && p.text) { styledTitle = titleOf(p.text); continue; }
+      const isH = p.heading || p.title || isHeading(p.text);
+      if (brk || isH) {
+        // a heading that follows another with no prose between (a Google
+        // Docs tab named "Chapter 2" holding a "The Long Way Home" heading)
+        // refines the chapter's title instead of opening an empty chapter
+        if (isH && lastWasHeading && !cur.length && !brk) {
+          const t = titleOf(p.text || '');
+          if (t) curTitle = curTitle ? `${curTitle} — ${t}` : t;
+          continue;
+        }
+        close();
       }
-      if (isHeading(p.text)) continue; // the heading line itself is replaced by NEO's numbering
+      if (isH) { curTitle = titleOf(p.text || ''); lastWasHeading = true; continue; } // the heading line is replaced by NEO's numbering
+      lastWasHeading = false;
       if (isBreak(p.text)) { cur.push({ scene: true }); continue; }
-      if (p.text) cur.push({ text: p.text });
+      if (p.text) { cur.push({ text: p.text }); seenProse = true; }
     }
-    if (cur.length) chapters.push(cur);
+    close();
     return chapters;
   };
 
   const countAllWords = (list) =>
-    list.reduce((n, ch) => n + ch.reduce((m, p) => m + (p.text ? p.text.trim().split(/\s+/).length : 0), 0), 0);
+    list.reduce((n, ch) => n + ch.paras.reduce((m, p) => m + (p.text ? p.text.trim().split(/\s+/).length : 0), 0), 0);
 
   // First pass trusts page breaks. Some word processors sprinkle page-break
   // formatting on every paragraph, exploding a story into confetti — if the
@@ -550,17 +681,17 @@ async function importFile(fp) {
   if (chapters.length > 6 && countAllWords(chapters) / chapters.length < 250) {
     chapters = chapterize(false);
   }
-  if (!chapters.length) chapters.push([{ text: '' }]);
+  if (!chapters.length) chapters.push({ title: '', paras: [{ text: '' }] });
 
   // Front matter: a short title line and a "by Author" line belong on the
   // title page, not in the body. Detect, harvest, and remove them.
-  let title = null;
+  let title = styledTitle || null;
   let author = null;
   const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const first = chapters[0];
-  if (first && first.length) {
-    const t0 = (first[0].text || '').trim();
-    const t1 = first.length > 1 ? (first[1].text || '').trim() : '';
+  if (first && first.paras.length) {
+    const t0 = (first.paras[0].text || '').trim();
+    const t1 = first.paras.length > 1 ? (first.paras[1].text || '').trim() : '';
     const titleish = t0 && t0.length < 90 && !/[.!?]$/.test(t0) && (
       (norm(t0).length > 3 && norm(name).includes(norm(t0))) ||
       /^by\s+\S/i.test(t1) ||
@@ -568,15 +699,15 @@ async function importFile(fp) {
     );
     if (titleish) {
       title = t0;
-      first.shift();
+      first.paras.shift();
     }
-    const bl = first.length ? (first[0].text || '').trim().match(/^by\s+(.{2,60})$/i) : null;
+    const bl = first.paras.length ? (first.paras[0].text || '').trim().match(/^by\s+(.{2,60})$/i) : null;
     if (bl) {
       author = bl[1].trim();
-      first.shift();
+      first.paras.shift();
     }
-    if (!first.length) chapters.shift();
-    if (!chapters.length) chapters.push([{ text: '' }]);
+    if (!first.paras.length) chapters.shift();
+    if (!chapters.length) chapters.push({ title: '', paras: [{ text: '' }] });
   }
 
   return { name, title, author, chapters };
@@ -705,12 +836,62 @@ let spellRequestId = 0;
 let spellCustomWords = [];
 const spellRequests = new Map();
 
-function initSpell() {
+// Spellcheck: NEO's own bundled Hunspell dictionaries via nspell, identical
+// on every platform. The renderer paints the squiggles and asks for
+// suggestions. Edit → Spellcheck Language picks the dictionary; the choice
+// lives in library.json so it travels with the writer's books.
+// (Languages beyond US English: idea and dictionary set from Zaim Halili.)
+// ---------------------------------------------------------------------------
+let spellLanguage = 'en-US';
+const SPELL_LANGUAGES = {
+  'en-US': { label: 'English (US)', pkg: 'dictionary-en-us' },
+  'en-GB': { label: 'English (UK)', pkg: 'dictionary-en-gb' },
+  'en-CA': { label: 'English (Canada)', pkg: 'dictionary-en-ca' },
+  'en-AU': { label: 'English (Australia)', pkg: 'dictionary-en-au' },
+  'fr': { label: 'French', pkg: 'dictionary-fr' },
+  'es': { label: 'Spanish', pkg: 'dictionary-es' },
+  'de': { label: 'German', pkg: 'dictionary-de' }
+};
+
+// The dictionary work runs in a helper process (spell-worker.js): parsing
+// French takes seconds, and the writing room must never wait for it.
+let spellChild = null;
+let spellSeq = 0;
+const spellWaiting = new Map();
+
+function spellRequest(msg) {
+  return new Promise((resolve) => {
+    if (!spellChild) { resolve({ ok: false, error: 'no spell process' }); return; }
+    const id = ++spellSeq;
+    spellWaiting.set(id, resolve);
+    spellChild.postMessage({ ...msg, id });
+  });
+}
+
+function startSpellProcess() {
+  if (spellChild) return;
+  try {
+function startSpellProcess() {
+  if (spellChild) return;
   try {
     const lib = readJSON(LIBRARY_FILE, {});
     spellCustomWords = Array.isArray(lib.customWords) ? lib.customWords : [];
+    spellChild = utilityProcess.fork(path.join(__dirname, 'spell-worker.js'), [], { serviceName: 'NEO spellcheck' });
+    spellChild.on('message', (m) => {
+      const done = spellWaiting.get(m.id);
+      if (done) { spellWaiting.delete(m.id); done(m); }
+    });
+    spellChild.on('exit', () => {
+      spellChild = null;
+      for (const done of spellWaiting.values()) done({ ok: false, error: 'spell process exited' });
+      spellWaiting.clear();
+    });
   } catch (err) {
     logError('spell', err);
+    spellChild = null;
+  } catch (err) {
+    logError('spell', err);
+    spellChild = null;
   }
 }
 
@@ -757,6 +938,34 @@ function requestSpell(action, data = {}) {
   });
 }
 
+async function loadSpellDictionary(code) {
+  const known = SPELL_LANGUAGES[code] ? code : 'en-US';
+  const entry = SPELL_LANGUAGES[known];
+  startSpellProcess();
+  let custom = [];
+  try { custom = readJSON(LIBRARY_FILE, {}).customWords || []; } catch { /* a nicety */ }
+  const ok = await requestSpell('load', { dir: path.join(__dirname, 'node_modules', entry.pkg), custom });
+  if (!ok) {
+    logError('spell', new Error('dictionary failed to load'));
+    return false;
+  }
+  spellLanguage = known;
+  return true;
+}
+
+function initSpell() {
+  let code = 'en-US';
+  try { code = readJSON(LIBRARY_FILE, {}).spellLanguage || 'en-US'; } catch { /* fresh library */ }
+  loadSpellDictionary(code);
+}
+
+ipcMain.handle('spell:setLanguage', async (_e, code) => {
+  if (!SPELL_LANGUAGES[code]) return false;
+  const ok = await loadSpellDictionary(code);
+  if (ok) { try { buildMenu(); } catch (err) { logError('menu', err); } }
+  return ok;
+});
+
 ipcMain.handle('spell:check', async (_e, words) => {
   try {
     return await requestSpell('check', { words });
@@ -776,6 +985,8 @@ ipcMain.handle('spell:learn', async (_e, word) => {
   if (!spellCustomWords.includes(word)) spellCustomWords.push(word);
   try { await requestSpell('learn', { word }); }
   catch (err) { logError('spell', err); }
+  return true;
+});
   return true;
 });
 
@@ -812,13 +1023,34 @@ function setInterfaceLanguage(language) {
   sendToWindow({ type: 'language', value: interfaceLanguage });
 }
 
+// the Format menu's ticks: whether the caret is in a poetry paragraph, and
+// whether typewriter scrolling is on
+let poetryState = false;
+let typewriterState = false;
+ipcMain.on('poetry:state', (_e, on) => {
+  on = !!on;
+  if (on === poetryState) return;
+  poetryState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
+ipcMain.on('typewriter:state', (_e, on) => {
+  on = !!on;
+  if (on === typewriterState) return;
+  typewriterState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
+
 function buildMenu() {
   const isMac = process.platform === 'darwin';
-  const isPortuguese = getInterfaceLanguage() === 'pt-BR';
-  const t = (english, portuguese) => isPortuguese ? portuguese : english;
+  const isWin = process.platform === 'win32';
+  // macOS and Windows name faces that ship with the OS. Linux has none of
+  // them, so the menu names the faces bundled in fonts/ (see styles.css).
+  // The Windows list stays the one the renderer already understands.
   const bodyFonts = isMac
     ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
-    : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
+    : isWin
+      ? ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia']
+      : ['Gelasio', 'TeX Gyre Pagella', 'Libre Baskerville', 'Alegreya', 'Source Serif Pro'];
   const template = [
     // appMenu exists only on macOS — including it on Windows throws,
     // which is exactly what kept NEO from ever opening a window there
@@ -856,6 +1088,8 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => sendToWindow({ type: 'import' })
         },
+        { label: 'Reshelve a Book…', click: () => sendToWindow({ type: 'reshelve' }) },
+        { label: 'Library Folder…', click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
         { type: 'separator' },
         ...(isMac ? [{ role: 'close' }] : [{ role: 'quit' }])
       ]
@@ -877,6 +1111,15 @@ function buildMenu() {
           label: t('Spellcheck Pass', 'Verificar ortografia'),
           accelerator: 'CmdOrCtrl+;',
           click: () => sendToWindow({ type: 'spellcheck' })
+        },
+        {
+          label: 'Spellcheck Language',
+          submenu: Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
+            label: lang.label,
+            type: 'radio',
+            checked: spellLanguage === code,
+            click: () => sendToWindow({ type: 'spellLanguage', value: code })
+          }))
         }
       ]
     },
@@ -885,10 +1128,14 @@ function buildMenu() {
       submenu: [
         {
           label: t('Body Font', 'Fonte do texto'),
-          submenu: bodyFonts.map((f) => ({
-            label: f,
-            click: () => sendToWindow({ type: 'bodyFont', value: f })
-          }))
+          submenu: [
+            ...bodyFonts.map((f) => ({
+              label: f,
+              click: () => sendToWindow({ type: 'bodyFont', value: f })
+            })),
+            { type: 'separator' },
+            { label: t('Other Font…', 'Outra fonte…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
+          ]
         },
         {
           label: t('Drop Cap Style', 'Estilo da capitular'),
@@ -901,10 +1148,10 @@ function buildMenu() {
         {
           label: t('Align Paragraph', 'Alinhar parágrafo'),
           submenu: [
-            { label: t('Left', 'À esquerda'), click: () => sendToWindow({ type: 'align', value: 'left' }) },
-            { label: t('Center', 'Centralizado'), click: () => sendToWindow({ type: 'align', value: 'center' }) },
-            { label: t('Right', 'À direita'), click: () => sendToWindow({ type: 'align', value: 'right' }) },
-            { label: t('Justify', 'Justificado'), click: () => sendToWindow({ type: 'align', value: 'justify' }) }
+            { label: t('Left', 'À esquerda'), accelerator: 'CmdOrCtrl+Shift+L', click: () => sendToWindow({ type: 'align', value: 'left' }) },
+            { label: t('Center', 'Centralizado'), accelerator: 'CmdOrCtrl+Shift+C', click: () => sendToWindow({ type: 'align', value: 'center' }) },
+            { label: t('Right', 'À direita'), accelerator: 'CmdOrCtrl+Shift+R', click: () => sendToWindow({ type: 'align', value: 'right' }) },
+            { label: t('Justify', 'Justificado'), accelerator: 'CmdOrCtrl+Shift+J', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
         { type: 'separator' },
@@ -915,7 +1162,18 @@ function buildMenu() {
         {
           label: t('Typewriter Scrolling', 'Rolagem de máquina de escrever'),
           accelerator: 'CmdOrCtrl+Shift+T',
+          type: 'checkbox',
+          checked: typewriterState,
           click: () => sendToWindow({ type: 'typewriter' })
+        },
+        { type: 'separator' },
+        // ticks when the caret sits in a poetry paragraph; ⇧Enter is the
+        // editor's own key, so no accelerator here
+        {
+          label: 'Poetry Paragraph\t⇧Enter',
+          type: 'checkbox',
+          checked: poetryState,
+          click: () => sendToWindow({ type: 'poetry' })
         }
       ]
     },
@@ -929,6 +1187,16 @@ function buildMenu() {
             const w = BrowserWindow.getFocusedWindow();
             if (w) w.setFullScreen(!w.isFullScreen());
           }
+        },
+        {
+          label: 'Focus Mode',
+          submenu: [
+            { label: 'Cycle', accelerator: 'CmdOrCtrl+Shift+O', click: () => sendToWindow({ type: 'focusCycle' }) },
+            { type: 'separator' },
+            { label: 'Sentence', click: () => sendToWindow({ type: 'focus', value: 'sentence' }) },
+            { label: 'Paragraph', click: () => sendToWindow({ type: 'focus', value: 'paragraph' }) },
+            { label: 'Off', click: () => sendToWindow({ type: 'focus', value: 'off' }) }
+          ]
         },
         { type: 'separator' },
         {
@@ -1071,6 +1339,9 @@ app.whenReady().then(() => {
     // the real Documents folder (handles OneDrive-redirected Windows setups)
     try {
       LIBRARY_DIR = path.join(app.getPath('documents'), 'NEO Library');
+      // …unless the writer chose their own folder (File → Library Folder…)
+      const chosen = readSettings().libraryDir;
+      if (chosen && fs.existsSync(chosen) && fs.statSync(chosen).isDirectory()) LIBRARY_DIR = chosen;
       LIBRARY_FILE = path.join(LIBRARY_DIR, 'library.json');
     } catch (err) {
       logError('paths', err);

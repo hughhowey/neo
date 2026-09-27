@@ -145,7 +145,7 @@ async function loadLibrary() {
 function showFirstRun() {
   const fr = $('#firstrun');
   fr.hidden = false;
-  let picked = { body: 'Georgia', dropcap: 'literary' };
+  let picked = { body: Object.keys(BODY_FONTS)[0] || 'Georgia', dropcap: 'literary' };
 
   // Step 1: who are you, and how do you write?
   $$('.fr-choice').forEach((btn) => {
@@ -168,7 +168,7 @@ function showFirstRun() {
   function buildFontStep() {
     const bodyRow = $('#fr-bodyfonts');
     bodyRow.innerHTML = '';
-    for (const name of Object.keys(BODY_FONTS)) {
+    for (const name of BODY_FONT_CHOICES) {
       const b = document.createElement('button');
       b.className = 'fr-font' + (picked.body === name ? ' sel' : '');
       b.textContent = name;
@@ -553,7 +553,12 @@ function bookTile(meta) {
   el.onclick = () => openBook(meta.id);
   el.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('application/x-neo-book', meta.id);
-    el.classList.add('dragging');
+    // the ghost that rides under the cursor is a faded, smaller cover, held
+    // by its top-left corner so it never sits on top of a drop target's label
+    el.style.opacity = '0.45';
+    el.style.transform = 'scale(0.7)';
+    e.dataTransfer.setDragImage(el, 12, 12);
+    setTimeout(() => { el.style.opacity = ''; el.style.transform = ''; el.classList.add('dragging'); }, 0);
   });
   el.addEventListener('dragend', () => el.classList.remove('dragging'));
   // images dragged from Finder onto a book become its cover;
@@ -808,6 +813,135 @@ $('#add-shelf-btn').onclick = async () => {
   renderShelves();
 };
 
+// Drag a book up to your name: if you write under other names too, a little
+// rack of shelves unfolds beneath it, one per pen name, and the book can be
+// dropped onto one. It lands on that name's top shelf and takes the name.
+// With a single author there is nothing to unfold, so nothing happens.
+(() => {
+  const chip = $('#author-chip');
+  let rack = null;
+  let hideTimer = null;
+  const otherAuthors = () => (library.authors || []).filter((a) => a.id !== currentAuthor().id);
+  const isBookDrag = (e) => e.dataTransfer && e.dataTransfer.types.includes('application/x-neo-book');
+
+  function showRack() {
+    if (rack) return;
+    const others = otherAuthors();
+    if (!others.length) return;
+    rack = document.createElement('div');
+    rack.id = 'pen-rack';
+    for (const a of others) {
+      const slot = document.createElement('div');
+      slot.className = 'pen-slot';
+      slot.textContent = a.name;
+      slot.dataset.authorId = a.id;
+      slot.addEventListener('dragover', (e) => {
+        if (!isBookDrag(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        slot.classList.add('over');
+        clearTimeout(hideTimer);
+      });
+      slot.addEventListener('dragleave', () => slot.classList.remove('over'));
+      slot.addEventListener('drop', async (e) => {
+        if (!isBookDrag(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const bookId = e.dataTransfer.getData('application/x-neo-book');
+        hideRack();
+        await moveBookToAuthor(bookId, a.id);
+      });
+      rack.appendChild(slot);
+    }
+    const r = chip.getBoundingClientRect();
+    rack.style.top = (r.bottom + 8) + 'px';
+    // the rack hangs from the name and reaches leftward, so the names on its
+    // planks sit well clear of the cover riding under the cursor
+    rack.style.right = Math.max(12, window.innerWidth - r.right) + 'px';
+    document.body.appendChild(rack);
+    requestAnimationFrame(() => rack.classList.add('open'));
+  }
+  function hideRack() {
+    clearTimeout(hideTimer);
+    if (rack) { rack.remove(); rack = null; }
+  }
+  const armHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideRack, 400); };
+
+  chip.addEventListener('dragenter', (e) => { if (isBookDrag(e)) { e.preventDefault(); showRack(); } });
+  chip.addEventListener('dragover', (e) => { if (isBookDrag(e)) { e.preventDefault(); clearTimeout(hideTimer); } });
+  chip.addEventListener('dragleave', armHide);
+  document.addEventListener('dragover', (e) => {
+    // leaving both the chip and the rack lets the rack fold away
+    if (rack && !rack.contains(e.target) && e.target !== chip) armHide();
+  });
+  document.addEventListener('dragend', hideRack);
+  document.addEventListener('drop', hideRack);
+})();
+
+// Esc mid-drag cancels the drag itself (the browser does that). Esc or ⌘Z
+// in the seconds after a drop puts the book back where it came from.
+let lastShelfMove = null;
+async function moveBookToAuthor(bookId, authorId) {
+  const target = (library.authors || []).find((a) => a.id === authorId);
+  const shelf = target && shelvesFor(target.id)[0];
+  if (!shelf) return;
+  const meta = await window.neo.readBookMeta(bookId);
+  if (!meta) return;
+  const from = library.shelves.find((s) => s.bookIds.includes(bookId));
+  lastShelfMove = {
+    bookId, title: meta.title, author: meta.author,
+    shelfId: from ? from.id : null, index: from ? from.bookIds.indexOf(bookId) : 0,
+    authorId: currentAuthor().id, at: Date.now()
+  };
+  for (const s of library.shelves) s.bookIds = s.bookIds.filter((b) => b !== bookId);
+  shelf.bookIds.unshift(bookId); // the top shelf, first in line
+  meta.author = target.name;
+  await window.neo.writeBookMeta(bookId, meta);
+  await window.neo.writeLibrary(library);
+  renderShelves();
+  toast(`“${meta.title}” now sits on ${target.name}’s top shelf — Esc puts it back`, 6000);
+}
+async function undoShelfMove() {
+  const m = lastShelfMove;
+  if (!m || Date.now() - m.at > 15000) return false;
+  lastShelfMove = null;
+  const home = library.shelves.find((s) => s.id === m.shelfId) || shelvesFor(m.authorId)[0] || library.shelves[0];
+  for (const s of library.shelves) s.bookIds = s.bookIds.filter((b) => b !== m.bookId);
+  home.bookIds.splice(Math.min(m.index, home.bookIds.length), 0, m.bookId);
+  const meta = await window.neo.readBookMeta(m.bookId);
+  if (meta) { meta.author = m.author; await window.neo.writeBookMeta(m.bookId, meta); }
+  await window.neo.writeLibrary(library);
+  renderShelves();
+  toast(`“${m.title}” is back where it was`);
+  return true;
+}
+document.addEventListener('keydown', (e) => {
+  if (!$('#editor-view').hidden || !lastShelfMove) return;
+  const undoKey = e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z');
+  if (!undoKey) return;
+  if (document.querySelector('.modal-backdrop:not([hidden])')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  undoShelfMove();
+}, true);
+
+// File → Reshelve a Book…: a book taken off the shelves is still on disk;
+// this puts it back, on the current name's first shelf
+async function reshelveBook() {
+  const all = await window.neo.listBooks();
+  const shelved = new Set(library.shelves.flatMap((s) => s.bookIds));
+  const loose = all.filter((b) => !shelved.has(b.id)).sort((a, b) => (b.modified || '').localeCompare(a.modified || ''));
+  if (!loose.length) { toast('Every book in your library is already on a shelf'); return; }
+  const pick = await optionModal('Books in your library that aren’t on a shelf', null,
+    loose.map((b) => ({ label: b.title, desc: b.author ? 'by ' + b.author : '', value: b.id })));
+  if (!pick) return;
+  const shelf = shelvesFor(currentAuthor().id)[0] || library.shelves[0];
+  shelf.bookIds.push(pick);
+  await window.neo.writeLibrary(library);
+  renderShelves();
+  toast(`“${loose.find((b) => b.id === pick).title}” is back on the shelf`);
+}
+
 $('#author-chip').onclick = async () => {
   const cur = currentAuthor();
   const opts = [];
@@ -954,7 +1088,11 @@ function renderChapters() {
       head.classList.toggle('has-title', titleSpan.textContent.trim() !== '');
     });
     titleSpan.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); titleSpan.blur(); }
+      if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        titleSpan.blur();
+        poetryUnderHeading(sec.querySelector('.chapter-body'), chId);
+      } else if (e.key === 'Enter') { e.preventDefault(); titleSpan.blur(); }
       e.stopPropagation();
     });
     titleSpan.addEventListener('blur', () => {
@@ -1090,6 +1228,8 @@ function wireChapterBody(body, chId) {
       if (destructive) healSelectionSeams(body);
     }
     if (styleKeepScroll(e)) return;
+    if (handlePoetry(e, body, chId)) return;
+    if (poetryBackspace(e, body, chId)) return;
     if (sceneBreakDelete(e, body, chId)) return;
     if (spaceSafeDelete(e, body, chId)) return;
     if (emptyChapterBackspace(e, body, chId)) return;
@@ -1456,6 +1596,32 @@ function handleEnter(e, body, chId) {
   const block = el && el.closest ? el.closest('p') : null;
   if (!block || !body.contains(block)) return false;
   if (block.classList.contains('scene-break')) { e.preventDefault(); return true; } // Enter on a *** line: nothing
+  // Enter in a poetry paragraph steps back into prose: an empty line becomes
+  // an ordinary paragraph in place; otherwise the line splits and the new
+  // paragraph is plain (⇧Enter is how the poem continues)
+  if (block.classList.contains('poetry')) {
+    e.preventDefault();
+    enterRun = 0;
+    if (block.textContent.trim() === '') {
+      snapshotStructure('poetry paragraph to prose');
+      block.classList.remove('poetry');
+      romanize(block);
+      placeCaret(block, 0);
+      syncChapter(body, chId);
+      resetNativeUndo();
+      breakRun++;
+      return true;
+    }
+    document.execCommand('insertParagraph');
+    const cur = caretBlock(body);
+    if (cur && cur !== block) {
+      cur.classList.remove('poetry');
+      romanize(cur);
+      placeCaret(cur, 0);
+    }
+    syncChapter(body, chId);
+    return true;
+  }
   const prev = block.previousElementSibling;
 
   if (block.textContent.trim() !== '') {
@@ -1540,6 +1706,175 @@ function handleEnter(e, body, chId) {
   return false;
 }
 
+/* ================================================================== */
+/*  POETRY PARAGRAPHS — ⇧Enter                                         */
+/*  A paragraph pulled in from the margins, italic: a stanza of verse,  */
+/*  a quote, a POV name under the chapter heading. One class, one key.  */
+/* ================================================================== */
+
+// the paragraph holding the caret, if it belongs to this chapter body
+function caretBlock(body) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  let el = sel.anchorNode;
+  if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const block = el && el.closest ? el.closest('p') : null;
+  return block && body.contains(block) ? block : null;
+}
+
+// A poetry paragraph is born italic — real <i> markup, so ⌘I can take it
+// off a word — and sheds that default italic when it returns to prose.
+function italicize(p) {
+  if (p.textContent.trim() === '') { p.innerHTML = '<i><br></i>'; return; }
+  const kids = [...p.childNodes].filter((n) => !(n.nodeType === Node.TEXT_NODE && !n.textContent.trim()));
+  if (kids.length === 1 && kids[0].nodeType === Node.ELEMENT_NODE && kids[0].tagName === 'I') return;
+  const i = document.createElement('i');
+  while (p.firstChild) i.appendChild(p.firstChild);
+  p.appendChild(i);
+}
+function romanize(p) {
+  const kids = [...p.childNodes].filter((n) => !(n.nodeType === Node.TEXT_NODE && !n.textContent.trim()));
+  if (kids.length !== 1 || kids[0].nodeType !== Node.ELEMENT_NODE || kids[0].tagName !== 'I') return;
+  const i = kids[0];
+  while (i.firstChild) i.before(i.firstChild);
+  i.remove();
+  if (p.textContent.trim() === '' && !p.querySelector('br')) p.innerHTML = '<br>';
+}
+// caret at the start of a paragraph's text — inside its italic when it has one
+function caretIntoStart(p) {
+  const i = p.firstElementChild && p.firstElementChild.tagName === 'I' ? p.firstElementChild : p;
+  placeCaret(i, 0);
+}
+
+function placeCaret(node, offset) {
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.setStart(node, offset);
+  r.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
+// ⇧Enter. At the end of a paragraph: a new poetry paragraph beneath it.
+// Mid-paragraph: the text after the caret becomes one. Inside a poetry
+// paragraph: another line of it, so verse flows. On a *** line: nothing.
+function handlePoetry(e, body, chId) {
+  if (e.key !== 'Enter' || !e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const block = caretBlock(body);
+  if (!block) return false;
+  e.preventDefault();
+  if (block.classList.contains('scene-break')) return true;
+
+  if (block.classList.contains('poetry')) {
+    // the engine's own split keeps the class on the new line, and ⌘Z sees it
+    if (block.querySelector('span:not(.ph-mark)')) stripJunkSpans(block);
+    document.execCommand('insertParagraph');
+    const cur = caretBlock(body);
+    if (cur) {
+      cur.classList.add('poetry');
+      if (cur.textContent.trim() === '' && !cur.querySelector('i')) { italicize(cur); caretIntoStart(cur); }
+    }
+    syncChapter(body, chId);
+    return true;
+  }
+
+  snapshotStructure('poetry paragraph');
+  const r = sel.getRangeAt(0);
+  const tail = document.createRange();
+  tail.selectNodeContents(block);
+  try { tail.setStart(r.startContainer, r.startOffset); } catch { return true; }
+  const after = tail.toString();
+  const empty = block.textContent.trim() === '';
+  const atStart = after.length === block.textContent.length;
+  if (empty || atStart) {
+    // an empty paragraph, or the caret at its very start: the whole paragraph turns to poetry
+    block.classList.add('poetry');
+    italicize(block);
+    caretIntoStart(block);
+  } else {
+    const line = document.createElement('p');
+    line.className = 'poetry';
+    if (after.trim() !== '') {
+      line.appendChild(tail.extractContents());
+      for (const junk of line.querySelectorAll('br')) junk.remove();
+      if (!block.textContent.trim()) block.innerHTML = '<br>';
+    }
+    italicize(line);
+    block.after(line);
+    caretIntoStart(line);
+  }
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+
+// Backspace at the very start of a poetry paragraph makes it prose again —
+// the second Backspace then merges it upward like any paragraph
+function poetryBackspace(e, body, chId) {
+  if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const block = caretBlock(body);
+  if (!block || !block.classList.contains('poetry')) return false;
+  const r = sel.getRangeAt(0);
+  const head = document.createRange();
+  head.selectNodeContents(block);
+  try { head.setEnd(r.startContainer, r.startOffset); } catch { return false; }
+  if (head.toString().length !== 0) return false;
+  e.preventDefault();
+  snapshotStructure('poetry paragraph to prose');
+  block.classList.remove('poetry');
+  romanize(block);
+  placeCaret(block, 0);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+
+// Format → Poetry Paragraph: toggles every paragraph the selection touches
+function togglePoetry() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) { toast('Click into a paragraph first'); return; }
+  const r = sel.getRangeAt(0);
+  let el = r.startContainer;
+  if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  const body = el && el.closest ? el.closest('.chapter-body') : null;
+  if (!body) { toast('Click into a paragraph first'); return; }
+  const chId = body.closest('.chapter').dataset.id;
+  const ps = [...body.querySelectorAll('p')].filter(
+    (p) => r.intersectsNode(p) && !p.classList.contains('scene-break')
+  );
+  if (!ps.length) return;
+  snapshotStructure('poetry paragraph');
+  const on = !ps.every((p) => p.classList.contains('poetry'));
+  for (const p of ps) {
+    p.classList.toggle('poetry', on);
+    if (on) italicize(p); else romanize(p);
+  }
+  caretIntoStart(ps[0]);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+}
+
+// ⇧Enter from the chapter title: a poetry paragraph above the opening one
+function poetryUnderHeading(body, chId) {
+  const line = document.createElement('p');
+  line.className = 'poetry';
+  italicize(line);
+  snapshotStructure('poetry paragraph');
+  body.prepend(line);
+  body.focus();
+  caretIntoStart(line);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+}
+
 // Backspace just below a *** (or Delete just above one) removes the break
 // itself — prose never merges into the break's styled paragraph
 function sceneBreakDelete(e, body, chId) {
@@ -1587,6 +1922,7 @@ function syncChapter(body, chId) {
 // Heal text-node fragmentation in each paragraph as the caret leaves it:
 let lastCaretPara = null;
 let capOffBody = null;
+let menuPoetryState = false;
 document.addEventListener('selectionchange', () => {
   if (!book || currentTab !== 'manuscript') return;
   const sel = window.getSelection();
@@ -1609,8 +1945,13 @@ document.addEventListener('selectionchange', () => {
     if (ch) scanSpellingIn(ch.querySelector('.chapter-body'), ch.dataset.id);
   }
   // the drop cap steps aside while the caret is in the first paragraph
+  const inPoetry = !!(caretP && caretP.classList.contains('poetry'));
+  if (inPoetry !== menuPoetryState && window.neo.poetryState) {
+    menuPoetryState = inPoetry;
+    window.neo.poetryState(inPoetry);
+  }
   const inFirst = caretP && caretP.parentElement &&
-    caretP === caretP.parentElement.querySelector('p');
+    caretP === caretP.parentElement.querySelector('p:not(.poetry)');
   const capBody = inFirst ? caretP.parentElement : null;
   if (capBody !== capOffBody) {
     if (capOffBody && capOffBody.isConnected) capOffBody.classList.remove('cap-off');
@@ -1619,15 +1960,55 @@ document.addEventListener('selectionchange', () => {
   }
 });
 
-// Reduce pasted HTML to what a manuscript is made of: paragraphs, bold, italic.
+// Reduce pasted HTML to what a manuscript is made of: paragraphs, bold,
+// italic. Word, Apple Notes, Google Docs and browsers each dress a
+// paragraph differently — <p>, <div>, a line break inside a block, styled
+// spans — so every block boundary and <br> becomes a paragraph break, and
+// styling that only lives in a style attribute is read as bold/italic.
 function cleanPasteHtml(html) {
   const holder = document.createElement('div');
   holder.innerHTML = html;
-  holder.querySelectorAll('script,style,meta,link,img,table').forEach((n) => n.remove());
-  let blocks = [...holder.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6')];
-  if (!blocks.length) blocks = [holder]; // inline-only clipboard
-  const out = blocks.map((b) => {
-    const inner = paraRuns(b.innerHTML).map((r) => {
+  holder.querySelectorAll('script,style,meta,link,img,table,head,title').forEach((n) => n.remove());
+  // Google Docs wraps the whole clipboard in <b style="font-weight:normal">
+  holder.querySelectorAll('b, strong').forEach((b) => {
+    const w = (b.style && b.style.fontWeight || '').toLowerCase();
+    if (w === 'normal' || w === '400') { while (b.firstChild) b.before(b.firstChild); b.remove(); }
+  });
+  // styled spans: Word's italics and bold often live only in a style attribute
+  holder.querySelectorAll('span[style], font[style]').forEach((sp) => {
+    const st = sp.style;
+    const fw = (st.fontWeight || '').toLowerCase();
+    const bold = fw === 'bold' || fw === 'bolder' || parseInt(fw, 10) >= 600;
+    const ital = (st.fontStyle || '').toLowerCase() === 'italic';
+    if (bold) { const b = document.createElement('b'); while (sp.firstChild) b.appendChild(sp.firstChild); sp.appendChild(b); }
+    if (ital) { const i = document.createElement('i'); while (sp.firstChild) i.appendChild(sp.firstChild); sp.appendChild(i); }
+  });
+  // a break marker at every block edge and every line break
+  const BREAK = '\uE000';
+  const blocks = 'p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, section, article, header, footer, tr, dd, dt';
+  holder.querySelectorAll(blocks).forEach((b) => {
+    b.before(document.createTextNode(BREAK));
+    b.after(document.createTextNode(BREAK));
+  });
+  holder.querySelectorAll('br').forEach((br) => br.replaceWith(document.createTextNode(BREAK)));
+
+  const paras = [[]];
+  for (const r of paraRuns(holder.innerHTML)) {
+    if (r.mark !== undefined) { paras[paras.length - 1].push(r); continue; }
+    const pieces = r.text.split(BREAK);
+    pieces.forEach((text, i) => {
+      if (i > 0) paras.push([]);
+      if (text) paras[paras.length - 1].push({ text, b: r.b, i: r.i });
+    });
+  }
+  const out = paras.map((runs) => {
+    // whitespace collapses like HTML's, and each paragraph is trimmed
+    runs = runs.map((r) => (r.mark !== undefined ? r : { ...r, text: r.text.replace(/\s+/g, ' ') }));
+    const first = runs.find((r) => r.mark === undefined);
+    if (first) first.text = first.text.replace(/^\s+/, '');
+    const last = [...runs].reverse().find((r) => r.mark === undefined);
+    if (last) last.text = last.text.replace(/\s+$/, '');
+    const inner = runs.map((r) => {
       if (r.mark !== undefined) {
         // placeholder marks travel with their text; reconcileMarks pairs
         // each one back up with a note after the paste lands
@@ -1635,12 +2016,13 @@ function cleanPasteHtml(html) {
           ? `<span class="ph-mark" data-sid="${escHtml(r.mark)}" contenteditable="false">⚑</span>`
           : '';
       }
+      if (!r.text) return '';
       let t = escHtml(r.text);
       if (r.i) t = '<i>' + t + '</i>';
       if (r.b) t = '<b>' + t + '</b>';
       return t;
     }).join('');
-    return inner.trim() ? '<p>' + inner + '</p>' : '';
+    return inner.replace(/<[^>]+>/g, '').trim() ? '<p>' + inner + '</p>' : '';
   }).filter(Boolean);
   // single block pastes inline (no forced new paragraph)
   if (out.length === 1) return out[0].slice(3, -4);
@@ -1765,6 +2147,9 @@ function newChapter() {
 }
 
 async function deleteChapterQuiet(chId) {
+  // a save still queued for this chapter must not resurrect it (nejcc, #70)
+  clearTimeout(saveTimers[chId]);
+  delete saveTimers[chId];
   book.chapterOrder = book.chapterOrder.filter((c) => c !== chId);
   delete chapterHTML[chId];
   delete wordCache[chId];
@@ -1954,7 +2339,14 @@ function updateNavNoteHints(locale = window.neoI18n.getLocale()) {
   });
 }
 
+let chapterDragActive = false;
+let navRefreshPending = false;
+
 function renderNav() {
+  if (!book) return; // a refresh queued just before the shelf came back
+  // Replacing the source row during a native drag can interrupt its lifecycle.
+  if (chapterDragActive) { navRefreshPending = true; return; }
+  navRefreshPending = false;
   const list = $('#nav-list');
   list.innerHTML = '';
   book.chapterNotes = book.chapterNotes || {};
@@ -1986,13 +2378,11 @@ function renderNav() {
     rowEl.draggable = true;
     rowEl.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('application/x-neo-chapter', chId);
+      chapterDragActive = true;
+      $('#nav-pane').classList.add('open');
       item.classList.add('dragging');
     });
-    rowEl.addEventListener('dragend', () => {
-      item.classList.remove('dragging');
-      const ind = document.querySelector('.nav-drop-ind');
-      if (ind) ind.remove();
-    });
+    rowEl.addEventListener('dragend', finishChapterDrag);
 
     // outline your whole book from this panel:
     const note = document.createElement('div');
@@ -2028,6 +2418,26 @@ $('#nav-add').onclick = () => {
 
 // drop target for chapter reordering, with a gold line showing the landing spot
 const navList = $('#nav-list');
+function finishChapterDrag(e) {
+  if (!chapterDragActive) return;
+  chapterDragActive = false;
+  navList.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
+  const ind = navList.querySelector('.nav-drop-ind');
+  if (ind) ind.remove();
+  // Native dragging can temporarily blur the window. Use the release position
+  // to keep the pane available after an in-pane drop, even before focus returns.
+  const pane = $('#nav-pane');
+  const r = pane.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) {
+    pane.classList.remove('open');
+  }
+  if (navRefreshPending) renderNav();
+}
+// Drop also cleans up if rendering removes the source before dragend bubbles.
+// Dragend covers Escape and releases outside a valid drop target.
+document.addEventListener('drop', finishChapterDrag);
+document.addEventListener('dragend', finishChapterDrag);
+
 function navDropInd() {
   let ind = document.querySelector('.nav-drop-ind');
   if (!ind) {
@@ -2092,7 +2502,8 @@ function scheduleNavRefresh() {
 
 // Hover behavior for both side panes:
 function wireHoverPane(hotzone, pane, isPinnable) {
-  const pinned = () => isPinnable && pane.dataset.pinned === '1';
+  const pinned = () => (isPinnable && pane.dataset.pinned === '1') ||
+    (pane.id === 'nav-pane' && chapterDragActive);
   hotzone.addEventListener('mouseenter', (e) => {
     if (e.buttons) return; // dragging something — stand down
     pane.classList.add('open');
@@ -2112,7 +2523,8 @@ wireHoverPane($('#side-hotzone'), $('#side-pane'), true);
 
 // leaving the window closes unpinned panes (they used to stick open)
 function closeUnpinnedPanes() {
-  $('#nav-pane').classList.remove('open');
+  // Wayland can blur the window as a native chapter drag begins.
+  if (!chapterDragActive) $('#nav-pane').classList.remove('open');
   if ($('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
 }
 document.documentElement.addEventListener('mouseleave', closeUnpinnedPanes);
@@ -2502,18 +2914,34 @@ function outlineLine(kind, chId, secId, index, label, text) {
     renderNav();
   });
 
+  // Enter at the very start of a line that has text makes the new line
+  // ABOVE it (the only way to put something before "A"); anywhere else,
+  // below — the way a text editor's outline behaves
+  const caretAtStart = () => {
+    if (!txt.textContent.trim()) return false;
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) return false;
+    const r = sel.getRangeAt(0);
+    if (!txt.contains(r.startContainer)) return false;
+    const head = document.createRange();
+    head.selectNodeContents(txt);
+    head.setEnd(r.startContainer, r.startOffset);
+    return head.toString().length === 0;
+  };
+
   txt.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      const above = caretAtStart();
       save();
       if (kind === 'chapter') {
-        const at = book.chapterOrder.indexOf(chId) + 1;
+        const at = book.chapterOrder.indexOf(chId) + (above ? 0 : 1);
         const newId = createChapterAt(at);
         renderOutline({ chId: newId });
       } else {
         const list = book.sectionNotes[chId];
         const newSec = { id: 'sec-' + Date.now().toString(36), text: '' };
-        list.splice(index + 1, 0, newSec);
+        list.splice(index + (above ? 0 : 1), 0, newSec);
         scheduleMetaSave();
         syncGhosts(chId);
         renderOutline({ secId: newSec.id });
@@ -2666,7 +3094,7 @@ function syncGhosts(chId) {
 }
 
 let auxDirty = false;
-$('#aux-editor').addEventListener('keydown', (e) => { styleKeepScroll(e); });
+$('#aux-editor').addEventListener('keydown', (e) => { if (styleKeepScroll(e)) return; smartKeys(e, e.currentTarget); });
 $('#aux-editor').addEventListener('input', () => {
   auxDirty = true;
   scheduleAuxSave();
@@ -2912,6 +3340,7 @@ $('#paper-scroll').addEventListener('scroll', () => {
 function scheduleChapterSave(chId) {
   clearTimeout(saveTimers[chId]);
   saveTimers[chId] = setTimeout(() => {
+    if (!book) return; // the book closed before the timer fired; flushAllSaves already wrote it
     window.neo.writeChapter(book.id, chId, chapterHTML[chId] || '');
   }, 800);
 }
@@ -3101,6 +3530,7 @@ function rejoinAtCaret() {
   const prev = blk.previousElementSibling;
   if (!prev || prev.tagName !== 'P') return;
   if (prev.classList.contains('scene-break') || blk.classList.contains('scene-break')) return;
+  if (prev.classList.contains('poetry') !== blk.classList.contains('poetry')) return;
   const chId = body.closest('.chapter').dataset.id;
   const at = prev.textContent.length;
   if (blk.textContent.trim() === '') {
@@ -3342,14 +3772,21 @@ async function addImportedBooks(results, shelf) {
       outline: (library.tabDefaults && library.tabDefaults.outline) || 'Outline'
     };
     let words = 0;
+    meta.chapterTitles = {};
     for (const ch of r.chapters) {
       const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-      const html = ch.map((p) =>
-        p.scene ? '<p class="scene-break">***</p>' : `<p>${escHtml(p.text || '')}</p>`
-      ).join('') || '<p><br></p>';
+      const html = ch.paras.map((p) => {
+        if (p.scene) return '<p class="scene-break">***</p>';
+        let text = escHtml(p.text || '');
+        text = text.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+                   .replace(/\*([^*]+)\*/g, '<i>$1</i>')
+                   .replace(/_([^_]+)_/g, '<i>$1</i>');
+        return `<p>${text}</p>`;
+      }).join('') || '<p><br></p>';
       await window.neo.writeChapter(meta.id, chId, html);
+      if (ch.title) meta.chapterTitles[chId] = ch.title;
       meta.chapterOrder.push(chId);
-      for (const p of ch) words += countWords(p.text || '');
+      for (const p of ch.paras) words += countWords(p.text || '');
     }
     meta.wordCount = words;
     await window.neo.writeBookMeta(meta.id, meta);
@@ -3396,7 +3833,7 @@ async function spellScanEl(el, key) {
   spellScanned.add(key);
   const occurrences = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  const re = NeoSpellWords.wordPattern();
+  const re = NeoSpellWords?.wordPattern?.() || /[\p{L}\p{M}'’]+/gu;
   let n;
   while ((n = walker.nextNode())) {
     const p = n.parentElement;
@@ -3406,7 +3843,7 @@ async function spellScanEl(el, key) {
     while ((m = re.exec(n.data))) {
       const word = spellNorm(m[0]);
       if (word.length < 2) continue;
-      if (NeoSpellWords.isAllCaps(m[0])) continue; // acronyms and shouting are legal
+      if (NeoSpellWords?.isAllCaps?.(m[0]) || /^[\p{Lu}'’]+$/u.test(m[0])) continue; // acronyms and shouting are legal
       occurrences.push({ node: n, start: m.index, end: m.index + m[0].length, word });
     }
   }
@@ -3479,6 +3916,27 @@ function toggleSpellcheck() {
     document.querySelector('.spell-menu')?.remove();
   }
   toast(spellOn ? 'Spellcheck on' : 'Spellcheck off');
+}
+
+// Edit → Spellcheck Language: swap the dictionary, remember the choice with
+// the library, and re-check whatever is on screen
+const SPELL_LANGUAGE_NAMES = {
+  'en-US': 'US English', 'en-GB': 'UK English', 'en-CA': 'Canadian English',
+  'en-AU': 'Australian English', fr: 'French', es: 'Spanish', de: 'German'
+};
+async function changeSpellLanguage(code) {
+  const ok = await window.neo.setSpellLanguage(code);
+  if (!ok) { toast('That dictionary would not load'); return; }
+  library.spellLanguage = code;
+  await window.neo.writeLibrary(library);
+  spellCache.clear();
+  if (spellOn) {
+    spellScanned = new Set();
+    spellRanges = new Map();
+    CSS.highlights.delete('neo-spell');
+    scanSpellingHere();
+  }
+  toast('Spellcheck: ' + (SPELL_LANGUAGE_NAMES[code] || code));
 }
 
 // right-click a flagged word for suggestions
@@ -3565,6 +4023,7 @@ let typewriterEnabled = false;
 // deepens #paper's bottom margin; see styles.css).
 function applyTypewriter() {
   document.body.classList.toggle('typewriter', typewriterEnabled);
+  if (window.neo.typewriterState) window.neo.typewriterState(typewriterEnabled); // the Format menu's tick
 }
 function toggleTypewriter() {
   typewriterEnabled = !typewriterEnabled;
@@ -3574,8 +4033,21 @@ function toggleTypewriter() {
   toast(typewriterEnabled ? 'Typewriter scrolling ON — your line stays centered' : 'Typewriter scrolling off');
 }
 
+
+// The page follows the caret only while the writer is typing or moving by
+// keyboard: a click to think about a sentence leaves the screen exactly as
+// it was. The caret has a band of a few lines to move in before the page
+// glides (not snaps) to bring it back to the writing height.
+let typewriterByKeyboard = false;
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const el = e.target;
+  if (el && el.closest && el.closest('.chapter-body')) typewriterByKeyboard = true;
+}, true);
+document.addEventListener('mousedown', () => { typewriterByKeyboard = false; }, true);
+
 document.addEventListener('selectionchange', () => {
-  if (!typewriterEnabled || !book || currentTab !== 'manuscript') return;
+  if (!typewriterEnabled || !book || currentTab !== 'manuscript' || !typewriterByKeyboard) return;
   const sel = window.getSelection();
   if (!sel.rangeCount || !sel.isCollapsed) return;
   let el = sel.anchorNode;
@@ -3585,10 +4057,131 @@ document.addEventListener('selectionchange', () => {
     try {
       let rect = sel.getRangeAt(0).getBoundingClientRect();
       if (!rect || (rect.top === 0 && rect.height === 0)) rect = el.getBoundingClientRect();
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 30;
       const diff = rect.top - window.innerHeight * 0.45;
-      if (Math.abs(diff) > 6) $('#paper-scroll').scrollTop += diff;
+      // a band of about three lines around the writing height
+      if (Math.abs(diff) <= lineHeight * 1.5) return;
+      const scroller = $('#paper-scroll');
+      scroller.scrollTo({ top: scroller.scrollTop + diff, behavior: 'smooth' });
     } catch { /* selection mid-mutation; skip this frame */ }
   });
+});
+
+/* ================================================================== */
+/*  FOCUS MODE: dim everything but the sentence, paragraph or scene     */
+/* ================================================================== */
+// Painted with the CSS Custom Highlight API (like search and spellcheck),
+// so the manuscript DOM is never touched and nothing leaks into saved HTML.
+// also the order ⌘⇧O steps through: off → paragraph → sentence → off
+const FOCUS_LEVELS = ['off', 'paragraph', 'sentence'];
+const FOCUS_LABELS = { off: 'Focus mode off', sentence: 'Focus: sentence', paragraph: 'Focus: paragraph' };
+let focusLevel = 'off';
+
+function applyFocus() {
+  document.body.classList.toggle('focus-mode', focusLevel !== 'off');
+  if (focusLevel === 'off') {
+    if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-focus');
+  } else updateFocus();
+}
+function setFocus(level) {
+  if (!FOCUS_LEVELS.includes(level)) return;
+  focusLevel = level;
+  library.focus = level;
+  window.neo.writeLibrary(library);
+  applyFocus();
+  toast(FOCUS_LABELS[level]);
+}
+function cycleFocus() { setFocus(FOCUS_LEVELS[(FOCUS_LEVELS.indexOf(focusLevel) + 1) % FOCUS_LEVELS.length]); }
+
+// the paragraph (direct <p> child of a chapter body) holding the caret
+function focusParagraph() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return null;
+  let el = sel.focusNode;
+  if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+  if (!el || !el.closest) return null;
+  const body = el.closest('.chapter-body');
+  if (!body) return null;
+  let p = el;
+  while (p && p.parentElement !== body) p = p.parentElement;
+  return p && p.tagName === 'P' ? p : null;
+}
+
+// caret position as a character offset into p.textContent
+function caretOffsetIn(p) {
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.selectNodeContents(p);
+  try { r.setEnd(sel.focusNode, sel.focusOffset); } catch { return 0; }
+  return r.toString().length;
+}
+
+// character offsets within p → a DOM Range over its text nodes
+function rangeFromOffsets(p, start, end) {
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  const r = document.createRange();
+  let pos = 0, n, startSet = false;
+  while ((n = walker.nextNode())) {
+    const len = n.textContent.length;
+    if (!startSet && start <= pos + len) { r.setStart(n, start - pos); startSet = true; }
+    if (startSet && end <= pos + len) { r.setEnd(n, end - pos); return r; }
+    pos += len;
+  }
+  if (!startSet) return null;
+  r.setEndAfter(p.lastChild || p);
+  return r;
+}
+
+let focusSegmenter = null;
+function sentenceRange(p) {
+  const text = p.textContent;
+  if (!text.trim()) return null;
+  const at = caretOffsetIn(p);
+  if (!focusSegmenter && window.Intl && Intl.Segmenter) {
+    focusSegmenter = new Intl.Segmenter((library.spellLanguage || 'en').split('-')[0], { granularity: 'sentence' });
+  }
+  if (!focusSegmenter) return null;
+  let hit = null, last = null;
+  for (const seg of focusSegmenter.segment(text)) {
+    last = seg;
+    // caret at the very end of a sentence still belongs to it
+    if (at >= seg.index && at <= seg.index + seg.segment.length) { hit = seg; if (at < seg.index + seg.segment.length) break; }
+  }
+  hit = hit || last;
+  // trim trailing whitespace so the highlight hugs the words
+  const start = hit.index;
+  const end = hit.index + hit.segment.replace(/\s+$/, '').length;
+  return rangeFromOffsets(p, start, Math.max(end, start));
+}
+
+function updateFocus() {
+  if (focusLevel === 'off' || !book || currentTab !== 'manuscript') return;
+  if (!window.Highlight || !window.CSS || !CSS.highlights) return;
+  const p = focusParagraph();
+  if (!p) return;   // caret elsewhere (title, panels): keep the last focus
+  let r = null;
+  if (isBreakPara(p)) r = null;
+  else if (focusLevel === 'sentence') r = sentenceRange(p);
+  else if (focusLevel === 'paragraph') { r = document.createRange(); r.selectNodeContents(p); }
+  if (r) CSS.highlights.set('neo-focus', new Highlight(r));
+  else CSS.highlights.delete('neo-focus');
+  // highlights can't reach ::first-letter, so the drop cap gets a class
+  // on its chapter body (a class on the body itself is never saved)
+  document.querySelectorAll('.chapter-body.focus-cap').forEach((b) => b.classList.remove('focus-cap'));
+  const body = p.parentElement;
+  const first = body.querySelector('p:not(.poetry)'); // the drop cap skips poetry paragraphs
+  const firstText = first && document.createTreeWalker(first, NodeFilter.SHOW_TEXT).nextNode();
+  if (r && firstText && r.comparePoint(firstText, 0) === 0) body.classList.add('focus-cap');
+}
+function isBreakPara(p) { return p.classList.contains('scene-break'); }
+
+document.addEventListener('selectionchange', () => {
+  if (focusLevel === 'off') return;
+  requestAnimationFrame(() => { try { updateFocus(); } catch { /* mid-mutation */ } });
+});
+document.addEventListener('input', () => {
+  if (focusLevel === 'off') return;
+  requestAnimationFrame(() => { try { updateFocus(); } catch { /* mid-mutation */ } });
 });
 
 /* ================================================================== */
@@ -3805,7 +4398,13 @@ function openStats() {
     if (hasBook) updateCounters();
   };
   bd.querySelector('.m-ok').onclick = close;
+  // Esc closes from anywhere in the dialog (it takes focus on opening, so
+  // the key reaches it even before a field is clicked); so does a click on
+  // the dim page around it. Both keep the edits, like Done.
+  bd.tabIndex = -1;
+  bd.focus();
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  bd.addEventListener('mousedown', (e) => { if (e.target === bd) close(); });
   if (hasBook) {
     bd.querySelector('#st-sprint-btn').onclick = () => {
       if (sprint && !sprint.done) {
@@ -3836,15 +4435,24 @@ const DROPCAP_FONTS = {
 const BODY_FONTS = {
   'Georgia': 'Georgia, "Times New Roman", serif',
   'Palatino': '"Palatino", "Palatino Linotype", serif',
-  'Baskerville': 'Baskerville, Georgia, serif',
+  'Baskerville': 'Baskerville, "Baskerville Old Face", Georgia, serif',
   'Hoefler Text': '"Hoefler Text", Georgia, serif',
-  'Iowan Old Style': '"Iowan Old Style", Georgia, serif'
+  'Iowan Old Style': '"Iowan Old Style", Georgia, serif',
+  'Cambria': 'Cambria, Georgia, serif',
+  'Constantia': 'Constantia, Georgia, serif'
 };
+
+// Hoefler Text and Iowan Old Style ship only with macOS; elsewhere they
+// would fall back to Georgia, so offer the fonts Windows actually has.
+// Keep in step with bodyFonts in main.js.
+const BODY_FONT_CHOICES = IS_MAC
+  ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style']
+  : ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia'];
 
 function applyFonts() {
   const f = library.fonts || {};
-  if (f.body && BODY_FONTS[f.body]) {
-    document.documentElement.style.setProperty('--body-font', BODY_FONTS[f.body]);
+  if (f.body && typeof f.body === 'string') {
+    document.documentElement.style.setProperty('--body-font', bodyFontStack(f.body));
   }
   if (f.dropcap && DROPCAP_FONTS[f.dropcap]) {
     document.documentElement.style.setProperty('--dropcap-font', DROPCAP_FONTS[f.dropcap]);
@@ -3856,6 +4464,73 @@ function applyFonts() {
   const zoom = Math.min(1.6, Math.max(0.75, library.pageZoom || 1));
   document.documentElement.style.setProperty('--page-zoom', zoom);
   updateZoomDisplay();
+}
+
+// A built-in choice, or a font the writer picked from their own computer.
+// A library opened where that font is missing simply reads in Georgia.
+function bodyFontStack(name) {
+  return Object.hasOwn(BODY_FONTS, name) ? BODY_FONTS[name] : `"${name.replace(/["\\]/g, '')}", Georgia, serif`;
+}
+
+// Format → Body Font → Other Font…: every font installed on this computer,
+// each shown in its own face. The panel sits top right, off the undimmed
+// page, so hovering previews the font on the writer's own words. Resolves
+// to a family name, or null on cancel.
+async function pickLocalFont() {
+  let families = [];
+  try {
+    // one entry per style; names starting with "." are the system's hidden fonts
+    const faces = await window.queryLocalFonts();
+    families = [...new Set(faces.map((f) => f.family))]
+      .filter((n) => n && !n.startsWith('.'))
+      .sort((a, b) => a.localeCompare(b));
+  } catch {}
+  if (!families.length) { toast('NEO couldn’t read the fonts on this computer'); return null; }
+  return new Promise((resolve) => {
+    const bd = document.createElement('div');
+    bd.className = 'modal-backdrop font-picker';
+    bd.innerHTML = `
+      <div class="modal" style="width:320px">
+        <h2 style="font-size:16px">Other font</h2>
+        <p class="font-now" style="font-size:13px;color:var(--muted);margin-bottom:10px"></p>
+        <input type="text" spellcheck="false" placeholder="Search ${families.length} installed fonts" />
+        <div class="font-list"></div>
+        <div style="text-align:right;margin-top:14px">
+          <button class="m-cancel btn-quiet">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bd);
+    const input = bd.querySelector('input');
+    const list = bd.querySelector('.font-list');
+    const current = (library.fonts || {}).body || 'Georgia';
+    bd.querySelector('.font-now').textContent = 'Now: ' + current;
+    const done = (val) => { bd.remove(); resolve(val); };
+    const render = () => {
+      const q = input.value.trim().toLowerCase();
+      list.innerHTML = '';
+      for (const name of families) {
+        if (q && !name.toLowerCase().includes(q)) continue;
+        const b = document.createElement('button');
+        b.className = 'fr-font' + (name === current ? ' sel' : '');
+        b.textContent = name;
+        b.style.fontFamily = bodyFontStack(name);
+        b.onmouseenter = () => { document.documentElement.style.setProperty('--body-font', bodyFontStack(name)); };
+        b.onclick = () => done(name);
+        list.appendChild(b);
+      }
+    };
+    list.onmouseleave = applyFonts; // back to the saved font
+    input.oninput = render;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter' && list.firstChild) done(list.firstChild.textContent);
+      if (e.key === 'Escape') done(null);
+    };
+    bd.querySelector('.m-cancel').onclick = () => done(null);
+    render();
+    const sel = list.querySelector('.sel');
+    if (sel) sel.scrollIntoView({ block: 'center' });
+    input.focus();
+  });
 }
 
 // Pinch (trackpad) or Ctrl+scroll: page and text zoom together.
@@ -3923,11 +4598,13 @@ function showHelp() {
       <div class="help-grid">
         ${row('Enter ×2', 'Section break (***)')}
         ${row('Enter ×3', 'New chapter, auto-numbered')}
+        ${row('⇧Enter', 'Poetry paragraph — verse, a quote, a POV name; italic, set in from the margins. ⇧Enter again continues it; Enter returns to prose')}
         ${row(KPH, 'Placeholder note')}
         ${row(KDA, 'Send the selected passage to Darlings')}
         ${row(KZ, 'Undo big moves (chapter deletes, replace-all, darlings) when not mid-typing')}
         ${row('-- and ...', 'Become an em dash — and a true ellipsis …')}
         ${row(K('⌘B · ⌘I', 'Ctrl+B · Ctrl+I'), 'Bold, italic. Quotes curl themselves.')}
+        ${row(K('⌘⇧ + …', 'Ctrl+Shift+…'), 'Align paragraph: L left · C center · R right · J justify')}
       </div>
 
       <div class="help-sec">Getting around</div>
@@ -3941,6 +4618,7 @@ function showHelp() {
       <div class="help-grid">
         ${row(K('⌘⇧F', 'Ctrl+Shift+F'), 'Full screen (Esc leaves)')}
         ${row(K('⌘⇧T', 'Ctrl+Shift+T'), 'Typewriter scrolling')}
+        ${row(K('⌘⇧O', 'Ctrl+Shift+O'), 'Focus mode: off → scene → paragraph → sentence → off (View → Focus Mode picks one directly)')}
         ${row(K('⌘;', 'Ctrl+;'), 'Spellcheck pass (right-click squiggles for fixes)')}
       </div>
 
@@ -3997,6 +4675,7 @@ function parasFromHtml(html) {
   holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
   return [...holder.querySelectorAll('p')].map((p) => {
     const sceneBreak = p.classList.contains('scene-break');
+    const poetry = p.classList.contains('poetry');
     const align = (p.style && p.style.textAlign) || '';
     const runs = paraRuns(p.innerHTML).filter((r) => r.text);
     const inner = runs.map((r) => {
@@ -4007,10 +4686,11 @@ function parasFromHtml(html) {
     }).join('');
     return {
       sceneBreak,
+      poetry,
       text: p.innerText.replace(/\u00a0/g, ' ').trim(),
       runs,
       align,
-      html: `<p${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
+      html: `<p${poetry ? ' class="poetry"' : ''}${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
     };
   }).filter((p) => p.sceneBreak || p.text);
 }
@@ -4032,11 +4712,19 @@ function exportChapters() {
 // The open book, packaged for the builders. Every builder takes an optional
 // data object in this shape, good for anthologies.
 function bookExportData() {
+  // an EPUB wants a real UUID as its identifier; the book gets one the first
+  // time it's exported and keeps it, so re-exports are the same book
+  if (!book.uuid) {
+    book.uuid = crypto.randomUUID();
+    saveMeta();
+  }
   return {
     id: book.id,
+    uuid: book.uuid,
     title: book.title,
     subtitle: book.subtitle,
-    author: book.author,
+    author: book.author || 'Anonymous', // the screen says so; the files should too
+    language: library.spellLanguage || 'en',
     coverSeed: book.coverSeed,
     coverImage: book.coverImage || null,
     sections: exportChapters()
@@ -4050,7 +4738,7 @@ function buildTxt(data) {
   out += `by ${d.author}\n\n\n`;
   for (const ch of d.sections) {
     if (ch.heading) out += `${ch.heading.toUpperCase()}\n\n`;
-    for (const p of ch.paras) out += p.sceneBreak ? '\n***\n\n' : p.text + '\n\n';
+    for (const p of ch.paras) out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '    ' : '') + p.text + '\n\n';
     out += '\n';
   }
   return out;
@@ -4058,6 +4746,8 @@ function buildTxt(data) {
 
 function buildMd(data) {
   const d = data || bookExportData();
+  // a title like "Wool *Omnibus*" must not turn into markup (idea: nejcc, #70)
+  const mdMeta = (s) => String(s || '').replace(/([\\`*_\[\]#<>])/g, '\\$1');
   // wrap a run in emphasis markers, keeping boundary spaces outside them
   const mdRun = (r) => {
     let t = r.text.replace(/([\\*_`])/g, '\\$1');
@@ -4068,13 +4758,13 @@ function buildMd(data) {
     const core = t.slice(lead.length, t.length - trail.length);
     return core ? lead + mark + core + mark + trail : t;
   };
-  let out = `# ${d.title}\n\n`;
-  if (d.subtitle) out += `*${d.subtitle}*\n\n`;
-  out += `**by ${d.author}**\n\n`;
+  let out = `# ${mdMeta(d.title)}\n\n`;
+  if (d.subtitle) out += `*${mdMeta(d.subtitle)}*\n\n`;
+  out += `**by ${mdMeta(d.author)}**\n\n`;
   for (const ch of d.sections) {
-    if (ch.heading) out += `\n## ${ch.heading}\n\n`;
+    if (ch.heading) out += `\n## ${mdMeta(ch.heading)}\n\n`;
     for (const p of ch.paras) {
-      out += p.sceneBreak ? '\n***\n\n' : p.runs.map(mdRun).join('') + '\n\n';
+      out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '> ' : '') + p.runs.map(mdRun).join('') + '\n\n';
     }
   }
   return out;
@@ -4090,6 +4780,7 @@ function buildHtml(data, opts = {}) {
     let first = true;
     const paras = ch.paras.map((p) => {
       if (p.sceneBreak) return '<p class="brk">***</p>';
+      if (p.poetry) return p.html;
       let html = p.html;
       if (first) {
         const h = document.createElement('div');
@@ -4104,12 +4795,12 @@ function buildHtml(data, opts = {}) {
     }).join('\n');
     return `
     <section class="chapter">
-      ${ch.heading ? `<h2>${ch.heading}</h2>` : ''}
+      ${ch.heading ? `<h2>${escHtml(ch.heading)}</h2>` : ''}
       ${paras}
     </section>`;
   }).join('\n');
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${d.title}</title>
+<html><head><meta charset="utf-8"><title>${escHtml(d.title)}</title>
 <style>
   body { font-family: Georgia, serif; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
   .coverpage { text-align: center; margin: 0 0 40px; page-break-after: always; }
@@ -4124,14 +4815,17 @@ function buildHtml(data, opts = {}) {
   .chapter h2 + p, .brk + p, .chapter p.first { text-indent: 0; }
   /* an in-flow raised initial: stays inside its word for copy, search,
      and screen readers, unlike a floated drop cap */
-  .chapter h2 + p::first-letter, .chapter p.first::first-letter { font-size: 1.8em; line-height: 1; }
+  .chapter h2 + p:not(.poetry)::first-letter, .chapter p.first::first-letter { font-size: 1.8em; line-height: 1; }
   .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
+  .chapter p.poetry { text-indent: 0; margin: 0 2.5em; }
+  .chapter p:not(.poetry) + p.poetry, .chapter h2 + p.poetry { margin-top: 0.9em; }
+  .chapter p.poetry + p:not(.poetry) { margin-top: 0.9em; }
   .prov { margin-top: 80px; text-align: center; color: #999; font-size: 9pt; }
 </style></head><body>
 ${opts.cover ? `<div class="coverpage"><img src="data:${opts.cover.mime};base64,${opts.cover.base64}" alt="Cover"/></div>` : ''}
-<div class="titlepage"><h1>${d.title}</h1>
-${d.subtitle ? `<p class="sub">${d.subtitle}</p>` : ''}
-<p class="auth">${d.author}</p></div>
+<div class="titlepage"><h1>${escHtml(d.title)}</h1>
+${d.subtitle ? `<p class="sub">${escHtml(d.subtitle)}</p>` : ''}
+<p class="auth">${escHtml(d.author)}</p></div>
 ${chaptersHtml}
 ${opts.stamp ? `<p class="prov">${total.toLocaleString()} words · exported from NEO on ${stamp}</p>` : ''}
 </body></html>`;
@@ -4173,6 +4867,7 @@ function docxP(runs, opts = {}) {
   if (opts.pageBreak) pPr.push('<w:pageBreakBefore/>');
   if (opts.align) pPr.push(`<w:jc w:val="${opts.align}"/>`);
   if (opts.indent) pPr.push('<w:ind w:firstLine="480"/>');
+  if (opts.poetry) pPr.push('<w:ind w:left="720" w:right="720"/>');
   if (opts.spaceBefore) pPr.push(`<w:spacing w:before="${opts.spaceBefore}" w:line="360" w:lineRule="auto"/>`);
   const rXml = runs.map((r) => {
     const rPr = (r.b ? '<w:b/>' : '') + (r.i ? '<w:i/>' : '') + (opts.size ? `<w:sz w:val="${opts.size}"/>` : '');
@@ -4197,6 +4892,7 @@ function buildDocxEntries(data) {
     }
     for (const p of ch.paras) {
       if (p.sceneBreak) body.push(docxP([{ text: '***' }], { align: 'center', spaceBefore: 240 }));
+      else if (p.poetry) body.push(docxP(paraRuns(p.html), { align: p.align === 'center' || p.align === 'right' ? p.align : '', poetry: true }));
       else if (p.align === 'center' || p.align === 'right') body.push(docxP(paraRuns(p.html), { align: p.align }));
       else body.push(docxP(paraRuns(p.html), { indent: true }));
     }
@@ -4251,10 +4947,11 @@ function chapterXhtml(ch, d) {
   const paras = ch.paras.map((p) => {
     if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
     const classes = [];
-    if (first) classes.push('first');
+    if (p.poetry) classes.push('poetry');
+    else if (first) classes.push('first');
     if (p.align === 'center' || p.align === 'right') classes.push(p.align);
     const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
-    first = false;
+    if (!p.poetry) first = false;
     const inner = paraRuns(p.html).map((r) => {
       let t = escXml(r.text);
       if (r.i) t = '<em>' + t + '</em>';
@@ -4275,7 +4972,7 @@ ${paras}
 async function buildEpubEntries(data) {
   const d = data || bookExportData();
   const chapters = d.sections;
-  const uuid = 'urn:uuid:neo-' + d.id;
+  const uuid = 'urn:uuid:' + (d.uuid || crypto.randomUUID());
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
   // real cover art when the book has it; the shelf's cover otherwise
@@ -4302,7 +4999,7 @@ async function buildEpubEntries(data) {
 <dc:identifier id="bookid">${uuid}</dc:identifier>
 <dc:title>${escXml(d.title)}</dc:title>
 <dc:creator>${escXml(d.author)}</dc:creator>
-<dc:language>en</dc:language>
+<dc:language>${escXml(d.language || 'en')}</dc:language>
 <meta property="dcterms:modified">${modified}</meta>
 <meta name="cover" content="cover-image"/>
 </metadata>
@@ -4356,6 +5053,9 @@ p.first, p.brk + p { text-indent: 0; }
 p.center { text-align: center; text-indent: 0; }
 p.right { text-align: right; text-indent: 0; }
 p.brk { text-align: center; text-indent: 0; margin: 2.5em 0; letter-spacing: 0.5em; }
+p.poetry { text-indent: 0; margin: 0 2em; }
+p:not(.poetry) + p.poetry, h1 + p.poetry { margin-top: 0.9em; }
+p.poetry + p:not(.poetry) { margin-top: 0.9em; }
 .titlepage { text-align: center; margin-top: 30%; }
 .titlepage h2 { font-size: 2em; margin: 0; }
 .titlepage .sub { font-style: italic; }
@@ -4588,13 +5288,18 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'emailSettings') emailSettings();
   if (msg.type === 'find') openSearch();
   if (msg.type === 'spellcheck') toggleSpellcheck();
+  if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
+  if (msg.type === 'reshelve') reshelveBook();
   if (msg.type === 'typewriter') toggleTypewriter();
+  if (msg.type === 'focus') setFocus(msg.value);
+  if (msg.type === 'focusCycle') cycleFocus();
   if (msg.type === 'import') importBooks();
   if (msg.type === 'stats') openStats();
   if (msg.type === 'coverArt') openCoverArt();
   if (msg.type === 'align') {
     applyAlign(msg.value);
   }
+  if (msg.type === 'poetry') togglePoetry();
   if (msg.type === 'uiBright') {
     library.uiBright = !library.uiBright;
     await window.neo.writeLibrary(library);
@@ -4611,6 +5316,15 @@ window.neo.onMenu(async (msg) => {
     if (msg.value === 0) library.pageZoom = 1; // ⌘0 resets pinch zoom too
     await window.neo.writeLibrary(library);
     applyFonts();
+  }
+  if (msg.type === 'bodyFontPick') {
+    const name = await pickLocalFont();
+    if (name) {
+      library.fonts = library.fonts || {};
+      library.fonts.body = name;
+      await window.neo.writeLibrary(library);
+    }
+    applyFonts(); // also undoes a hover preview after Cancel
   }
   if (msg.type === 'bodyFont') {
     library.fonts = library.fonts || {};
@@ -4642,9 +5356,56 @@ window.addEventListener('error', (e) => reportError(`${e.message} @ ${e.filename
 window.addEventListener('unhandledrejection', (e) => reportError('Unhandled: ' + (e.reason && e.reason.stack || e.reason)));
 
 /* ================================================================== */
+/*  Linux body fonts                                                   */
+/*  Georgia, Palatino, Baskerville, Hoefler Text, and Iowan Old Style  */
+/*  are not on Linux. The bundled faces below are what the Format menu */
+/*  and the first-run picker offer instead. Old libraries still resolve */
+/*  the macOS names, but those names stay out of the picker.           */
+/* ================================================================== */
+
+const LINUX_BODY_FONTS = {
+  'Gelasio': '"Gelasio", Georgia, "Times New Roman", serif',
+  'TeX Gyre Pagella': '"TeX Gyre Pagella", Palatino, "Palatino Linotype", serif',
+  'Libre Baskerville': '"Libre Baskerville", Baskerville, Georgia, serif',
+  'Alegreya': '"Alegreya", "Hoefler Text", Georgia, serif',
+  'Source Serif Pro': '"Source Serif Pro", "Iowan Old Style", Georgia, serif'
+};
+
+function installLinuxBodyFonts() {
+  if (IS_MAC || /win/i.test(navigator.platform)) return;
+  const legacy = {
+    Georgia: LINUX_BODY_FONTS.Gelasio,
+    Palatino: LINUX_BODY_FONTS['TeX Gyre Pagella'],
+    Baskerville: LINUX_BODY_FONTS['Libre Baskerville'],
+    'Hoefler Text': LINUX_BODY_FONTS.Alegreya,
+    'Iowan Old Style': LINUX_BODY_FONTS['Source Serif Pro'],
+    Cambria: LINUX_BODY_FONTS['Source Serif Pro'],
+    Constantia: LINUX_BODY_FONTS['Libre Baskerville']
+  };
+  for (const key of Object.keys(BODY_FONTS)) delete BODY_FONTS[key];
+  Object.assign(BODY_FONTS, LINUX_BODY_FONTS);
+  for (const [key, stack] of Object.entries(legacy)) {
+    Object.defineProperty(BODY_FONTS, key, {
+      value: stack, enumerable: false, writable: true, configurable: true
+    });
+  }
+  DROPCAP_FONTS.literary = '"Libre Bodoni", "Didot", "Bodoni 72", Georgia, serif';
+  DROPCAP_FONTS.fantasy = '"TeX Gyre Chorus", "Apple Chancery", "Snell Roundhand", cursive';
+  DROPCAP_FONTS.scifi = '"Jost", Futura, "Avenir Next", "Helvetica Neue", sans-serif';
+  // A shared choice list, when the renderer defines one, has to name these
+  // bundled faces on Linux rather than fonts the machine does not have.
+  if (typeof BODY_FONT_CHOICES !== 'undefined') {
+    BODY_FONT_CHOICES.splice(0, BODY_FONT_CHOICES.length, ...Object.keys(LINUX_BODY_FONTS));
+  }
+}
+installLinuxBodyFonts();
+
+/* ================================================================== */
 
 loadLibrary().then(() => {
   applyFonts();
   typewriterEnabled = !!library.typewriter;
   applyTypewriter();
+  focusLevel = FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';
+  applyFocus();
 });

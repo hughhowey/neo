@@ -31,6 +31,10 @@ Type two hyphens and get an em dash — like that. The change happens immediatel
 
 Note: **there is no spellcheck while you write.** No red squiggles yelling WRONG at you while you're mid-thought about a made-up city with a made-up name. Your creative brain doesn't need a klaxon. When you're ready to check spelling, hit ⌘; and it'll turn on. Right-click the squiggles for suggestions. Hit ⌘; again to get back into the flow.
 
+**Poetry Paragraph**
+
+A new feature added in v0.8.0: the "Poetry Paragraph." If you SHIFT + ENTER, you'll get an indented paragraph style, default italicized (but you can change it with CTRL + I). It lets you put quotes, poetry, alien chatter, spells being cast, etc. in your manuscript. You can even put a Poetry Paragraph BEFORE the start of a chapter. Just hit SHIFT + ENTER from the chapter title. Or toggle any paragraph to a Poetry Paragraph in the Format menu.
+
 **When you need to mark a spot and keep moving**
 
 I used to type XXX in drafts when I needed to change something later (or look something up, or verify some continuity). Now, you can just hit ⌘⇧X instead. NEO drops a little mark, makes a sticky note in the margin for later, and you keep writing. The chapter list shows a red dot everywhere you left a sticky. The notes are on the hidden right panel any time you need to look for something to fix.
@@ -55,7 +59,7 @@ Click the word counter that says "0 today" and you get the progress room: set a 
 
 **Cover Art**
 
-New books are automatically given cover art with a seeded abstract look (six art styles, six type templates, typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint a cover from the text. This is a bit more work but totally worth it. Get an OpenAI API key from their website and paste it into Goals & Settings. The art is generated in the background for about a penny a picture. (These are not meant for publication, just writing inspiration!) The API key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to a gen-AI model. The ↻ on any book re-rolls its type and colors, or paints it again. And you can always switch back and forth from the seeded modern look to the painted variety.
+New books are automatically given cover art with a seeded abstract look (six art styles, six type templates, typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint a cover from the text. This is a bit more work but totally worth it. Get an OpenAI API key from their website and paste it into **File → Cover Art…**. The art is generated in the background for about a penny a picture. (These are not meant for publication, just writing inspiration!) The API key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to a gen-AI model. The ↻ on any book re-rolls its type and colors, or paints it again. And you can always switch back and forth from the seeded modern look to the painted variety.
 
 
 **Getting your book out**
