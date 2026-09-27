@@ -82,7 +82,9 @@ function ensureLibrary() {
 }
 
 function bookDir(bookId) {
-  return path.join(LIBRARY_DIR, bookId);
+  const safeId = path.basename(String(bookId));
+  if (!safeId || safeId !== bookId) throw new Error('Invalid bookId');
+  return path.join(LIBRARY_DIR, safeId);
 }
 
 // A human-readable map of the library, regenerated on every change:
