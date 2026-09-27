@@ -1047,6 +1047,13 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'spellcheck' })
         },
         {
+          label: t('Interface Language', 'Idioma da interface'),
+          submenu: [
+            { label: 'English', type: 'radio', checked: !isPortuguese, click: () => setInterfaceLanguage('en') },
+            { label: 'Português (Brasil)', type: 'radio', checked: isPortuguese, click: () => setInterfaceLanguage('pt-BR') }
+          ]
+        },
+        {
           label: 'Spellcheck Language',
           submenu: Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
             label: lang.label,
@@ -1143,13 +1150,6 @@ function buildMenu() {
         {
           label: t('Brighter Interface', 'Interface mais clara'),
           click: () => sendToWindow({ type: 'uiBright' })
-        },
-        {
-          label: t('Language', 'Idioma'),
-          submenu: [
-            { label: 'English (en-us)', type: 'radio', checked: !isPortuguese, click: () => setInterfaceLanguage('en') },
-            { label: 'Português (pt-br)', type: 'radio', checked: isPortuguese, click: () => setInterfaceLanguage('pt-BR') }
-          ]
         }
       ]
     },
