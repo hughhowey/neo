@@ -60,8 +60,21 @@ async function run() {
     });
     assert.deepEqual(english, { the: true, writer: true, biblioteca: false });
 
-    await request(worker, 4, 'learn', 'pt-BR', { word: 'meuNeologismo' });
-    const learned = await request(worker, 5, 'check', 'pt-BR', { words: ['meuNeologismo'] });
+    const localeWords = [
+      ['en-GB', 'colour'],
+      ['en-CA', 'colour'],
+      ['en-AU', 'colour'],
+      ['fr', 'bonjour'],
+      ['es', 'hola'],
+      ['de', 'hallo']
+    ];
+    for (const [index, [locale, word]] of localeWords.entries()) {
+      const checked = await request(worker, index + 4, 'check', locale, { words: [word] });
+      assert.deepEqual(checked, { [word]: true }, `${locale} should accept ${word}`);
+    }
+
+    await request(worker, 10, 'learn', 'pt-BR', { word: 'meuNeologismo' });
+    const learned = await request(worker, 11, 'check', 'pt-BR', { words: ['meuNeologismo'] });
     assert.deepEqual(learned, { meuNeologismo: true });
     console.log('spellcheck dictionary tests passed');
   } finally {

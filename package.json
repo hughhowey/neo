@@ -112,9 +112,8 @@
     "dictionary-es": "^4.0.0",
     "dictionary-fr": "^3.0.0",
     "electron-updater": "^6.3.9",
-    "jszip": "^3.10.1"
-    "electron-updater": "^6.3.9",
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "nspell": "^2.1.5"
   },
   "allowScripts": {
     "electron@33.4.11": true

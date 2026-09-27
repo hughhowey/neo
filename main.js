@@ -2,7 +2,7 @@
 // Owns the window and all file-system access. The renderer talks to this
 // through the IPC handlers below (see preload.js for the exposed API).
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -827,73 +827,23 @@ function createWindow() {
   win.webContents.session.setSpellCheckerEnabled(false);
 }
 
-// ---------------------------------------------------------------------------
-// Spellcheck runs in a worker so parsing the large Hunspell dictionaries never
-// blocks the window or the main Electron process.
-// ---------------------------------------------------------------------------
+// Spellcheck uses one lazy worker. CSpell handles the bundled language
+// dictionaries, while the local PT-BR trie remains the Brazilian dictionary.
 let spellWorker = null;
 let spellRequestId = 0;
 let spellCustomWords = [];
 const spellRequests = new Map();
-
-// Spellcheck: NEO's own bundled Hunspell dictionaries via nspell, identical
-// on every platform. The renderer paints the squiggles and asks for
-// suggestions. Edit → Spellcheck Language picks the dictionary; the choice
-// lives in library.json so it travels with the writer's books.
-// (Languages beyond US English: idea and dictionary set from Zaim Halili.)
-// ---------------------------------------------------------------------------
 let spellLanguage = 'en-US';
 const SPELL_LANGUAGES = {
-  'en-US': { label: 'English (US)', pkg: 'dictionary-en-us' },
-  'en-GB': { label: 'English (UK)', pkg: 'dictionary-en-gb' },
-  'en-CA': { label: 'English (Canada)', pkg: 'dictionary-en-ca' },
-  'en-AU': { label: 'English (Australia)', pkg: 'dictionary-en-au' },
-  'fr': { label: 'French', pkg: 'dictionary-fr' },
-  'es': { label: 'Spanish', pkg: 'dictionary-es' },
-  'de': { label: 'German', pkg: 'dictionary-de' }
+  'en-US': { label: 'English (US)' },
+  'en-GB': { label: 'English (UK)' },
+  'en-CA': { label: 'English (Canada)' },
+  'en-AU': { label: 'English (Australia)' },
+  fr: { label: 'French' },
+  es: { label: 'Spanish' },
+  de: { label: 'German' },
+  'pt-BR': { label: 'Português (Brasil)' }
 };
-
-// The dictionary work runs in a helper process (spell-worker.js): parsing
-// French takes seconds, and the writing room must never wait for it.
-let spellChild = null;
-let spellSeq = 0;
-const spellWaiting = new Map();
-
-function spellRequest(msg) {
-  return new Promise((resolve) => {
-    if (!spellChild) { resolve({ ok: false, error: 'no spell process' }); return; }
-    const id = ++spellSeq;
-    spellWaiting.set(id, resolve);
-    spellChild.postMessage({ ...msg, id });
-  });
-}
-
-function startSpellProcess() {
-  if (spellChild) return;
-  try {
-function startSpellProcess() {
-  if (spellChild) return;
-  try {
-    const lib = readJSON(LIBRARY_FILE, {});
-    spellCustomWords = Array.isArray(lib.customWords) ? lib.customWords : [];
-    spellChild = utilityProcess.fork(path.join(__dirname, 'spell-worker.js'), [], { serviceName: 'NEO spellcheck' });
-    spellChild.on('message', (m) => {
-      const done = spellWaiting.get(m.id);
-      if (done) { spellWaiting.delete(m.id); done(m); }
-    });
-    spellChild.on('exit', () => {
-      spellChild = null;
-      for (const done of spellWaiting.values()) done({ ok: false, error: 'spell process exited' });
-      spellWaiting.clear();
-    });
-  } catch (err) {
-    logError('spell', err);
-    spellChild = null;
-  } catch (err) {
-    logError('spell', err);
-    spellChild = null;
-  }
-}
 
 function requestSpell(action, data = {}) {
   if (!spellWorker) {
@@ -931,45 +881,29 @@ function requestSpell(action, data = {}) {
     worker.postMessage({
       id,
       action,
-      locale: getInterfaceLanguage(),
-      customWords: spellCustomWords,
-      ...data
+      ...data,
+      locale: spellLanguage,
+      customWords: spellCustomWords
     });
   });
 }
 
-async function loadSpellDictionary(code) {
-  const known = SPELL_LANGUAGES[code] ? code : 'en-US';
-  const entry = SPELL_LANGUAGES[known];
-  startSpellProcess();
-  let custom = [];
-  try { custom = readJSON(LIBRARY_FILE, {}).customWords || []; } catch { /* a nicety */ }
-  const ok = await requestSpell('load', { dir: path.join(__dirname, 'node_modules', entry.pkg), custom });
-  if (!ok) {
-    logError('spell', new Error('dictionary failed to load'));
-    return false;
-  }
-  spellLanguage = known;
-  return true;
-}
-
 function initSpell() {
-  let code = 'en-US';
-  try { code = readJSON(LIBRARY_FILE, {}).spellLanguage || 'en-US'; } catch { /* fresh library */ }
-  loadSpellDictionary(code);
+  const lib = readJSON(LIBRARY_FILE, {});
+  spellCustomWords = Array.isArray(lib.customWords) ? lib.customWords : [];
+  spellLanguage = SPELL_LANGUAGES[lib.spellLanguage] ? lib.spellLanguage : 'en-US';
 }
 
 ipcMain.handle('spell:setLanguage', async (_e, code) => {
   if (!SPELL_LANGUAGES[code]) return false;
-  const ok = await loadSpellDictionary(code);
-  if (ok) { try { buildMenu(); } catch (err) { logError('menu', err); } }
-  return ok;
+  spellLanguage = code;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+  return true;
 });
 
 ipcMain.handle('spell:check', async (_e, words) => {
-  try {
-    return await requestSpell('check', { words });
-  } catch (err) {
+  try { return await requestSpell('check', { words }); }
+  catch (err) {
     logError('spell', err);
     return Object.fromEntries(words.map((word) => [word, true]));
   }
@@ -985,8 +919,6 @@ ipcMain.handle('spell:learn', async (_e, word) => {
   if (!spellCustomWords.includes(word)) spellCustomWords.push(word);
   try { await requestSpell('learn', { word }); }
   catch (err) { logError('spell', err); }
-  return true;
-});
   return true;
 });
 
@@ -1043,6 +975,8 @@ ipcMain.on('typewriter:state', (_e, on) => {
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const isWin = process.platform === 'win32';
+  const isPortuguese = getInterfaceLanguage() === 'pt-BR';
+  const t = (english, portuguese) => isPortuguese ? portuguese : english;
   // macOS and Windows name faces that ship with the OS. Linux has none of
   // them, so the menu names the faces bundled in fonts/ (see styles.css).
   // The Windows list stays the one the renderer already understands.
