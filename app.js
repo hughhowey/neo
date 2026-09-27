@@ -3377,8 +3377,9 @@ let spellOn = false;
 let spellScanned = new Set();
 let spellRanges = new Map();     // key → [Range]
 const spellCache = new Map();    // word → correct?
+let spellVersion = 0;
 
-const spellNorm = (w) => w.replace(/’/g, "'").replace(/^'+|'+$/g, '');
+const spellNorm = (w) => NeoSpellWords.normalize(w);
 
 function spellElFor(key) {
   return key.startsWith('aux-')
@@ -3388,10 +3389,11 @@ function spellElFor(key) {
 
 async function spellScanEl(el, key) {
   if (!el || !spellOn) return;
+  const version = spellVersion;
   spellScanned.add(key);
   const occurrences = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  const re = /[A-Za-z'’]+/g;
+  const re = NeoSpellWords.wordPattern();
   let n;
   while ((n = walker.nextNode())) {
     const p = n.parentElement;
@@ -3401,16 +3403,17 @@ async function spellScanEl(el, key) {
     while ((m = re.exec(n.data))) {
       const word = spellNorm(m[0]);
       if (word.length < 2) continue;
-      if (/^[A-Z'’]+$/.test(m[0])) continue; // acronyms and shouting are legal
+      if (NeoSpellWords.isAllCaps(m[0])) continue; // acronyms and shouting are legal
       occurrences.push({ node: n, start: m.index, end: m.index + m[0].length, word });
     }
   }
   const unknown = [...new Set(occurrences.map((o) => o.word))].filter((w) => !spellCache.has(w));
   if (unknown.length) {
     const res = await window.neo.spellCheckWords(unknown);
+    if (!spellOn || version !== spellVersion) return;
     for (const w of unknown) spellCache.set(w, res[w] !== false);
   }
-  if (!spellOn) return; // toggled off while we were checking
+  if (!spellOn || version !== spellVersion) return; // discard stale checks
   const ranges = [];
   for (const o of occurrences) {
     if (spellCache.get(o.word) || !o.node.isConnected) continue;
@@ -3452,13 +3455,22 @@ function scheduleSpellRescan(key, el) {
   saveTimers['sp-' + key] = setTimeout(() => { if (spellOn) spellScanEl(el, key); }, 600);
 }
 
+function resetSpellState() {
+  spellVersion++;
+  spellScanned = new Set();
+  spellRanges = new Map();
+  spellCache.clear();
+  CSS.highlights.delete('neo-spell');
+  document.querySelector('.spell-menu')?.remove();
+}
+
 function toggleSpellcheck() {
   spellOn = !spellOn;
   if (spellOn) {
-    spellScanned = new Set();
-    spellRanges = new Map();
+    resetSpellState();
     scanSpellingHere();
   } else {
+    spellVersion++;
     CSS.highlights.delete('neo-spell');
     spellRanges = new Map();
     document.querySelector('.spell-menu')?.remove();
@@ -3475,7 +3487,7 @@ document.addEventListener('contextmenu', async (e) => {
   if (!pos || pos.startContainer.nodeType !== Node.TEXT_NODE) return;
   const node = pos.startContainer;
   const text = node.data;
-  const isW = (c) => /[A-Za-z'’]/.test(c);
+  const isW = (c) => /[\p{L}\p{M}'’]/u.test(c);
   let a = pos.startOffset, b = pos.startOffset;
   while (a > 0 && isW(text[a - 1])) a--;
   while (b < text.length && isW(text[b])) b++;
@@ -4556,7 +4568,13 @@ async function showAbout() {
 }
 
 window.neo.onMenu(async (msg) => {
-  if (msg.type === 'language') window.neoI18n.setLocale(msg.value);
+  if (msg.type === 'language') {
+    window.neoI18n.setLocale(msg.value);
+    if (spellOn) {
+      resetSpellState();
+      scanSpellingHere();
+    }
+  }
   if (msg.type === 'help') showHelp();
   if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();

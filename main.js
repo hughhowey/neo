@@ -697,38 +697,85 @@ function createWindow() {
 }
 
 // ---------------------------------------------------------------------------
-// Spellcheck: NEO's own dictionary (Hunspell en-US via nspell), identical on
-// every platform. The renderer paints the squiggles and asks for suggestions.
+// Spellcheck runs in a worker so parsing the large Hunspell dictionaries never
+// blocks the window or the main Electron process.
 // ---------------------------------------------------------------------------
-let neoSpell = null;
+let spellWorker = null;
+let spellRequestId = 0;
+let spellCustomWords = [];
+const spellRequests = new Map();
 
 function initSpell() {
   try {
-    const nspell = require('nspell');
-    require('dictionary-en-us')((err, dict) => {
-      if (err) { logError('spell', err); return; }
-      neoSpell = nspell(dict);
-      try {
-        const lib = readJSON(LIBRARY_FILE, {});
-        for (const w of lib.customWords || []) neoSpell.add(w);
-      } catch { /* custom words are a nicety */ }
-    });
+    const lib = readJSON(LIBRARY_FILE, {});
+    spellCustomWords = Array.isArray(lib.customWords) ? lib.customWords : [];
   } catch (err) {
     logError('spell', err);
   }
 }
 
-ipcMain.handle('spell:check', (_e, words) => {
-  const out = {};
-  // dictionary still loading: report everything correct rather than crying wolf
-  for (const w of words) out[w] = neoSpell ? neoSpell.correct(w) : true;
-  return out;
+function requestSpell(action, data = {}) {
+  if (!spellWorker) {
+    const { Worker } = require('node:worker_threads');
+    const worker = new Worker(path.join(__dirname, 'spell-worker.js'));
+    spellWorker = worker;
+    worker.unref();
+    worker.on('message', (message) => {
+      const pending = spellRequests.get(message.id);
+      if (!pending || pending.worker !== worker) return;
+      spellRequests.delete(message.id);
+      if (message.error) pending.reject(new Error(message.error));
+      else pending.resolve(message.result);
+    });
+    const failRequests = (err) => {
+      logError('spell-worker', err);
+      for (const [id, pending] of spellRequests) {
+        if (pending.worker !== worker) continue;
+        spellRequests.delete(id);
+        pending.reject(err);
+      }
+      if (spellWorker === worker) spellWorker = null;
+    };
+    worker.on('error', failRequests);
+    worker.on('exit', (code) => {
+      if (code !== 0) failRequests(new Error(`Worker exited with code ${code}`));
+      if (spellWorker === worker) spellWorker = null;
+    });
+  }
+
+  const id = ++spellRequestId;
+  return new Promise((resolve, reject) => {
+    const worker = spellWorker;
+    spellRequests.set(id, { worker, resolve, reject });
+    worker.postMessage({
+      id,
+      action,
+      locale: getInterfaceLanguage(),
+      customWords: spellCustomWords,
+      ...data
+    });
+  });
+}
+
+ipcMain.handle('spell:check', async (_e, words) => {
+  try {
+    return await requestSpell('check', { words });
+  } catch (err) {
+    logError('spell', err);
+    return Object.fromEntries(words.map((word) => [word, true]));
+  }
 });
 
-ipcMain.handle('spell:suggest', (_e, word) => (neoSpell ? neoSpell.suggest(word).slice(0, 6) : []));
+ipcMain.handle('spell:suggest', async (_e, word) => {
+  try { return await requestSpell('suggest', { word }); }
+  catch (err) { logError('spell', err); return []; }
+});
 
-ipcMain.handle('spell:learn', (_e, word) => {
-  if (neoSpell && typeof word === 'string') neoSpell.add(word);
+ipcMain.handle('spell:learn', async (_e, word) => {
+  if (typeof word !== 'string') return false;
+  if (!spellCustomWords.includes(word)) spellCustomWords.push(word);
+  try { await requestSpell('learn', { word }); }
+  catch (err) { logError('spell', err); }
   return true;
 });
 

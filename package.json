@@ -7,7 +7,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/interface-language.test.js",
+    "test": "node tests/interface-language.test.js && node tests/spellcheck-words.test.js && node tests/spellcheck-dictionary.test.js",
+    "build:dict:pt-br": "node scripts/build-pt-br-dictionary.js",
     "package": "electron-builder --mac",
     "package:win": "electron-builder --win",
     "package:linux": "electron-builder --linux",
@@ -97,14 +98,14 @@
   "author": "Hugh Howey",
   "license": "MIT",
   "devDependencies": {
+    "@cspell/cspell-tools": "^10.3.4",
     "electron": "^43.0.0",
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
-    "dictionary-en-us": "^2.2.1",
+    "cspell-lib": "^10.3.4",
     "electron-updater": "^6.3.9",
-    "jszip": "^3.10.1",
-    "nspell": "^2.1.5"
+    "jszip": "^3.10.1"
   },
   "allowScripts": {
     "electron@33.4.11": true
