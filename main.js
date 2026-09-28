@@ -500,7 +500,8 @@ ipcMain.handle('cover:paint', (_e, bookId, text, options) => {
         text: String(text || ''),
         textModel: options && options.textModel,
         imageModel: options && options.imageModel,
-        quality: options && options.quality
+        quality: options && options.quality,
+        base: options && options.base
       });
       // sweep older paintings; the writer's own cover-*.png files are untouched
       for (const f of fs.readdirSync(dir)) {

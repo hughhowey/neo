@@ -84,9 +84,11 @@ async function withModels(preferred, defaults, fn) {
 
 // If every name on our list has been retired, ask the key what it can use:
 // the newest small GPT for the brief, the newest gpt-image for the painting.
-let openaiCatalog = null;
+// Keyed by base: a custom endpoint must not be answered with OpenAI's list.
+const openaiCatalogs = new Map();
 async function openaiModels(base, apiKey) {
-  if (openaiCatalog && Date.now() - openaiCatalog.at < 6 * 3600 * 1000) return openaiCatalog;
+  const hit = openaiCatalogs.get(base);
+  if (hit && Date.now() - hit.at < 6 * 3600 * 1000) return hit;
   const res = await fetch(base + '/models', { headers: { Authorization: 'Bearer ' + apiKey } });
   if (!res.ok) throw new Error('Could not list models (' + res.status + ')');
   const ids = ((await res.json()).data || []).map((m) => String(m.id || ''));
@@ -94,8 +96,9 @@ async function openaiModels(base, apiKey) {
   const newest = (a, b) => ver(b) - ver(a) || a.length - b.length;
   const text = ids.filter((n) => /^gpt-\d+(\.\d+)?-mini$/.test(n)).sort(newest);
   const image = ids.filter((n) => /^gpt-image-\d+(\.\d+)?(-mini)?$/.test(n)).sort((a, b) => newest(a, b) || (/mini/.test(b) ? 1 : -1));
-  openaiCatalog = { at: Date.now(), text, image };
-  return openaiCatalog;
+  const cat = { at: Date.now(), text, image };
+  openaiCatalogs.set(base, cat);
+  return cat;
 }
 
 async function candidates(base, apiKey, preferred, defaults, kind) {
@@ -139,21 +142,28 @@ function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, t
   };
 }
 
-const openai = openaiStyle({
+const OPENAI = {
   base: 'https://api.openai.com/v1',
   textModels: ['gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini'],
   imageModels: ['gpt-image-1-mini', 'gpt-image-1'],
   imageExtras: { output_format: 'jpeg' },
   sizeParams: true
-});
+};
+
+const openai = openaiStyle(OPENAI);
 
 // ---------------------------------------------------------------------------
 
 const PROVIDERS = { openai };
 
 // The whole job: text in, { buffer, ext, brief, textModel, imageModel } out.
-async function paintCover({ provider, apiKey, text, textModel, imageModel, quality }) {
-  const p = PROVIDERS[provider || 'openai'];
+// `base` overrides OpenAI's URL so any service that speaks the same dialect —
+// OpenRouter, LM Studio, a company gateway — can paint the cover instead.
+async function paintCover({ provider, apiKey, text, textModel, imageModel, quality, base }) {
+  const endpoint = String(base || '').trim().replace(/\/+$/, '');
+  const p = endpoint && (provider || 'openai') === 'openai'
+    ? openaiStyle({ ...OPENAI, base: endpoint })
+    : PROVIDERS[provider || 'openai'];
   if (!p) throw new Error('Unknown cover-art provider: ' + provider);
   const b = await p.writeBrief({ apiKey, text, model: textModel });
   const i = await p.paint({ apiKey, brief: b.result, model: imageModel, quality });

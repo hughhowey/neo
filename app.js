@@ -858,9 +858,10 @@ async function requestPaint(meta, text) {
   }
   const cs = coverSettings();
   const mine = (cs.models && cs.models[provider]) || {};
+  const endpoint = (cs.endpoints && cs.endpoints[provider]) || undefined;
   let res = null;
   try {
-    res = await window.neo.paintCover(meta.id, text, { provider, textModel: mine.text, imageModel: mine.image, quality: cs.quality });
+    res = await window.neo.paintCover(meta.id, text, { provider, textModel: mine.text, imageModel: mine.image, quality: cs.quality, base: endpoint });
   } catch (err) {
     window.neo.logError('paint request: ' + (err && err.stack || err));
     res = { error: String((err && err.message) || err) };
@@ -4648,7 +4649,7 @@ function statsChartSvg() {
 // One key per provider. The brief and the painting always come from the
 // same provider, so a writer only ever needs one account.
 const COVER_PROVIDERS = {
-  openai: { name: 'OpenAI', keyHint: 'sk-…', where: tk('platform.openai.com → API keys'), text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: tk('a few cents a picture') }
+  openai: { name: 'OpenAI', keyHint: 'sk-…', where: tk('platform.openai.com → API keys'), text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: tk('a few cents a picture'), base: 'https://api.openai.com/v1' }
 };
 // shown in the window, so translated when read
 const providerWhere = (p) => t(p.where);
@@ -4675,6 +4676,9 @@ function openCoverArt() {
       </div>
       <div class="stats-row st-covers">
         <label>${t('API key')} <input id="ca-key" type="password" autocomplete="off" spellcheck="false" style="width:300px"/></label>
+      </div>
+      <div class="stats-row st-covers">
+        <label>${t('Endpoint')} <input id="ca-base" type="text" spellcheck="false" style="width:300px"/></label>
       </div>
       <p class="soft" id="ca-note" style="margin:-6px 0 12px;font-size:12px"></p>
       <details class="st-advanced">
@@ -4703,8 +4707,11 @@ function openCoverArt() {
   // per-provider fields: key placeholder, stored model overrides, quality
   const showProvider = async () => {
     const id = sel.value, p = COVER_PROVIDERS[id];
+    const custom = (cs.endpoints && cs.endpoints[id]) || '';
     key.value = '';
     key.placeholder = t('{name} key ({hint})', { name: p.name, hint: p.keyHint });
+    bd.querySelector('#ca-base').value = custom;
+    bd.querySelector('#ca-base').placeholder = p.base;
     bd.querySelector('#ca-tmodel').value = (models[id] && models[id].text) || '';
     bd.querySelector('#ca-tmodel').placeholder = p.text;
     bd.querySelector('#ca-imodel').value = (models[id] && models[id].image) || '';
@@ -4714,7 +4721,8 @@ function openCoverArt() {
     if (sel.value !== id) return;
     note.textContent = has
       ? t('A {name} key is saved, encrypted, outside your library folder. Paste a new one to replace it, or type “{remove}” to forget it.', { name: p.name, remove: t('remove') })
-      : t('Get a key at {where} ({cost}). It’s stored encrypted on this computer and only ever sent to {name}.', { where: providerWhere(p), cost: providerCost(p), name: p.name });
+        + (custom ? ' ' + t('Painting goes to the endpoint above, not OpenAI.') : '')
+      : t('Get a key at {where} ({cost}). It’s stored encrypted on this computer and only ever sent to {name}.', { where: providerWhere(p), cost: providerCost(p), name: custom ? t('the endpoint above') : p.name });
   };
   sel.onchange = showProvider;
   showProvider();
@@ -4723,6 +4731,8 @@ function openCoverArt() {
   bd.querySelector('.m-ok').onclick = async () => {
     const id = sel.value, p = COVER_PROVIDERS[id];
     const k = key.value.trim();
+    const base = bd.querySelector('#ca-base').value.trim().replace(/\/+$/, '');
+    if (base && !/^https?:\/\/\S+$/i.test(base)) { toast(t('That endpoint doesn’t look like a URL — it should start with http:// or https://'), 6000); return; }
     if (k === 'remove' || k === t('remove')) await window.neo.setSecret(id, '');
     else if (k && !looksLikeKey(k)) { toast(t('That doesn’t look like an API key ({name} keys look like {hint}) — not saved', { name: p.name, hint: p.keyHint }), 6000); return; }
     else if (k) await window.neo.setSecret(id, k);
@@ -4730,11 +4740,14 @@ function openCoverArt() {
       text: bd.querySelector('#ca-tmodel').value.trim() || undefined,
       image: bd.querySelector('#ca-imodel').value.trim() || undefined
     };
+    const endpoints = { ...(cs.endpoints || {}) };
+    if (base) endpoints[id] = base; else delete endpoints[id];
     library.coverArt = {
       provider: id,
       auto: bd.querySelector('#ca-auto').checked,
       quality: bd.querySelector('#ca-quality').value,
-      models
+      models,
+      endpoints
     };
     await window.neo.writeLibrary(library);
     done();
