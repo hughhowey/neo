@@ -99,6 +99,10 @@
         "to": "app.asar.unpacked/node_modules/dictionary-pt"
       },
       {
+        "from": "licenses/dictionary-tr",
+        "to": "app.asar.unpacked/licenses/dictionary-tr"
+      },
+      {
         "from": "licenses/hunspell",
         "to": "licenses/hunspell"
       }

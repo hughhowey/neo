@@ -1,0 +1,22 @@
+Turkish Hunspell dictionary
+
+NEO distributes the Turkish Hunspell dictionary from:
+https://github.com/tdd-ai/hunspell-tr
+
+The dictionary is licensed under the Mozilla Public License, Version 2.0.
+
+Original project:
+https://github.com/tdd-ai/hunspell-tr
+
+Contributors:
+- Ali Safaya
+- Arda Göktoğan
+- Deniz Yuret
+- Emirhan Kurtuluş
+- Taner Sezer
+
+The bundled dictionary files are:
+  spell-dictionaries/tr/index.aff
+  spell-dictionaries/tr/index.dic
+
+The full MPL-2.0 license text is included in MPL-2.0.txt.

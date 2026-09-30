@@ -1224,7 +1224,8 @@ const SPELL_LANGUAGES = {
   'pl': { label: 'Polski', pkg: 'dictionary-pl' },
   'pt-BR': { label: 'Português (Brasil)', pkg: 'dictionary-pt' },
   'ro': { label: 'Română', pkg: 'dictionary-ro' },
-  'ru': { label: 'Русский', pkg: 'dictionary-ru' }
+  'ru': { label: 'Русский', pkg: 'dictionary-ru' },
+  'tr': { label: 'Türkçe', pkg: 'dictionary-tr' }
 };
 
 // The dictionary work runs in a helper process (spell-worker.js), so the
@@ -1270,7 +1271,8 @@ async function loadSpellDictionary(code) {
   startSpellProcess();
   let custom = [];
   try { custom = readJSON(LIBRARY_FILE, {}).customWords || []; } catch { /* a nicety */ }
-  const res = await spellRequest({ type: 'load', language: known, dir: path.join(__dirname, 'node_modules', entry.pkg), custom });
+  const dir = known === 'tr' ? path.join(__dirname, 'spell-dictionaries', 'tr') : path.join(__dirname, 'node_modules', entry.pkg);
+  const res = await spellRequest({ type: 'load', language: known, dir, custom });
   if (!res.ok) { logError('spell', new Error(res.error || 'dictionary failed to load')); return false; }
   spellLanguage = known;
   return true;
