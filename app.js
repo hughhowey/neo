@@ -5037,6 +5037,16 @@ function switchTab(name) {
 
 const secLetter = (i) => String.fromCharCode(65 + (i % 26));
 
+/**
+ * Where the caret goes after a section is removed from the outline: the end of the section ABOVE it,
+ * the way a text editor behaves. Only the first section has no line above it, and then the chapter's
+ * own line is where the caret belongs.
+ */
+function focusAfterSectionRemoved(list, index, chId) {
+  const above = index > 0 ? list[index - 1] : undefined;
+  return above ? { secId: above.id } : { chId };
+}
+
 function renderOutline(focusTarget) {
   book.sectionNotes = book.sectionNotes || {};
   book.chapterNotes = book.chapterNotes || {};
@@ -5216,11 +5226,12 @@ function outlineLine(kind, chId, secId, index, label, text) {
     if (e.key === 'Backspace' && txt.textContent.trim() === '') {
       e.preventDefault();
       if (kind === 'section') {
-        const list = book.sectionNotes[chId];
+        const list = book.sectionNotes[chId] || [];
+        const focus = focusAfterSectionRemoved(list, index, chId);
         book.sectionNotes[chId] = list.filter((s) => s.id !== secId);
         scheduleMetaSave();
         syncGhosts(chId);
-        renderOutline({ chId });
+        renderOutline(focus);
       } else if (book.chapterOrder.filter((c) => isStory(c)).length > 1 && countWords(chapterText(chId)) === 0) {
         const prevCh = storyBefore(chId) || book.chapterOrder.find((c) => c !== chId && isStory(c));
         deleteChapterQuiet(chId).then(() => renderOutline({ chId: prevCh }));
@@ -5238,10 +5249,12 @@ function outlineLine(kind, chId, secId, index, label, text) {
       const choice = await optionModal(t('Delete this section?'), null,
         [{ label: t('Delete section'), desc: t('Removes the outline line and its gray ghost from the manuscript. Written prose is never touched.'), danger: true, value: 'delete' }]);
       if (choice === 'delete') {
-        book.sectionNotes[chId] = (book.sectionNotes[chId] || []).filter((s) => s.id !== secId);
+        const list = book.sectionNotes[chId] || [];
+        const focus = focusAfterSectionRemoved(list, index, chId);
+        book.sectionNotes[chId] = list.filter((s) => s.id !== secId);
         scheduleMetaSave();
         syncGhosts(chId);
-        renderOutline({ chId });
+        renderOutline(focus);
       }
     }
   });
