@@ -22,6 +22,7 @@ on:
     paths:
       - 'pocket/**'
       - 'app.js'
+      - 'bible.js'
       - 'covers.js'
       - 'styles.css'
       - 'fonts/**'
@@ -69,6 +70,7 @@ jobs:
           cd pocket
           npm install
           cp ../app.js www/app.js
+          cp ../bible.js www/bible.js
           cp ../covers.js www/covers.js
           cp ../styles.css www/styles.css
           cp ../i18n.js www/i18n.js

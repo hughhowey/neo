@@ -2124,6 +2124,8 @@ async function openBook(bookId) {
   if (!book) return;
   currentChapterId = null; // never carry a chapter reference across books
   undoStack = [];
+  castPeers = [];
+  castPeek = null;
   chapterHTML = {};
   savedHTML = {};
   diskStamps = {};
@@ -2146,6 +2148,7 @@ async function openBook(bookId) {
   $$('.tab[data-tab="outline"]')[0].textContent = tabName('outline');
 
   renderChapters();
+  syncCastOnOpen().then(pruneBibleImages); // a bound book's parts share their bible
   renderStickies();
   migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
   reconcileMarks();        // re-adopt any note marks orphaned by cut/paste
@@ -2416,6 +2419,7 @@ function wireChapterBody(body, chId) {
     if (spellOn) scheduleSpellRescan(chId, body);
     updateCounters();
     scheduleNavRefresh();
+    scheduleCast(); // who is in this chapter follows the typing
     if (!typewriterEnabled) revealCaret();
   });
   // paste without formatting
@@ -3283,6 +3287,7 @@ function syncChapter(body, chId) {
   scheduleChapterSave(chId);
   updateCounters();
   scheduleNavRefresh();
+  scheduleCast();
 }
 
 // Heal text-node fragmentation in each paragraph as the caret leaves it:
@@ -4749,6 +4754,7 @@ navList.addEventListener('drop', async (e) => {
 
 function highlightNav() {
   $$('.nav-item').forEach((el) => el.classList.toggle('current', el.dataset.id === currentChapterId));
+  scheduleCast();
 }
 
 function scheduleNavRefresh() {
@@ -5070,6 +5076,7 @@ function switchTab(name) {
   const auxEditor = $('#aux-editor');
   const dList = $('#darlings-list');
   const oList = $('#outline-list');
+  const cList = $('#characters-list');
   const back = tabPlaces[name];
   const returnTo = () => { if (back && typeof back.scroll === 'number') scroller.scrollTop = back.scroll; };
 
@@ -5091,6 +5098,7 @@ function switchTab(name) {
   auxEditor.hidden = true;
   dList.hidden = true;
   oList.hidden = true;
+  cList.hidden = true;
 
   if (name === 'darlings') {
     $('#aux-title').textContent = t('Darlings');
@@ -5111,6 +5119,7 @@ function switchTab(name) {
     auxEditor.dataset.kind = name;
     window.neo.readAux(book.id, name).then((html) => {
       auxEditor.innerHTML = html || '';
+      if (name === 'notes') notesOpened(); // bible.js: the cards under the notes
       auxEditor.focus({ preventScroll: true });
       returnTo();
       findHere();
@@ -5154,6 +5163,8 @@ function renderOutline(focusTarget) {
       wrap.appendChild(outlineLine('section', chId, sec.id, j, secLetter(j), sec.text));
     });
   });
+
+  bibleOutline(wrap); // bible.js: the synopsis on top, who is in each chapter
 
   const hint = document.createElement('div');
   hint.className = 'ol-hint';
@@ -5429,7 +5440,7 @@ function scheduleAuxSave() {
 function flushAux() {
   if (!auxDirty || !book) return;
   const kind = $('#aux-editor').dataset.kind;
-  if (kind) window.neo.writeAux(book.id, kind, $('#aux-editor').innerHTML);
+  if (kind) window.neo.writeAux(book.id, kind, kind === 'notes' ? notesHTML() : $('#aux-editor').innerHTML);
   auxDirty = false;
 }
 
@@ -5737,6 +5748,7 @@ function flushAllSaves(e) {
   }
   flushAux();
   flushStickiesSave();
+  if (castShareTimer) shareCast();
   if (moved || metaSig(book) !== savedMetaSig) saveMeta();
 }
 
@@ -6126,7 +6138,12 @@ function snapshotStructure(label, opts) {
     chapterNotes: { ...(book.chapterNotes || {}) },
     sectionNotes: JSON.parse(JSON.stringify(book.sectionNotes || {})),
     darlings: JSON.parse(JSON.stringify(darlings)),
-    stickies: JSON.parse(JSON.stringify(stickies))
+    stickies: JSON.parse(JSON.stringify(stickies)),
+    characters: JSON.parse(JSON.stringify(book.characters || [])),
+    world: JSON.parse(JSON.stringify(book.world || [])),
+    story: JSON.parse(JSON.stringify(book.story || {})),
+    castRemoved: [...(book.castRemoved || [])],
+    worldRemoved: [...(book.worldRemoved || [])]
   });
   if (undoStack.length > 10) undoStack.shift();
 }
@@ -6142,6 +6159,19 @@ async function structuralUndo() {
   book.sectionNotes = snap.sectionNotes;
   darlings = snap.darlings;
   stickies = snap.stickies;
+  if (snap.characters) book.characters = snap.characters;
+  if (snap.world) book.world = snap.world;
+  if (snap.story) book.story = snap.story;
+  if (snap.castRemoved) book.castRemoved = snap.castRemoved;
+  if (snap.worldRemoved) book.worldRemoved = snap.worldRemoved;
+  if (castPeers.length && !snap.peers) scheduleCastShare(); // a deleted card comes back in every part
+  // a rename across the book also rewrote the Notes tab
+  if (typeof snap.auxNotes === 'string') await window.neo.writeAux(book.id, 'notes', snap.auxNotes);
+  for (const peer of snap.peers || []) {
+    for (const [chId, html] of Object.entries(peer.chapters)) await window.neo.writeChapter(peer.id, chId, html);
+    await window.neo.writeAux(peer.id, 'notes', peer.notes);
+    await writeBookMeta(peer.id, peer.meta);
+  }
   // resurrect any chapter files the action may have deleted
   for (const chId of book.chapterOrder) {
     await persistChapter(chId, chapterHTML[chId] || '<p><br></p>');
@@ -6154,6 +6184,8 @@ async function structuralUndo() {
   renderStickies();
   if (currentTab === 'darlings') renderDarlings();
   if (currentTab === 'outline') renderOutline();
+  if (currentTab === 'notes') renderCharacters();
+  scheduleCast();
   updateCounters();
   restoreCaret(snap.caret); // back to work, no announcement
   if (snap.rejoin) rejoinAtCaret();
@@ -7361,7 +7393,8 @@ function shortcutSections() {
       [tk('Enter ×3'), tk('Start a new chapter')],
       [K('⇧Enter', 'Shift+Enter'), tk('Start or continue a poetry paragraph'), tk('Also works from a chapter heading.')],
       [KPH, tk('Insert a placeholder note')],
-      [KDA, tk('Move selected text to Darlings')]
+      [KDA, tk('Move selected text to Darlings')],
+      [['@'], tk('Name a character'), tk('Type @ and a few letters, then pick the name. Esc keeps the @.')]
     ] },
     { title: tk('Formatting'), rows: [
       [['*…*', '**…**', '***…***'], tk('Italic, bold, the Markdown way'), tk('Typed around a word (or pasted). Undo right after keeps the asterisks. Format → Markdown Emphasis turns it off.')],
