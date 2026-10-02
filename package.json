@@ -6,7 +6,7 @@
   "homepage": "https://github.com/hughhowey/neo",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/start.js",
     "test:spellcheck": "node --test scripts/spellcheck.test.js",
     "test:dashes": "node --test scripts/dashes.test.js",
     "package": "electron-builder --mac",

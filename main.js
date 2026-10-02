@@ -20,6 +20,9 @@ const os = require('os');
 // macOS Chromium's "smart delete" also removes whitespace around a deleted
 // selection, and that pass can duplicate characters. Deletes stay literal.
 app.commandLine.appendSwitch('blink-settings', 'smartInsertDeleteEnabled=false');
+if (process.platform === 'linux' && process.env && (process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland')) {
+  app.commandLine.appendSwitch('disable-gpu');
+}
 
 // ---------------------------------------------------------------------------
 // Library location: a folder of plain files the user can inspect, sync, back up.
@@ -1241,6 +1244,7 @@ function createWindow() {
     // menu bar lives in that frame (KDE Plasma showed no menu, and Alt
     // found nothing to show)
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' } : {}),
+    autoHideMenuBar: false,
     backgroundColor: roomColor(libraryPageTheme()),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -1767,6 +1771,12 @@ function buildMenu() {
   const menu = Menu.buildFromTemplate(template);
   editMenuState.edit = null; // the old menu bar is going: forget its Edit menu first
   Menu.setApplicationMenu(menu);
+  if (!isMac) {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.setAutoHideMenuBar(false);
+      win.setMenuBarVisibility(!win.isFullScreen());
+    }
+  }
   if (isMac) {
     // macOS adds its items as the menu opens: NEO hears each addition
     // (watchEditMenu) and looks again whenever the menu opens
