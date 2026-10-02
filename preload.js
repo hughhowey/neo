@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('neo', {
   bibleReadImage: (bookId, fname) => ipcRenderer.invoke('bible:readImage', bookId, fname),
   bibleCopyImage: (fromBookId, fname, toBookId) => ipcRenderer.invoke('bible:copyImage', fromBookId, fname, toBookId),
   biblePruneImages: (bookId, keep) => ipcRenderer.invoke('bible:pruneImages', bookId, keep),
+  bibleExportImages: (bookId, files, savedPath) => ipcRenderer.invoke('bible:exportImages', bookId, files, savedPath),
   paintCover: (bookId, text, options) => ipcRenderer.invoke('cover:paint', bookId, text, options),
   setSecret: (name, value) => ipcRenderer.invoke('secret:set', name, value),
   hasSecret: (name) => ipcRenderer.invoke('secret:has', name),

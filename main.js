@@ -553,6 +553,27 @@ ipcMain.handle('bible:pruneImages', (_e, bookId, keep) => {
   }
 });
 
+// the pictures of a Markdown export of the notes, in an images/ folder
+// beside the file it just saved (the .md links to them there)
+ipcMain.handle('bible:exportImages', (_e, bookId, files, savedPath) => {
+  try {
+    const out = path.join(path.dirname(savedPath), 'images');
+    let n = 0;
+    for (const f of files || []) {
+      if (!BIBLE_IMG.test(f)) continue;
+      const src = path.join(bibleDir(bookId), f);
+      if (!fs.existsSync(src)) continue;
+      fs.mkdirSync(out, { recursive: true });
+      fs.copyFileSync(src, path.join(out, f));
+      n++;
+    }
+    return n;
+  } catch (err) {
+    logError('bible:exportImages', err);
+    return 0;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Painted covers: once a story passes a thousand words, NEO reads it and
 // paints an abstract cover (art.js). The API key lives encrypted in the
@@ -1526,6 +1547,8 @@ function buildMenu() {
             { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
             { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
             { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) },
+            { type: 'separator' },
+            { label: t('Notes…'), click: () => sendToWindow({ type: 'exportNotes' }) },
             { type: 'separator' },
             {
               id: 'export-custom-chapter-titles',

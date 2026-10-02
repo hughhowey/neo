@@ -415,7 +415,7 @@ function renderCharacters(focusId) {
     const hint = document.createElement('div');
     hint.className = 'notes-hint';
     hint.textContent = t('Type / for a character, a place, a picture, a heading…');
-    wrap.append(hint, importButton());
+    wrap.append(hint, notesActions());
     renderNotesToc();
     return;
   }
@@ -473,7 +473,7 @@ function renderCharacters(focusId) {
     wrap.appendChild(sec);
   }
 
-  wrap.appendChild(importButton());
+  wrap.appendChild(notesActions());
 
   scroller.scrollTop = keep;
   requestAnimationFrame(() => wrap.querySelectorAll('textarea').forEach(growField));
@@ -486,12 +486,20 @@ function renderCharacters(focusId) {
   }
 }
 
-function importButton() {
+// at the foot of the notes: bring cards in, send the notes out
+function notesActions() {
+  const row = document.createElement('div');
+  row.className = 'notes-actions';
   const imp = document.createElement('button');
-  imp.className = 'cast-import-btn notes-import';
+  imp.className = 'cast-import-btn';
   imp.textContent = t('Import cards from another book…');
   imp.onclick = () => importCharacters();
-  return imp;
+  const exp = document.createElement('button');
+  exp.className = 'cast-import-btn';
+  exp.textContent = t('Export the notes…');
+  exp.onclick = () => exportNotes();
+  row.append(imp, exp);
+  return row;
 }
 
 // reordering inside one world rubric: a view of that type's cards whose
@@ -1741,7 +1749,8 @@ const SLASH_COMMANDS = [
   { key: 'subheading', label: tk('Subheading'), group: tk('In the notes'), run: () => document.execCommand('formatBlock', false, 'h4') },
   { key: 'list', label: tk('Bulleted list'), group: tk('In the notes'), run: () => document.execCommand('insertUnorderedList') },
   { key: 'numbered', label: tk('Numbered list'), group: tk('In the notes'), run: () => document.execCommand('insertOrderedList') },
-  { key: 'import', label: tk('Import cards from another book…'), group: tk('In the notes'), run: () => importCharacters() }
+  { key: 'import', label: tk('Import cards from another book…'), group: tk('In the notes'), run: () => importCharacters() },
+  { key: 'export', label: tk('Export the notes…'), group: tk('In the notes'), run: () => exportNotes() }
 ];
 
 let slashPop = null;       // { el, options, index }
@@ -1904,3 +1913,338 @@ notesEditor().addEventListener('input', () => updateSlashPop(true));
 document.addEventListener('selectionchange', () => { if (slashPop) updateSlashPop(false); });
 notesEditor().addEventListener('blur', () => setTimeout(closeSlashPop, 0));
 $('#paper-scroll').addEventListener('scroll', closeSlashPop, { passive: true });
+
+/* --- The notes, exported: Markdown, Word, PDF, web page, plain text */
+/*  One shape for every format: the book's title, a contents list,    */
+/*  the notes as written (headings, lists, pictures), then the cards  */
+/*  rubric by rubric, their filled fields only.                        */
+
+const NOTES_FORMATS = [
+  { label: 'Markdown (.md)', desc: tk('Plain text with its headings and lists; the pictures go in an images folder beside it.'), value: 'md' },
+  { label: 'Word (.docx)', desc: tk('To edit or share; pictures included.'), value: 'docx' },
+  { label: 'PDF (.pdf)', desc: tk('To read or print, with a contents page and bookmarks.'), value: 'pdf' },
+  { label: tk('Web Page (.html)'), desc: tk('One file that opens in any browser, pictures included.'), value: 'html' },
+  { label: tk('Plain Text (.txt)'), desc: tk('Words only.'), value: 'txt' }
+];
+
+// "Role: Heroine" the way the language writes it
+function fieldLine(label, value) {
+  const pat = t('{label}: {value}');
+  const at = pat.indexOf('{value}');
+  return { label: pat.slice(0, at).replace('{label}', label), value };
+}
+
+// the notes and the cards as a list of blocks
+function notesExportModel(root) {
+  const blocks = [];
+  let para = '';
+  const flush = () => {
+    const runs = paraRuns(para).filter((r) => r.text);
+    if (runs.some((r) => r.text.trim())) blocks.push({ t: 'p', runs });
+    para = '';
+  };
+  const BLOCK = /^(P|DIV|H1|H2|H3|H4|H5|H6|UL|OL|LI|BLOCKQUOTE|PRE|IMG|BR)$/;
+  const walk = (node) => {
+    for (const n of node.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) { para += escHtml(n.textContent); continue; }
+      if (n.nodeType !== Node.ELEMENT_NODE) continue;
+      const tag = n.tagName;
+      if (!BLOCK.test(tag) && !n.querySelector('p, div, h1, h2, h3, h4, ul, ol, img, br')) { para += n.outerHTML; continue; }
+      if (tag === 'BR') { flush(); continue; }
+      flush();
+      if (/^H[1-6]$/.test(tag)) {
+        const text = n.textContent.trim();
+        if (text) blocks.push({ t: 'h', level: tag === 'H4' || tag === 'H5' || tag === 'H6' ? 2 : 1, text });
+      } else if (tag === 'UL' || tag === 'OL') {
+        let i = 0;
+        for (const li of n.children) {
+          if (li.tagName !== 'LI') continue;
+          const runs = paraRuns(li.innerHTML).filter((r) => r.text);
+          if (runs.some((r) => r.text.trim())) blocks.push({ t: 'li', ordered: tag === 'OL', n: ++i, runs });
+        }
+      } else if (tag === 'IMG') {
+        if (n.dataset.img) blocks.push({ t: 'img', file: n.dataset.img });
+      } else {
+        walk(n);
+        flush();
+      }
+    }
+  };
+  walk(root);
+  flush();
+
+  const field = (label, v) => {
+    const text = Array.isArray(v) ? v.join(', ') : String(v || '').trim();
+    if (text) blocks.push({ t: 'field', ...fieldLine(t(label), text) });
+  };
+  const pictures = (o) => galleryOf(o).forEach((f) => blocks.push({ t: 'img', file: f }));
+  if (storyShown().length) {
+    blocks.push({ t: 'h', level: 1, text: t('The story') });
+    for (const [f, label] of storyShown()) field(label, storyBible()[f]);
+  }
+  const stats = castList().length ? bookCastStats() : new Map();
+  for (const [key, title] of RUBRICS) {
+    const items = rubricCards(key);
+    if (!items.length) continue;
+    blocks.push({ t: 'h', level: 1, text: t(title) });
+    for (const o of items) {
+      if (key === 'cast') {
+        blocks.push({ t: 'h', level: 2, text: charName(o) || t('Unnamed') });
+        if (o.portrait) blocks.push({ t: 'img', file: o.portrait, portrait: true });
+        field(tk('Nicknames'), o.nicknames);
+        field(tk('Note'), o.note);
+        for (const [f, label] of CAST_DETAILS) field(label, o[f]);
+        pictures(o);
+        const s = stats.get(o.id);
+        if (s) blocks.push({ t: 'p', runs: [{ text: castMetaText(s), i: true }] });
+      } else {
+        const [, fields] = WORLD_TYPES[o.type] || WORLD_TYPES.other;
+        blocks.push({ t: 'h', level: 2, text: o.name || worldTypeName(o.type) });
+        for (const [f, label] of [...fields, ['notes', tk('Notes')]]) field(label, o[f]);
+        pictures(o);
+      }
+    }
+  }
+  // every heading gets an anchor, unique, for the contents and the links
+  // (the Markdown's in the reader's letters, the page's in plain ASCII:
+  // a PDF finds its page numbers only by those)
+  const seen = new Map();
+  blocks.filter((x) => x.t === 'h').forEach((b, i) => { b.hid = 'n' + (i + 1); });
+  for (const b of blocks.filter((x) => x.t === 'h')) {
+    let slug = b.text.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-') || 'section';
+    const n = seen.get(slug) || 0;
+    seen.set(slug, n + 1);
+    b.id = n ? `${slug}-${n}` : slug;
+  }
+  return {
+    title: book.title || t('Untitled'),
+    subtitle: tabName('notes'),
+    author: book.author || '',
+    blocks,
+    toc: blocks.filter((x) => x.t === 'h')
+  };
+}
+
+// a picture's bytes and size, for the formats that carry them
+async function notesPicture(file) {
+  if (!canBibleImages()) return null;
+  const r = await window.neo.bibleReadImage(book.id, file);
+  if (!r) return null;
+  const url = `data:${r.mime};base64,${r.base64}`;
+  const size = await new Promise((res) => {
+    const img = new Image();
+    img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => res({ w: 800, h: 600 });
+    img.src = url;
+  });
+  return { ...r, url, ...size };
+}
+
+const mdEscape = (s) => String(s).replace(/([\\`*_\[\]#<>])/g, '\\$1');
+function mdRuns(runs) {
+  return runs.map((r) => {
+    const tx = r.text.replace(/([\\*_`\[\]<>])/g, '\\$1');
+    const mark = r.b && r.i ? '***' : r.b ? '**' : r.i ? '*' : '';
+    if (!mark) return tx;
+    const lead = tx.match(/^\s*/)[0];
+    const trail = tx.match(/\s*$/)[0];
+    const core = tx.slice(lead.length, tx.length - trail.length);
+    return core ? lead + mark + core + mark + trail : tx;
+  }).join('');
+}
+
+function notesMd(m) {
+  let out = `# ${mdEscape(m.title)}\n\n*${mdEscape(m.subtitle)}*\n\n`;
+  if (m.toc.length > 1) {
+    out += `## ${mdEscape(t('Contents'))}\n\n`;
+    for (const h of m.toc) out += `${h.level === 2 ? '  ' : ''}- [${mdEscape(h.text)}](#${h.id})\n`;
+    out += '\n';
+  }
+  let prev = null;
+  for (const b of m.blocks) {
+    if (prev === 'li' && b.t !== 'li') out += '\n';
+    if (b.t === 'h') out += `${b.level === 1 ? '##' : '###'} ${mdEscape(b.text)}\n\n`;
+    else if (b.t === 'p') out += mdRuns(b.runs) + '\n\n';
+    else if (b.t === 'li') out += (b.ordered ? `${b.n}. ` : '- ') + mdRuns(b.runs) + '\n';
+    else if (b.t === 'field') out += `**${mdEscape(b.label.trim())}**${b.label.endsWith(' ') ? ' ' : ''}${mdEscape(b.value).replace(/\n/g, '  \n')}\n\n`;
+    else if (b.t === 'img') out += `![](images/${b.file})\n\n`;
+    prev = b.t;
+  }
+  return out.replace(/\n{3,}/g, '\n\n');
+}
+
+function notesTxt(m) {
+  let out = `${m.title.toUpperCase()}\n${m.subtitle}\n\n\n`;
+  let prev = null;
+  for (const b of m.blocks) {
+    if (prev === 'li' && b.t !== 'li') out += '\n';
+    prev = b.t;
+    if (b.t === 'h') out += b.level === 1 ? `\n${b.text.toUpperCase()}\n\n` : `${b.text}\n${'-'.repeat(Math.min(40, b.text.length))}\n\n`;
+    else if (b.t === 'p') out += b.runs.map((r) => r.text).join('') + '\n\n';
+    else if (b.t === 'li') out += (b.ordered ? `${b.n}. ` : '• ') + b.runs.map((r) => r.text).join('') + '\n';
+    else if (b.t === 'field') out += b.label + b.value + '\n\n';
+  }
+  return out.replace(/\n{3,}/g, '\n\n');
+}
+
+const htmlRuns = (runs) => runs.map((r) => {
+  let s = escHtml(r.text);
+  if (r.i) s = `<i>${s}</i>`;
+  if (r.b) s = `<b>${s}</b>`;
+  return s;
+}).join('');
+
+async function notesHtml(m) {
+  const pics = {};
+  for (const b of m.blocks) if (b.t === 'img' && !(b.file in pics)) pics[b.file] = await notesPicture(b.file);
+  const body = [];
+  let list = null;
+  const closeList = () => { if (list) { body.push(`</${list}>`); list = null; } };
+  for (const b of m.blocks) {
+    const want = b.t === 'li' ? (b.ordered ? 'ol' : 'ul') : null;
+    if (list !== want) { closeList(); if (want) { body.push(`<${want}>`); list = want; } }
+    if (b.t === 'h') body.push(`<h${b.level + 1} id="${b.hid}">${escHtml(b.text)}</h${b.level + 1}>`);
+    else if (b.t === 'p') body.push(`<p>${htmlRuns(b.runs)}</p>`);
+    else if (b.t === 'li') body.push(`<li>${htmlRuns(b.runs)}</li>`);
+    else if (b.t === 'field') body.push(`<p class="field"><b>${escHtml(b.label.trim())}</b>${b.label.endsWith(' ') ? ' ' : ''}${escHtml(b.value).replace(/\n/g, '<br>')}</p>`);
+    else if (b.t === 'img' && pics[b.file]) body.push(`<figure class="${b.portrait ? 'portrait' : 'pic'}"><img src="${pics[b.file].url}" alt=""></figure>`);
+  }
+  closeList();
+  const toc = m.toc.length > 1 ? `<nav class="contents"><h2>${escHtml(t('Contents'))}</h2><ol>${m.toc.map((h) =>
+    `<li class="lv${h.level}"><a href="#${h.hid}"><span class="toc-t">${escHtml(h.text)}</span><span class="toc-pg" data-for="${h.hid}"></span></a></li>`).join('')}</ol></nav>` : '';
+  return `<!DOCTYPE html>
+<html lang="${escHtml(writingLanguage())}"><head><meta charset="utf-8"><title>${escHtml(m.title)} · ${escHtml(m.subtitle)}</title>
+<style>
+  body { font-family: ${exportBodyFont()}; font-size: 12pt; line-height: 1.55; color: #1c1a17; max-width: 40em; margin: 3em auto; padding: 0 1.5em; }
+  header { text-align: center; margin-bottom: 2.5em; }
+  header h1 { font-size: 24pt; margin: 0; }
+  header .sub { letter-spacing: 3px; text-transform: uppercase; color: #777; font-size: 10pt; margin-top: .5em; }
+  .contents h2 { font-size: 11pt; letter-spacing: 2px; text-transform: uppercase; color: #777; font-weight: normal; }
+  .contents ol { list-style: none; padding: 0; margin: 0 0 2.5em; }
+  .contents li { margin: .2em 0; }
+  .contents li.lv2 { margin-left: 1.6em; }
+  .contents a { display: flex; color: inherit; text-decoration: none; }
+  .contents .toc-t { flex: 1; }
+  .contents .toc-pg { width: 3em; text-align: right; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 15pt; margin: 1.8em 0 .5em; border-bottom: 1px solid #ddd; padding-bottom: .2em; }
+  h3 { font-size: 13pt; margin: 1.4em 0 .4em; }
+  p { margin: .4em 0; }
+  p.field b { font-weight: 600; }
+  figure { margin: .8em 0; page-break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 22em; border-radius: 3px; }
+  figure.portrait img { width: 7em; height: 7em; object-fit: cover; border-radius: 50%; }
+  @media print { body { margin: 0 auto; } h2, h3 { page-break-after: avoid; } }
+</style></head><body>
+<header><h1>${escHtml(m.title)}</h1><div class="sub">${escHtml(m.subtitle)}</div>${m.author ? `<div class="sub">${escHtml(m.author)}</div>` : ''}</header>
+${toc}
+${body.join('\n')}
+</body></html>`;
+}
+
+async function notesDocx(m) {
+  const body = [];
+  const media = [];
+  const P = (runs, opts) => body.push(docxP(runs, opts));
+  P([{ text: m.title, b: true }], { align: 'center', spaceBefore: 2400, size: 48 });
+  P([{ text: m.subtitle }], { align: 'center', size: 24, caps: true, tracking: 40 });
+  if (m.author) P([{ text: m.author }], { align: 'center', spaceBefore: 400 });
+  if (m.toc.length > 1) {
+    P([{ text: t('Contents') }], { pageBreak: true, size: 22, caps: true, spaceAfter: 240 });
+    for (const h of m.toc) P([{ text: h.text }], { indentLeft: h.level === 2 ? 480 : 0 });
+  }
+  let first = true;
+  for (const b of m.blocks) {
+    if (b.t === 'h') {
+      P([{ text: b.text }], { style: 'Heading' + b.level, pageBreak: first && m.toc.length > 1 });
+      first = false;
+    } else if (b.t === 'p') P(b.runs, { spaceAfter: 120 });
+    else if (b.t === 'li') P([{ text: b.ordered ? `${b.n}.\t` : '•\t' }, ...b.runs], { indentLeft: 360 });
+    else if (b.t === 'field') P([{ text: b.label.trim(), b: true }, { text: (b.label.endsWith(' ') ? ' ' : '') }, ...b.value.split('\n').flatMap((line, i) => (i ? [{ br: true }, { text: line }] : [{ text: line }]))], { spaceAfter: 120 });
+    else if (b.t === 'img') {
+      const pic = await notesPicture(b.file);
+      if (!pic) continue;
+      const n = media.length + 1;
+      const ext = pic.mime === 'image/png' ? 'png' : 'jpg';
+      media.push({ n, ext, base64: pic.base64 });
+      // at most 6 by 4 inches on the page (a portrait 1.5 inches square)
+      const EMU = 914400;
+      const scale = b.portrait ? Math.min(1.5 * EMU / pic.w, 1.5 * EMU / pic.h) : Math.min(6 * EMU / pic.w, 4 * EMU / pic.h, 9525);
+      const cx = Math.round(pic.w * scale);
+      const cy = Math.round(pic.h * scale);
+      body.push(`<w:p><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Picture ${n}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${n}" name="image${n}.${ext}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rImg${n}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`);
+    }
+  }
+  const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${NS}><w:body>${body.join('')}
+<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+</w:body></w:document>`;
+  const headingStyle = (n) => `<w:style w:type="paragraph" w:styleId="Heading${n}"><w:name w:val="heading ${n}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>
+<w:pPr><w:keepNext/><w:spacing w:before="${n === 1 ? 480 : 300}" w:after="120"/><w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr><w:b/><w:sz w:val="${n === 1 ? 32 : 26}"/></w:rPr></w:style>`;
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
+<w:pPrDefault><w:pPr><w:spacing w:line="320" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+${[1, 2].map(headingStyle).join('\n')}
+</w:styles>`;
+  return [
+    { path: '[Content_Types].xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Default Extension="jpg" ContentType="image/jpeg"/>
+<Default Extension="png" ContentType="image/png"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>` },
+    { path: '_rels/.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>` },
+    { path: 'word/_rels/document.xml.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+${media.map((x) => `<Relationship Id="rImg${x.n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image${x.n}.${x.ext}"/>`).join('\n')}
+</Relationships>` },
+    { path: 'word/document.xml', content: documentXml },
+    { path: 'word/styles.xml', content: stylesXml },
+    ...media.map((x) => ({ path: `word/media/image${x.n}.${x.ext}`, content: x.base64, base64: true, store: true }))
+  ];
+}
+
+async function exportNotes(format) {
+  if (!book) { toast(t('Open a book first')); return; }
+  if (!format) format = await optionModal(escHtml(t('Export the notes as…')), null, NOTES_FORMATS.map((f) => ({ ...f, label: t(f.label), desc: t(f.desc) })));
+  if (!format) return;
+  flushAllSaves();
+  // the notes as they are on the page, or from disk when another tab is open
+  let root;
+  if (inNotes()) root = notesEditor().cloneNode(true);
+  else {
+    root = document.createElement('div');
+    root.innerHTML = (await window.neo.readAux(book.id, 'notes')) || '';
+  }
+  const m = notesExportModel(root);
+  if (!m.blocks.length) { toast(t('Nothing in the notes to export yet.')); return; }
+  const defaultName = safeName(book.title || t('Untitled')) + '-' + safeName(tabName('notes'));
+  try {
+    let payload;
+    if (format === 'md') payload = { format, defaultName, content: notesMd(m) };
+    else if (format === 'txt') payload = { format, defaultName, content: notesTxt(m) };
+    else if (format === 'docx') payload = { format, defaultName, zipEntries: await notesDocx(m) };
+    else payload = { format, defaultName, content: await notesHtml(m) };
+    const saved = await window.neo.exportSave(payload);
+    if (!saved) return;
+    const pics = m.blocks.filter((b) => b.t === 'img').map((b) => b.file);
+    if (format === 'md' && pics.length && window.neo.bibleExportImages) await window.neo.bibleExportImages(book.id, pics, saved);
+    toast(t('Exported: {file}', { file: saved.split(/[\\/]/).pop() }));
+  } catch (err) {
+    window.neo.logError('export notes ' + format + ': ' + (err && err.stack || err));
+    toast(t('Couldn’t export: {error}', { error: plainError(err) }), 8000);
+  }
+}
+
+if (window.neo && window.neo.onMenu) {
+  window.neo.onMenu((msg) => { if (msg.type === 'exportNotes') exportNotes(); });
+}
