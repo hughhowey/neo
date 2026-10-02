@@ -2,7 +2,7 @@
 // Owns the window and all file-system access. The renderer talks to this
 // through the IPC handlers below (see preload.js for the exposed API).
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem, utilityProcess, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem, utilityProcess, screen, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -457,6 +457,99 @@ ipcMain.handle('cover:read', (_e, bookId, fname) => {
     return { base64: buf.toString('base64'), mime, ext };
   } catch {
     return null;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Pictures for the cards in Notes (and the notes themselves), kept in the book's own bible/ folder
+// (copied, never linked, so the book travels whole) and brought down to a
+// sensible size on the way in.
+// ---------------------------------------------------------------------------
+
+const BIBLE_IMG = /^img-\d+-[a-z0-9]+\.(jpg|png)$/;
+const bibleDir = (bookId) => path.join(bookDir(bookId), 'bible');
+
+ipcMain.handle('bible:pickImage', async (_e, several) => {
+  const win = BrowserWindow.getFocusedWindow();
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: several ? t('Choose pictures') : t('Choose a picture'),
+    properties: several ? ['openFile', 'multiSelections'] : ['openFile'],
+    filters: [{ name: t('Images'), extensions: COVER_EXTS }]
+  });
+  return canceled || !filePaths.length ? null : filePaths;
+});
+
+ipcMain.handle('bible:setImage', (_e, bookId, srcPath) => {
+  try {
+    const ext = path.extname(srcPath).toLowerCase().replace('.', '');
+    if (!COVER_EXTS.includes(ext) || !fs.existsSync(bookDir(bookId))) return null;
+    let img = nativeImage.createFromPath(srcPath);
+    if (img.isEmpty()) return null;
+    const { width, height } = img.getSize();
+    const MAX = 1400;
+    if (Math.max(width, height) > MAX) {
+      img = width >= height ? img.resize({ width: MAX, quality: 'best' }) : img.resize({ height: MAX, quality: 'best' });
+    }
+    // a PNG keeps its transparency (a map, a crest); everything else is a JPEG
+    const png = ext === 'png';
+    const fname = 'img-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) + (png ? '.png' : '.jpg');
+    fs.mkdirSync(bibleDir(bookId), { recursive: true });
+    fs.writeFileSync(path.join(bibleDir(bookId), fname), png ? img.toPNG() : img.toJPEG(85));
+    return fname;
+  } catch (err) {
+    logError('bible:setImage', err);
+    return null;
+  }
+});
+
+ipcMain.handle('bible:readImage', (_e, bookId, fname) => {
+  try {
+    if (!BIBLE_IMG.test(fname)) return null;
+    const buf = fs.readFileSync(path.join(bibleDir(bookId), fname));
+    return { base64: buf.toString('base64'), mime: fname.endsWith('.png') ? 'image/png' : 'image/jpeg' };
+  } catch {
+    return null;
+  }
+});
+
+// another book's picture, for a bound part or an imported card
+ipcMain.handle('bible:copyImage', (_e, fromBookId, fname, toBookId) => {
+  try {
+    if (!BIBLE_IMG.test(fname)) return false;
+    const src = path.join(bibleDir(fromBookId), fname);
+    const dest = path.join(bibleDir(toBookId), fname);
+    if (fs.existsSync(dest)) return true;
+    if (!fs.existsSync(src)) return false;
+    fs.mkdirSync(bibleDir(toBookId), { recursive: true });
+    fs.copyFileSync(src, dest);
+    return true;
+  } catch (err) {
+    logError('bible:copyImage', err);
+    return false;
+  }
+});
+
+// pictures no card has used for a week (checked when a book opens, so ⌘Z
+// within a session always finds its picture)
+ipcMain.handle('bible:pruneImages', (_e, bookId, keep) => {
+  try {
+    const dir = bibleDir(bookId);
+    if (!fs.existsSync(dir)) return 0;
+    const used = new Set(keep || []);
+    let n = 0;
+    for (const f of fs.readdirSync(dir)) {
+      if (!BIBLE_IMG.test(f) || used.has(f)) continue;
+      // a week's grace: a synced library may bring the picture before the
+      // book.json that uses it
+      const full = path.join(dir, f);
+      if (Date.now() - fs.statSync(full).mtimeMs < 7 * 24 * 3600 * 1000) continue;
+      fs.unlinkSync(full);
+      n++;
+    }
+    return n;
+  } catch (err) {
+    logError('bible:pruneImages', err);
+    return 0;
   }
 });
 
