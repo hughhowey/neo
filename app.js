@@ -7647,8 +7647,9 @@ function openStats() {
     }
   };
   // hovering a day shows its mark; the tip lives on <body>, outside the
-  // modal: body is not zoomed (a fixed tip inside .modal's zoom would land
-  // off the pointer), and the modal's scroll box cannot clip it.
+  // modal (body is not zoomed, so it is not scaled with the modal), and it
+  // is placed on the hovered band itself, not the cursor, so it always sits
+  // on the day's column wherever the pointer happens to be.
   const wrap = bd.querySelector('#stats-chart-wrap');
   const tip = document.createElement('div');
   tip.id = 'chart-tip';
@@ -7664,11 +7665,14 @@ function openStats() {
       const info = statsChartTip(days, chartModel(book, library, days, time), i, time);
       tip.innerHTML = `<b>${escHtml(info.title)}</b><span>${escHtml(info.value)}</span>`;
       tip.classList.remove('hidden');
-      tip.style.left = e.clientX + 'px';
-      // above the pointer normally, below it near the top of the window
-      const above = e.clientY > 64;
-      tip.style.top = e.clientY + 'px';
-      tip.style.transform = above ? 'translate(-50%, calc(-100% - 12px))' : 'translate(-50%, 12px)';
+      // the band's box, in viewport space: center the tip on it and lift it
+      // clear of the chart's top edge, dropping below when there is no room
+      const band = hit.getBoundingClientRect();
+      const chart = wrap.querySelector('svg').getBoundingClientRect();
+      const above = chart.top > 56;
+      tip.style.left = (band.left + band.width / 2) + 'px';
+      tip.style.top = (above ? chart.top - 8 : chart.bottom + 8) + 'px';
+      tip.style.transform = above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
     });
     wrap.addEventListener('mouseleave', () => tip.classList.add('hidden'));
   }
