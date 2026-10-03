@@ -57,7 +57,7 @@ Every book gets a cover! New books are dressed in a seeded abstract (six art sty
 
 **Goals and momentum** 
 
-Daily word goals, word sprints, and a NaNoWriMo-style progress chart. Needs more testing, but I think it works okay!
+Daily word goals — or a daily time goal, for the days when a clock is kinder than a count — word sprints, and a NaNoWriMo-style progress chart. Needs more testing, but I think it works okay!
 
 **A shelf can become one book** 
 

@@ -1107,6 +1107,20 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
   padding: 6px 14px; color: #191919; font-size: 12px;
 }
 #stats-chart { background: #1d1d1d; border-radius: 8px; padding: 10px; margin-top: 8px; }
+/* the chart's hover band and its little tip. The tip is fixed, not absolute:
+   an absolute tip would be clipped by the modal's scroll box as it rises
+   above the chart. */
+.chart-hit { cursor: default; }
+#stats-chart-wrap { position: relative; }
+#chart-tip {
+  position: fixed; transform: translate(-50%, calc(-100% - 12px));
+  background: #2b2b2b; color: #ddd; font-size: 12px; line-height: 1.35;
+  padding: 6px 10px; border-radius: 7px; pointer-events: none; white-space: nowrap;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.45); z-index: 960;
+}
+#chart-tip b { display: block; color: var(--accent); font-weight: 600; }
+#chart-tip.hidden { display: none; }
+body.light #chart-tip { background: #2b2926; color: #f0ede7; }
 
 /* --- Keyboard shortcut reference --- */
 .shortcuts-modal {
@@ -1202,6 +1216,33 @@ body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(25
   display: flex; justify-content: space-between; font-size: 10px; color: #666; padding: 2px 4px;
 }
 .stats-legend .sl-daily { color: #3d8a6a; }
+
+/* the chart's Words / Time switch. The chosen side is filled gold with dark
+   text and casts a soft glow; the other is a dim, clearly clickable
+   alternative that brightens on hover. The .stats-row button rule would
+   paint both gold, so these are more specific. */
+.chart-toggle { justify-content: flex-end; gap: 10px; }
+.chart-toggle-label { font-size: 12px; color: var(--muted); margin-right: auto; }
+.seg { display: inline-flex; border: 1px solid #3a3a3a; border-radius: 7px; overflow: hidden; background: var(--bg); }
+.stats-row .seg-btn {
+  background: none; border: 0; border-radius: 0; box-shadow: none;
+  color: #6f6f6f; font-size: 12px; padding: 6px 16px;
+  cursor: pointer; font-family: inherit; font-weight: 500; transition: color 0.12s, background 0.12s;
+}
+.stats-row .seg-btn + .seg-btn { border-left: 1px solid #3a3a3a; }
+.stats-row .seg-btn:hover:not(.on) { color: var(--accent); background: rgba(201,168,106,0.10); }
+.stats-row .seg-btn.on {
+  background: var(--accent); color: #1b1b1b; font-weight: 700;
+  box-shadow: 0 0 0 1px var(--accent), 0 0 10px rgba(201,168,106,0.35);
+}
+body.light .seg { border-color: #cfcac0; background: #efece6; }
+body.light .stats-row .seg .seg-btn { color: #9a938a; background: none; }
+body.light .stats-row .seg .seg-btn + .seg-btn { border-left-color: #cfcac0; }
+body.light .stats-row .seg .seg-btn:hover:not(.on) { color: #7c5d26; background: rgba(124,93,38,0.10); }
+body.light .stats-row .seg .seg-btn.on {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 0 0 1px var(--accent), 0 1px 6px rgba(124,93,38,0.35);
+}
 
 /* Where the keyboard is: a gold ring on whatever Tab reaches. The mouse
    never sees it, and the page itself never gets one. */
@@ -1336,7 +1377,8 @@ body.light {
   color: #2b2926;
 }
 /* the gold that sits under dark text keeps its own light shade */
-body.light .btn-gold, body.light .stats-row button { background: #c9a86a; color: #191919; }
+body.light .btn-gold { background: #c9a86a; color: #191919; }
+body.light .stats-row button { background: #c9a86a; color: #191919; }
 
 /* the shelf */
 body.light #author-chip:hover, body.light .shelf-label:focus { color: #1c1a17; }

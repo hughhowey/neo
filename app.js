@@ -2160,6 +2160,9 @@ async function openBook(bookId) {
   migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
   reconcileMarks();        // re-adopt any note marks orphaned by cut/paste
   updateCounters();
+  timeMark = 0;            // the watch starts on the first word, not the open
+  lastWriteActivity = 0;
+  ensureTimeTimer();
 
   // Plotters land in the outline for a brand-new book
   const isNew = book.chapterOrder.length === 0;
@@ -5803,6 +5806,138 @@ function writingDay(d = new Date()) {
 }
 const todayStr = () => writingDay();
 
+// ---- time-goal helpers (pure: a clock face, a readable duration, and the
+// span the stopwatch credits) ----
+const TIME_TICK_MS = 1000;
+const TIME_GRACE_MS = 120000; // two minutes of thinking still counts
+
+// The span from the last mark up to now, but never past the grace window
+// after the last touch. A closed form like this is exact whatever the tick
+// size, so a throttled or delayed timer can't drift or dump a sleep into the
+// day — and a pause of mind stops the watch on its own. With no touch yet
+// there is nothing to credit: the watch waits for the first word.
+function writingSpanMs(now, mark, lastActivity, grace = TIME_GRACE_MS) {
+  if (!lastActivity || !mark) return 0;
+  const end = Math.min(now, lastActivity + grace);
+  return Math.max(0, end - mark);
+}
+
+// A stopwatch face: mm:ss, or h:mm:ss past an hour.
+function fmtClock(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+// ---- end time-goal helpers ----
+
+// ---- daily time tracking ----
+// A stopwatch that pauses itself. It runs while the editor is on screen and
+// the window is in front, and it keeps counting for a short grace after the
+// last keystroke or click. Time is stored per book, beside the day's word
+// counts, and never touches a word goal.
+let lastWriteActivity = 0;
+let timeMark = 0;       // the last instant already credited
+let timeDirty = false;  // seconds changed since the last save
+let timeTimer = null;   // the 1s live tick; only while a time goal is set
+
+// Time counts only while the writer is actually writing, and only once the
+// first word has landed: an open, untouched page is not writing time.
+function recentWriting(now = Date.now()) {
+  return lastWriteActivity > 0 && now - lastWriteActivity < TIME_GRACE_MS;
+}
+function writingTimeActive(now = Date.now()) {
+  return !!book && !$('#editor-view').hidden &&
+    document.visibilityState === 'visible' && document.hasFocus() && recentWriting(now);
+}
+
+// The first touch starts the watch, not the open book: until then there is
+// no mark to measure from.
+function noteWriting(now = Date.now()) {
+  lastWriteActivity = now;
+  if (!timeMark) timeMark = now;
+}
+
+function timeToday() {
+  return (book && book.dailyTime && book.dailyTime[todayStr()]) || 0;
+}
+
+// Credit the span since the last mark. Callers only call this while the page
+// is live — or once, as the window is leaving, to catch the last word.
+function creditWritingTime(now = Date.now()) {
+  if (!book || !timeMark) { timeMark = now; return 0; }
+  const got = writingSpanMs(now, timeMark, lastWriteActivity);
+  timeMark = now;
+  if (got <= 0) return 0;
+  book.dailyTime = book.dailyTime || {};
+  const day = todayStr();
+  // whole seconds: the file stays tidy and diffable across devices
+  book.dailyTime[day] = Math.round((book.dailyTime[day] || 0) + got / 1000);
+  timeDirty = true;
+  return got;
+}
+
+// The live tick exists only to keep a time goal's clock moving. Time is still
+// credited on the regular saves when no goal is set, so history is there if a
+// goal is added later.
+function ensureTimeTimer() {
+  const want = !!book && !$('#editor-view').hidden && (library.dailyTimeGoal || 0) > 0;
+  if (want && !timeTimer) {
+    timeTimer = setInterval(() => {
+      // the watch is already running only while writing; otherwise hold the
+      // mark at now so a later first keystroke starts from zero
+      if (writingTimeActive()) { creditWritingTime(); renderGoalCounter(); }
+      else timeMark = lastWriteActivity || 0;
+    }, TIME_TICK_MS);
+  } else if (!want && timeTimer) {
+    clearInterval(timeTimer);
+    timeTimer = null;
+  }
+}
+function stopTimeTimer() {
+  if (timeTimer) { clearInterval(timeTimer); timeTimer = null; }
+}
+
+// A key, or a click in the editor, keeps the stopwatch alive — where the
+// writer is working, not necessarily which pane. The first one starts it.
+document.addEventListener('keydown', () => { noteWriting(); }, true);
+document.addEventListener('pointerdown', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#editor-view')) noteWriting();
+}, true);
+
+// The bottom counter: the day's words exactly as before, with the day's
+// time appended only once a time goal is set.
+function renderGoalCounter() {
+  if (!book) return;
+  const gc = $('#goal-counter');
+  const today = (book.dailyCounts || {})[todayStr()];
+  const wordsToday = today ? Math.max(0, today.end - today.start) : 0;
+  if (sprint && !sprint.done) {
+    const sprintWords = bookWordCount() - sprint.startCount;
+    gc.textContent = `⚡ ${fmtNum(sprintWords)} / ${fmtNum(sprint.target)}`;
+    if (sprintWords >= sprint.target) {
+      sprint.done = true;
+      toast(t('Sprint complete — {n} words. Well earned.', { n: sprintWords }), 6000);
+    }
+    return;
+  }
+  const goal = library.dailyGoal || 0;
+  const words = goal
+    ? t('{n} / {goal} today', { n: wordsToday, goal })
+    : t('{n} today', { n: wordsToday });
+  const goalSec = (library.dailyTimeGoal || 0) * 60;
+  if (goalSec > 0) {
+    const secs = timeToday();
+    // the word text in the writer's language, then a language-neutral clock
+    gc.textContent = words + ' · ' + fmtClock(secs) + ' / ' + fmtClock(goalSec);
+    gc.classList.toggle('goal-met', secs >= goalSec);
+  } else {
+    gc.textContent = words;
+    gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
+  }
+}
+
 function trackDailyWords(total) {
   book.dailyCounts = book.dailyCounts || {};
   const today = todayStr();
@@ -5821,22 +5956,7 @@ function trackDailyWords(total) {
     scheduleMetaSave();
   }
   if (sprint && total < sprint.startCount) sprint.startCount = total;
-  const wordsToday = book.dailyCounts[today].end - book.dailyCounts[today].start;
-  const gc = $('#goal-counter');
-  if (sprint && !sprint.done) {
-    const sprintWords = total - sprint.startCount;
-    gc.textContent = `⚡ ${fmtNum(sprintWords)} / ${fmtNum(sprint.target)}`;
-    if (sprintWords >= sprint.target) {
-      sprint.done = true;
-      toast(t('Sprint complete — {n} words. Well earned.', { n: sprintWords }), 6000);
-    }
-  } else {
-    const goal = library.dailyGoal || 0;
-    gc.textContent = goal
-      ? t('{n} / {goal} today', { n: wordsToday, goal })
-      : t('{n} today', { n: wordsToday });
-    gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
-  }
+  renderGoalCounter();
 }
 
 // Pages, the way a manuscript counts them: 250 words to a page. The page
@@ -5952,7 +6072,7 @@ function metaSig(m) {
   if (!m) return '';
   const c = {};
   for (const k of Object.keys(m).sort()) {
-    if (k === 'lastPosition' || k === 'modified' || k === 'wordCount' || k === 'dailyCounts') continue; // bookkeeping, not the book
+    if (k === 'lastPosition' || k === 'modified' || k === 'wordCount' || k === 'dailyCounts' || k === 'dailyTime') continue; // bookkeeping, not the book
     const v = m[k];
     if (v === undefined || v === null || v === '') continue;
     if (typeof v === 'object' && Object.keys(v).length === 0) continue;
@@ -5968,6 +6088,7 @@ function scheduleMetaSave() {
 async function saveMeta() {
   if (!book) return;
   const sig = metaSig(book);
+  timeDirty = false; // this write carries the day's time; new seconds set it again
   const stamp = await writeBookMeta(book.id, book);
   if (book && typeof stamp === 'string') book.modified = stamp;
   savedMetaSig = sig;
@@ -5975,6 +6096,7 @@ async function saveMeta() {
 
 function flushAllSaves(e) {
   if (!book) return;
+  if (writingTimeActive()) creditWritingTime();
   // remember where you were, for next session and for the other device:
   // the chapter, the paragraph and the letter (the same place on any
   // screen) plus the scroll (this screen's). `at` changes only when the
@@ -5999,7 +6121,7 @@ function flushAllSaves(e) {
   }
   flushAux();
   flushStickiesSave();
-  if (moved || metaSig(book) !== savedMetaSig) saveMeta();
+  if (moved || timeDirty || metaSig(book) !== savedMetaSig) saveMeta();
 }
 
 /* ================================================================== */
@@ -6225,21 +6347,24 @@ async function refreshFromDisk() {
     refreshing = false;
   }
 }
-window.addEventListener('focus', () => setTimeout(refreshFromDisk, 300));
+window.addEventListener('focus', () => { timeMark = lastWriteActivity || 0; setTimeout(refreshFromDisk, 300); });
 // and a quiet look every half minute while NEO is on screen, for the writer
 // who left both machines open
 setInterval(() => { if (document.visibilityState === 'visible') refreshFromDisk(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') setTimeout(refreshFromDisk, 300);
-  else if (book) flushAllSaves(); // iOS may end a backgrounded app without warning
+  else if (book) { creditWritingTime(); flushAllSaves(); } // iOS may end a backgrounded app without warning
 });
 
-window.addEventListener('beforeunload', flushAllSaves);
+window.addEventListener('beforeunload', () => { if (book) creditWritingTime(); flushAllSaves(); });
 // flush whenever focus leaves NEO, and every 20 seconds
-window.addEventListener('blur', () => { if (book) flushAllSaves(); });
+window.addEventListener('blur', () => { if (book) { creditWritingTime(); flushAllSaves(); } });
 setInterval(() => { if (book) flushAllSaves('tick'); }, 20000);
 
 async function backToShelf() {
+  creditWritingTime(); // catch the last words before the editor goes away
+  stopTimeTimer();
+  timeMark = 0;
   flushAllSaves();
   tabPlaces = {};
   book = null;
@@ -7250,51 +7375,75 @@ document.addEventListener('input', () => {
 /* ================================================================== */
 
 let sprint = null;
+let chartMode = 'words'; // what the 30-day chart plots: words or time
 
-function statsChartSvg() {
-  const W = 520, H = 200, PAD = 6;
+// The 30-day chart, one design in both modes: a bar for each day, and one
+// gold dashed line for that mode's daily goal. Words count a day's words,
+// time counts a day's minutes; the two never share state.
+function chartModel(book, library, days, useTime) {
+  const counts = (book && book.dailyCounts) || {};
+  const times = (book && book.dailyTime) || {};
+  const daily = days.map((d) => {
+    if (useTime) return (times[d] || 0) / 60;
+    return counts[d] ? Math.max(0, counts[d].end - counts[d].start) : 0;
+  });
+  const goal = useTime ? ((library && library.dailyTimeGoal) || 0) : ((book && book.wordGoal) || 0);
+  const maxD = Math.max(...daily, goal, useTime ? 1 : ((library && library.dailyGoal) || 0), 1);
+  return { daily, goal, maxD };
+}
+
+// The chart's hover: each day is a full-height invisible band. On hover it
+// shows that day's date and its mark (words or time). All the numbers are
+// worked out here so the DOM handler only positions the tip.
+// the last 30 writing days, oldest first — shared by the model and the tip
+function chartDays() {
   const days = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     days.push(writingDay(d));
   }
-  const counts = book.dailyCounts || {};
-  const daily = days.map((d) => counts[d] ? Math.max(0, counts[d].end - counts[d].start) : 0);
-  // cumulative: carry the last known total forward
-  let last = 0;
-  const firstKnown = days.find((d) => counts[d]);
-  if (firstKnown) last = counts[firstKnown].start;
-  const cumulative = days.map((d) => {
-    if (counts[d]) last = counts[d].end;
-    return last;
-  });
-  const goal = book.wordGoal || 0;
-  const maxC = Math.max(...cumulative, goal, 1);
-  const maxD = Math.max(...daily, library.dailyGoal || 0, 1);
+  return days;
+}
+
+function statsChartTip(days, model, i, useTime) {
+  const raw = model.daily[i];
+  const value = useTime ? fmtClock(raw * 60) : fmtNum(raw);
+  const label = useTime ? tk('{value} written') : tk('{value} words');
+  const when = days[i] === todayStr() ? t('today') : NeoI18n.fmtDate(days[i], { day: 'numeric', month: 'short' });
+  return { title: when, value: t(label, { value }) };
+}
+
+function statsChartSvg() {
+  const days = chartDays();
+  const W = 520, H = 200, PAD = 6;
+  const time = chartMode === 'time';
+  const { daily, goal, maxD } = chartModel(book, library, days, time);
   const bw = (W - PAD * 2) / 30;
 
   const bars = daily.map((v, i) => {
     const h = Math.round((v / maxD) * (H * 0.45));
+    // a zero word or minute day draws no bar: a rounded rect of height 0
+    // still paints a sliver, which reads as a dotted line across the chart
+    if (h <= 0) return '';
     return `<rect x="${(PAD + i * bw).toFixed(1)}" y="${H - PAD - h}" width="${(bw - 2).toFixed(1)}" height="${h}" rx="1.5" fill="#3d5a4f"/>`;
   }).join('');
-  const line = cumulative.map((v, i) => {
-    const x = (PAD + i * bw + bw / 2).toFixed(1);
-    const y = (H - PAD - (v / maxC) * (H - PAD * 2 - 20)).toFixed(1);
-    return (i === 0 ? 'M' : 'L') + x + ',' + y;
-  }).join(' ');
   const goalLine = goal
-    ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxC) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxC) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
+    ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
     : '';
-  return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(t('Words written over the last 30 days')).replace(/"/g, '&quot;')}">
+  // a full-height band per day for the hover, drawn last so it sits on top
+  const hits = days.map((_, i) =>
+    `<rect class="chart-hit" x="${(PAD + i * bw).toFixed(1)}" y="${PAD}" width="${bw.toFixed(1)}" height="${H - PAD * 2}" fill="transparent" data-day="${i}"><title>${escHtml(statsChartTip(days, { daily }, i, time).title)}</title></rect>`).join('');
+  const label = time ? t('Time written over the last 30 days') : t('Words written over the last 30 days');
+  return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(label).replace(/"/g, '&quot;')}">
     ${bars}
-    <path d="${line}" fill="none" stroke="#c9a86a" stroke-width="2"/>
     ${goalLine}
+    ${hits}
   </svg>
   <div class="stats-legend">
     <span>${t('30 days ago')}</span>
-    <span class="sl-daily">▮ ${t('daily words')}</span>
-    <span style="color:var(--accent)">— ${t('total')}${goal ? ' · - - ' + t('goal') : ''}</span>
+    <span class="sl-daily">▮ ${time ? t('daily time') : t('daily words')}</span>
+    <span style="color:var(--accent)">${t('daily goal')}${goal ? ' · ' + (time ? fmtClock(goal * 60) : fmtNum(goal)) : ''}</span>
     <span>${t('today')}</span>
   </div>`;
 }
@@ -7431,10 +7580,19 @@ function openStats() {
         <div><div class="big">${fmtNum(total)}</div><div class="lbl">${t('total words')}</div></div>
         <div><div class="big">${fmtNum(wordsToday)}</div><div class="lbl">${t('today')}</div></div>
         <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">${t('of book goal')}</div></div>
+        ${(library.dailyTimeGoal || 0) > 0 ? `<div><div class="big">${fmtClock(timeToday())}</div><div class="lbl">${t('time today')}</div></div>` : ''}
       </div>
-      ${statsChartSvg()}` : ''}
+      <div class="stats-row chart-toggle">
+        <span class="chart-toggle-label">${t('Chart')}</span>
+        <div id="chart-switch" class="seg" role="tablist" aria-label="${t('Chart')}">
+          <button type="button" class="seg-btn${chartMode === 'words' ? ' on' : ''}" data-mode="words" role="tab" aria-selected="${chartMode === 'words'}">${t('Words')}</button>
+          <button type="button" class="seg-btn${chartMode === 'time' ? ' on' : ''}" data-mode="time" role="tab" aria-selected="${chartMode === 'time'}">${t('Time')}</button>
+        </div>
+      </div>
+      <div id="stats-chart-wrap">${statsChartSvg()}</div>` : ''}
       <div class="stats-row stats-goals" style="margin-top:${hasBook ? 18 : 6}px">
         <label>${t('Daily goal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
+        <label>${t('Daily time goal (minutes)')} <input id="st-timegoal" type="number" min="0" value="${library.dailyTimeGoal || ''}" placeholder="30"/></label>
         ${hasBook ? `<label>${t('Book goal')} <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
       </div>
       <div class="stats-row stats-goals">
@@ -7456,6 +7614,7 @@ function openStats() {
   document.body.appendChild(bd);
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
+    library.dailyTimeGoal = parseInt(bd.querySelector('#st-timegoal').value, 10) || 0;
     library.dayEndsAt = parseInt(bd.querySelector('#st-dayends').value, 10) || 0;
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
@@ -7463,6 +7622,9 @@ function openStats() {
     }
     await writeLibrary(library);
     bd.remove();
+    const tip = document.querySelector('#chart-tip');
+    if (tip) tip.remove();
+    ensureTimeTimer();
     if (hasBook) updateCounters();
   };
   bd.querySelector('.m-ok').onclick = close;
@@ -7485,6 +7647,50 @@ function openStats() {
       }
       close();
     };
+  }
+  // the chart's Words / Time switch redraws only what it changes
+  const sw = bd.querySelector('#chart-switch');
+  if (sw) sw.onclick = (e) => {
+    const btn = e.target.closest('[data-mode]');
+    if (btn && btn.dataset.mode !== chartMode) {
+      chartMode = btn.dataset.mode;
+      for (const b of sw.querySelectorAll('.seg-btn')) {
+        const on = b.dataset.mode === chartMode;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-selected', String(on));
+      }
+      bd.querySelector('#stats-chart-wrap').innerHTML = statsChartSvg();
+    }
+  };
+  // hovering a day shows its mark; the tip lives on <body>, outside the
+  // modal (body is not zoomed, so it is not scaled with the modal), and it
+  // is placed on the hovered band itself, not the cursor, so it always sits
+  // on the day's column wherever the pointer happens to be.
+  const wrap = bd.querySelector('#stats-chart-wrap');
+  const tip = document.createElement('div');
+  tip.id = 'chart-tip';
+  tip.className = 'hidden';
+  document.body.appendChild(tip);
+  if (wrap) {
+    wrap.addEventListener('mousemove', (e) => {
+      const hit = e.target.closest && e.target.closest('.chart-hit');
+      if (!hit) return;
+      const i = +hit.dataset.day;
+      const time = chartMode === 'time';
+      const days = chartDays();
+      const info = statsChartTip(days, chartModel(book, library, days, time), i, time);
+      tip.innerHTML = `<b>${escHtml(info.title)}</b><span>${escHtml(info.value)}</span>`;
+      tip.classList.remove('hidden');
+      // the band's box, in viewport space: center the tip on it and lift it
+      // clear of the chart's top edge, dropping below when there is no room
+      const band = hit.getBoundingClientRect();
+      const chart = wrap.querySelector('svg').getBoundingClientRect();
+      const above = chart.top > 56;
+      tip.style.left = (band.left + band.width / 2) + 'px';
+      tip.style.top = (above ? chart.top - 8 : chart.bottom + 8) + 'px';
+      tip.style.transform = above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
+    });
+    wrap.addEventListener('mouseleave', () => tip.classList.add('hidden'));
   }
 }
 

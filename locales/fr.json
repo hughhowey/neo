@@ -419,8 +419,7 @@
   "This story just passed {n} words — add an API key under File → Cover Art… and NEO will paint it a cover.": "Cette histoire vient de dépasser {n} mots : ajoutez une clé d’API via Fichier → Couverture… et NEO lui peindra une couverture.",
   "Title Page": "Page de titre",
   "today": "aujourd’hui",
-  "Today's words — click for goals, sprints, and your progress chart": "Mots du jour : cliquez pour les objectifs, les sprints et votre courbe de progression",
-  "total": "total",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Mots et temps du jour : cliquez pour les objectifs, les sprints et votre courbe de progression",
   "total words": "mots au total",
   "Typewriter Scrolling": "Défilement machine à écrire",
   "Typewriter scrolling off": "Défilement machine à écrire désactivé",
@@ -590,5 +589,15 @@
   "Write in a new paragraph below or above": "Écrire dans un nouveau paragraphe en dessous ou au-dessus",
   "Select": "Sélectionner",
   "Move to stretch it, then y to copy or d to cut.": "Déplacez-vous pour l’étendre, puis y pour copier ou d pour couper.",
-  "Delete the letter under the caret": "Supprimer la lettre sous le curseur"
+  "Delete the letter under the caret": "Supprimer la lettre sous le curseur",
+  "Daily time goal (minutes)": "Objectif de temps quotidien (minutes)",
+  "time today": "temps aujourd’hui",
+  "Words": "Mots",
+  "Time": "Temps",
+  "Chart": "Graphique",
+  "daily time": "temps par jour",
+  "Time written over the last 30 days": "Temps écrit ces 30 derniers jours",
+  "daily goal": "objectif quotidien",
+  "{value} words": "{value} mots",
+  "{value} written": "{value} écrits"
 }
