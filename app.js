@@ -7645,10 +7645,12 @@ function openStats() {
       bd.querySelector('#stats-chart-wrap').innerHTML = statsChartSvg();
     }
   };
-  // hovering a day shows its mark; one tip element is moved between bands
+  // hovering a day shows its mark; one tip element is moved between bands.
+  // Fixed positioning keeps it off the modal's scroll box, which would
+  // otherwise clip a tip that rises above the chart.
   const wrap = bd.querySelector('#stats-chart-wrap');
   if (wrap) {
-    wrap.addEventListener('mousemove', (e) => {
+    const move = (e) => {
       const hit = e.target.closest && e.target.closest('.chart-hit');
       const tip = wrap.querySelector('#chart-tip');
       if (!hit || !tip) return;
@@ -7658,10 +7660,13 @@ function openStats() {
       const info = statsChartTip(days, chartModel(book, library, days, time), i, time);
       tip.innerHTML = `<b>${escHtml(info.title)}</b><span>${escHtml(info.value)}</span>`;
       tip.classList.remove('hidden');
-      const r = wrap.getBoundingClientRect();
-      tip.style.left = (e.clientX - r.left) + 'px';
-      tip.style.top = (e.clientY - r.top) + 'px';
-    });
+      tip.style.left = e.clientX + 'px';
+      // above the pointer normally, below it near the top of the window
+      const above = e.clientY > 64;
+      tip.style.top = e.clientY + 'px';
+      tip.style.transform = above ? 'translate(-50%, calc(-100% - 12px))' : 'translate(-50%, 12px)';
+    };
+    wrap.addEventListener('mousemove', move);
     wrap.addEventListener('mouseleave', () => {
       const tip = wrap.querySelector('#chart-tip');
       if (tip) tip.classList.add('hidden');
