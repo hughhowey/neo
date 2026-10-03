@@ -7425,7 +7425,6 @@ function statsChartSvg() {
     ${goalLine}
     ${hits}
   </svg>
-  <div id="chart-tip" class="hidden"></div>
   <div class="stats-legend">
     <span>${t('30 days ago')}</span>
     <span class="sl-daily">▮ ${time ? t('daily time') : t('daily words')}</span>
@@ -7607,6 +7606,8 @@ function openStats() {
     }
     await writeLibrary(library);
     bd.remove();
+    const tip = document.querySelector('#chart-tip');
+    if (tip) tip.remove();
     ensureTimeTimer();
     if (hasBook) updateCounters();
   };
@@ -7645,15 +7646,18 @@ function openStats() {
       bd.querySelector('#stats-chart-wrap').innerHTML = statsChartSvg();
     }
   };
-  // hovering a day shows its mark; one tip element is moved between bands.
-  // Fixed positioning keeps it off the modal's scroll box, which would
-  // otherwise clip a tip that rises above the chart.
+  // hovering a day shows its mark; the tip lives on <body>, outside the
+  // modal: body is not zoomed (a fixed tip inside .modal's zoom would land
+  // off the pointer), and the modal's scroll box cannot clip it.
   const wrap = bd.querySelector('#stats-chart-wrap');
+  const tip = document.createElement('div');
+  tip.id = 'chart-tip';
+  tip.className = 'hidden';
+  document.body.appendChild(tip);
   if (wrap) {
-    const move = (e) => {
+    wrap.addEventListener('mousemove', (e) => {
       const hit = e.target.closest && e.target.closest('.chart-hit');
-      const tip = wrap.querySelector('#chart-tip');
-      if (!hit || !tip) return;
+      if (!hit) return;
       const i = +hit.dataset.day;
       const time = chartMode === 'time';
       const days = chartDays();
@@ -7665,12 +7669,8 @@ function openStats() {
       const above = e.clientY > 64;
       tip.style.top = e.clientY + 'px';
       tip.style.transform = above ? 'translate(-50%, calc(-100% - 12px))' : 'translate(-50%, 12px)';
-    };
-    wrap.addEventListener('mousemove', move);
-    wrap.addEventListener('mouseleave', () => {
-      const tip = wrap.querySelector('#chart-tip');
-      if (tip) tip.classList.add('hidden');
     });
+    wrap.addEventListener('mouseleave', () => tip.classList.add('hidden'));
   }
 }
 
