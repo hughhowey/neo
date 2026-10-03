@@ -7377,14 +7377,31 @@ function chartModel(book, library, days, useTime) {
   return { daily, goal, maxD };
 }
 
-function statsChartSvg() {
-  const W = 520, H = 200, PAD = 6;
+// The chart's hover: each day is a full-height invisible band. On hover it
+// shows that day's date and its mark (words or time). All the numbers are
+// worked out here so the DOM handler only positions the tip.
+// the last 30 writing days, oldest first — shared by the model and the tip
+function chartDays() {
   const days = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     days.push(writingDay(d));
   }
+  return days;
+}
+
+function statsChartTip(days, model, i, useTime) {
+  const raw = model.daily[i];
+  const value = useTime ? fmtClock(raw * 60) : fmtNum(raw);
+  const label = useTime ? tk('{value} written') : tk('{value} words');
+  const when = days[i] === todayStr() ? t('today') : NeoI18n.fmtDate(days[i], { day: 'numeric', month: 'short' });
+  return { title: when, value: t(label, { value }) };
+}
+
+function statsChartSvg() {
+  const days = chartDays();
+  const W = 520, H = 200, PAD = 6;
   const time = chartMode === 'time';
   const { daily, goal, maxD } = chartModel(book, library, days, time);
   const bw = (W - PAD * 2) / 30;
@@ -7399,11 +7416,16 @@ function statsChartSvg() {
   const goalLine = goal
     ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
     : '';
+  // a full-height band per day for the hover, drawn last so it sits on top
+  const hits = days.map((_, i) =>
+    `<rect class="chart-hit" x="${(PAD + i * bw).toFixed(1)}" y="${PAD}" width="${bw.toFixed(1)}" height="${H - PAD * 2}" fill="transparent" data-day="${i}"><title>${escHtml(statsChartTip(days, { daily }, i, time).title)}</title></rect>`).join('');
   const label = time ? t('Time written over the last 30 days') : t('Words written over the last 30 days');
   return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(label).replace(/"/g, '&quot;')}">
     ${bars}
     ${goalLine}
+    ${hits}
   </svg>
+  <div id="chart-tip" class="hidden"></div>
   <div class="stats-legend">
     <span>${t('30 days ago')}</span>
     <span class="sl-daily">▮ ${time ? t('daily time') : t('daily words')}</span>
@@ -7623,6 +7645,28 @@ function openStats() {
       bd.querySelector('#stats-chart-wrap').innerHTML = statsChartSvg();
     }
   };
+  // hovering a day shows its mark; one tip element is moved between bands
+  const wrap = bd.querySelector('#stats-chart-wrap');
+  if (wrap) {
+    wrap.addEventListener('mousemove', (e) => {
+      const hit = e.target.closest && e.target.closest('.chart-hit');
+      const tip = wrap.querySelector('#chart-tip');
+      if (!hit || !tip) return;
+      const i = +hit.dataset.day;
+      const time = chartMode === 'time';
+      const days = chartDays();
+      const info = statsChartTip(days, chartModel(book, library, days, time), i, time);
+      tip.innerHTML = `<b>${escHtml(info.title)}</b><span>${escHtml(info.value)}</span>`;
+      tip.classList.remove('hidden');
+      const r = wrap.getBoundingClientRect();
+      tip.style.left = (e.clientX - r.left) + 'px';
+      tip.style.top = (e.clientY - r.top) + 'px';
+    });
+    wrap.addEventListener('mouseleave', () => {
+      const tip = wrap.querySelector('#chart-tip');
+      if (tip) tip.classList.add('hidden');
+    });
+  }
 }
 
 $('#goal-counter').onclick = openStats;

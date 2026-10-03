@@ -624,5 +624,7 @@
   "Chart": "Grafic",
   "daily time": "timp pe zi",
   "Time written over the last 30 days": "Timp scris în ultimele 30 de zile",
-  "daily goal": "obiectiv zilnic"
+  "daily goal": "obiectiv zilnic",
+  "{value} words": "{value} cuvinte",
+  "{value} written": "{value} scrise"
 }

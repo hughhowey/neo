@@ -30,6 +30,8 @@
   "{name}: {n} words": "",
   "{title} — {count} / {goal} words": "",
   "{title} — progress": "",
+  "{value} words": "",
+  "{value} written": "",
   "⌘ Command · ⇧ Shift · ⌥ Option · ⌃ Control": "",
   "0 replaced": "",
   "30 days ago": "",

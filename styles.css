@@ -1107,6 +1107,18 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
   padding: 6px 14px; color: #191919; font-size: 12px;
 }
 #stats-chart { background: #1d1d1d; border-radius: 8px; padding: 10px; margin-top: 8px; }
+/* the chart's hover band and its little tip */
+.chart-hit { cursor: default; }
+#stats-chart-wrap { position: relative; }
+#chart-tip {
+  position: absolute; transform: translate(-50%, calc(-100% - 10px));
+  background: #2b2b2b; color: #ddd; font-size: 12px; line-height: 1.35;
+  padding: 6px 10px; border-radius: 7px; pointer-events: none; white-space: nowrap;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.45); z-index: 3;
+}
+#chart-tip b { display: block; color: var(--accent); font-weight: 600; }
+#chart-tip.hidden { display: none; }
+body.light #chart-tip { background: #2b2926; color: #f0ede7; }
 
 /* --- Keyboard shortcut reference --- */
 .shortcuts-modal {

@@ -596,5 +596,7 @@
   "Chart": "Gráfico",
   "daily time": "tiempo por día",
   "Time written over the last 30 days": "Tiempo escrito en los últimos 30 días",
-  "daily goal": "objetivo diario"
+  "daily goal": "objetivo diario",
+  "{value} words": "{value} palabras",
+  "{value} written": "{value} escritas"
 }

@@ -14,11 +14,19 @@ vm.runInContext(app.slice(app.indexOf('// ---- time-goal helpers'), app.indexOf(
 vm.runInContext('this.api = { TIME_GRACE_MS, writingSpanMs, fmtClock };', context);
 const { TIME_GRACE_MS, writingSpanMs, fmtClock } = context.api;
 
-// the chart's model — what the bars and the line plot, in words or time
-const chart = vm.createContext({});
+// the chart's model and its hover tip
+const chart = vm.createContext({
+  t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s),
+  tk: (s) => s,
+  escHtml: (s) => s,
+  fmtNum: (n) => String(n || 0),
+  fmtClock: (s) => String(s),
+  todayStr: () => '2026-10-03',
+  NeoI18n: { fmtDate: (d) => d }
+});
 vm.runInContext(app.slice(app.indexOf('function chartModel'), app.indexOf('function statsChartSvg')), chart);
-vm.runInContext('this.api = { chartModel };', chart);
-const { chartModel } = chart.api;
+vm.runInContext('this.api = { chartModel, statsChartTip };', chart);
+const { chartModel, statsChartTip } = chart.api;
 
 test('the clock face is mm:ss, and h:mm:ss past an hour', () => {
   assert.equal(fmtClock(0), '0:00');
@@ -117,4 +125,20 @@ test('a day with no words or minutes draws no bar', () => {
     const heights = m.daily.map((v) => Math.round((v / m.maxD) * 90));
     assert.deepEqual(heights, [0, 0, 0]);
   }
+});
+
+test('the hover tip names the day and its mark', () => {
+  const days = ['2026-10-01', '2026-10-02'];
+  const book = { dailyCounts: { '2026-10-01': { start: 0, end: 120 } }, dailyTime: { '2026-10-01': 1860 } };
+  const wtip = statsChartTip(days, chartModel(book, {}, days, false), 0, false);
+  assert.equal(wtip.title, '2026-10-01');       // the real date, formatted for the reader
+  assert.equal(wtip.value, '120 words');
+
+  const ttip = statsChartTip(days, chartModel(book, { dailyTimeGoal: 30 }, days, true), 0, true);
+  assert.equal(ttip.value, '1860 written');     // the clock, from seconds
+
+  // "today" replaces the date, and an empty day still tips, reading zero
+  const today = statsChartTip([days[0], '2026-10-03'], chartModel(book, {}, days, true), 1, true);
+  assert.equal(today.title, 'today');
+  assert.equal(today.value, '0 written');
 });

@@ -645,5 +645,7 @@
   "Chart": "График",
   "daily time": "время за день",
   "Time written over the last 30 days": "Время письма за последние 30 дней",
-  "daily goal": "цель на день"
+  "daily goal": "цель на день",
+  "{value} words": "{value} слов",
+  "{value} written": "{value} написано"
 }

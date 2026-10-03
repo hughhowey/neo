@@ -627,5 +627,7 @@
   "Chart": "Wykres",
   "daily time": "czas dziennie",
   "Time written over the last 30 days": "Czas pisania w ostatnich 30 dniach",
-  "daily goal": "cel dzienny"
+  "daily goal": "cel dzienny",
+  "{value} words": "{value} słów",
+  "{value} written": "{value} napisane"
 }

@@ -546,5 +546,7 @@
   "Chart": "Grafik",
   "daily time": "günlük süre",
   "Time written over the last 30 days": "Son 30 günde yazılan süre",
-  "daily goal": "günlük hedef"
+  "daily goal": "günlük hedef",
+  "{value} words": "{value} kelime",
+  "{value} written": "{value} yazıldı"
 }

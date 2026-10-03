@@ -533,5 +533,7 @@
   "Chart": "Γράφημα",
   "daily time": "χρόνος ανά ημέρα",
   "Time written over the last 30 days": "Χρόνος γραφής τις τελευταίες 30 ημέρες",
-  "daily goal": "ημερήσιος στόχος"
+  "daily goal": "ημερήσιος στόχος",
+  "{value} words": "{value} λέξεις",
+  "{value} written": "{value} γραμμένες"
 }

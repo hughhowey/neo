@@ -592,5 +592,7 @@
   "Chart": "Grafiek",
   "daily time": "tijd per dag",
   "Time written over the last 30 days": "Geschreven tijd in de laatste 30 dagen",
-  "daily goal": "dagdoel"
+  "daily goal": "dagdoel",
+  "{value} words": "{value} woorden",
+  "{value} written": "{value} geschreven"
 }
