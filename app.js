@@ -2160,6 +2160,9 @@ async function openBook(bookId) {
   migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
   reconcileMarks();        // re-adopt any note marks orphaned by cut/paste
   updateCounters();
+  timeMark = Date.now();   // a fresh book starts the stopwatch from here
+  lastWriteActivity = 0;
+  ensureTimeTimer();
 
   // Plotters land in the outline for a brand-new book
   const isNew = book.chapterOrder.length === 0;
@@ -5803,6 +5806,133 @@ function writingDay(d = new Date()) {
 }
 const todayStr = () => writingDay();
 
+// ---- time-goal helpers (pure: a clock face, a readable duration, and the
+// span the stopwatch credits) ----
+const TIME_TICK_MS = 1000;
+const TIME_GRACE_MS = 120000; // two minutes of thinking still counts
+
+// The span from the last mark up to now, but never past the grace window
+// after the last touch. A closed form like this is exact whatever the tick
+// size, so a throttled or delayed timer can't drift or dump a sleep into the
+// day — and a pause of mind stops the watch on its own.
+function writingSpanMs(now, mark, lastActivity, grace = TIME_GRACE_MS) {
+  const end = Math.min(now, (lastActivity || now) + grace);
+  return Math.max(0, end - mark);
+}
+
+// A stopwatch face: mm:ss, or h:mm:ss past an hour.
+function fmtClock(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+// The same duration the way a sentence reads it: seconds under a minute,
+// minutes under an hour, hours and minutes above.
+function fmtDuration(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h) return t('{h} h {m} min', { h, m: String(m).padStart(2, '0') });
+  if (m) return t('{n} min', { n: m });
+  return t('{n} sec', { n: s });
+}
+// ---- end time-goal helpers ----
+
+// ---- daily time tracking ----
+// A stopwatch that pauses itself. It runs while the editor is on screen and
+// the window is in front, and it keeps counting for a short grace after the
+// last keystroke or click. Time is stored per book, beside the day's word
+// counts, and never touches a word goal.
+let lastWriteActivity = 0;
+let timeMark = 0;       // the last instant already credited
+let timeDirty = false;  // seconds changed since the last save
+let timeTimer = null;   // the 1s live tick; only while a time goal is set
+
+function writingTimeActive() {
+  return !!book && !$('#editor-view').hidden &&
+    document.visibilityState === 'visible' && document.hasFocus();
+}
+
+function timeToday() {
+  return (book && book.dailyTime && book.dailyTime[todayStr()]) || 0;
+}
+
+// Credit the span since the last mark. Callers only call this while the page
+// is live — or once, as the window is leaving, to catch the last word.
+function creditWritingTime(now = Date.now()) {
+  if (!book) { timeMark = now; return 0; }
+  if (!timeMark) { timeMark = now; return 0; }
+  const got = writingSpanMs(now, timeMark, lastWriteActivity);
+  timeMark = now;
+  if (got <= 0) return 0;
+  book.dailyTime = book.dailyTime || {};
+  const day = todayStr();
+  book.dailyTime[day] = (book.dailyTime[day] || 0) + got / 1000;
+  timeDirty = true;
+  return got;
+}
+
+// The live tick exists only to keep a time goal's clock moving. Time is still
+// credited on the regular saves when no goal is set, so history is there if a
+// goal is added later.
+function ensureTimeTimer() {
+  const want = !!book && !$('#editor-view').hidden && (library.dailyTimeGoal || 0) > 0;
+  if (want && !timeTimer) {
+    if (!timeMark) timeMark = Date.now();
+    timeTimer = setInterval(() => {
+      if (writingTimeActive()) { creditWritingTime(); renderGoalCounter(); }
+      else timeMark = Date.now();
+    }, TIME_TICK_MS);
+  } else if (!want && timeTimer) {
+    clearInterval(timeTimer);
+    timeTimer = null;
+  }
+}
+function stopTimeTimer() {
+  if (timeTimer) { clearInterval(timeTimer); timeTimer = null; }
+}
+
+// A key, or a click in the editor, keeps the stopwatch alive — where the
+// writer is working, not necessarily which pane.
+document.addEventListener('keydown', () => { lastWriteActivity = Date.now(); }, true);
+document.addEventListener('pointerdown', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#editor-view')) lastWriteActivity = Date.now();
+}, true);
+
+// The bottom counter: the day's words exactly as before, with the day's
+// time appended only once a time goal is set.
+function renderGoalCounter() {
+  if (!book) return;
+  const gc = $('#goal-counter');
+  const today = (book.dailyCounts || {})[todayStr()];
+  const wordsToday = today ? Math.max(0, today.end - today.start) : 0;
+  if (sprint && !sprint.done) {
+    const sprintWords = bookWordCount() - sprint.startCount;
+    gc.textContent = `⚡ ${fmtNum(sprintWords)} / ${fmtNum(sprint.target)}`;
+    if (sprintWords >= sprint.target) {
+      sprint.done = true;
+      toast(t('Sprint complete — {n} words. Well earned.', { n: sprintWords }), 6000);
+    }
+    return;
+  }
+  const goal = library.dailyGoal || 0;
+  const words = goal
+    ? t('{n} / {goal} today', { n: wordsToday, goal })
+    : t('{n} today', { n: wordsToday });
+  const goalSec = (library.dailyTimeGoal || 0) * 60;
+  if (goalSec > 0) {
+    const secs = timeToday();
+    gc.textContent = t('{words} · {done} / {goal}', { words, done: fmtClock(secs), goal: fmtClock(goalSec) });
+    gc.classList.toggle('goal-met', secs >= goalSec);
+  } else {
+    gc.textContent = words;
+    gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
+  }
+}
+
 function trackDailyWords(total) {
   book.dailyCounts = book.dailyCounts || {};
   const today = todayStr();
@@ -5821,22 +5951,7 @@ function trackDailyWords(total) {
     scheduleMetaSave();
   }
   if (sprint && total < sprint.startCount) sprint.startCount = total;
-  const wordsToday = book.dailyCounts[today].end - book.dailyCounts[today].start;
-  const gc = $('#goal-counter');
-  if (sprint && !sprint.done) {
-    const sprintWords = total - sprint.startCount;
-    gc.textContent = `⚡ ${fmtNum(sprintWords)} / ${fmtNum(sprint.target)}`;
-    if (sprintWords >= sprint.target) {
-      sprint.done = true;
-      toast(t('Sprint complete — {n} words. Well earned.', { n: sprintWords }), 6000);
-    }
-  } else {
-    const goal = library.dailyGoal || 0;
-    gc.textContent = goal
-      ? t('{n} / {goal} today', { n: wordsToday, goal })
-      : t('{n} today', { n: wordsToday });
-    gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
-  }
+  renderGoalCounter();
 }
 
 // Pages, the way a manuscript counts them: 250 words to a page. The page
@@ -5952,7 +6067,7 @@ function metaSig(m) {
   if (!m) return '';
   const c = {};
   for (const k of Object.keys(m).sort()) {
-    if (k === 'lastPosition' || k === 'modified' || k === 'wordCount' || k === 'dailyCounts') continue; // bookkeeping, not the book
+    if (k === 'lastPosition' || k === 'modified' || k === 'wordCount' || k === 'dailyCounts' || k === 'dailyTime') continue; // bookkeeping, not the book
     const v = m[k];
     if (v === undefined || v === null || v === '') continue;
     if (typeof v === 'object' && Object.keys(v).length === 0) continue;
@@ -5968,6 +6083,7 @@ function scheduleMetaSave() {
 async function saveMeta() {
   if (!book) return;
   const sig = metaSig(book);
+  timeDirty = false; // this write carries the day's time; new seconds set it again
   const stamp = await writeBookMeta(book.id, book);
   if (book && typeof stamp === 'string') book.modified = stamp;
   savedMetaSig = sig;
@@ -5975,6 +6091,7 @@ async function saveMeta() {
 
 function flushAllSaves(e) {
   if (!book) return;
+  if (writingTimeActive()) creditWritingTime();
   // remember where you were, for next session and for the other device:
   // the chapter, the paragraph and the letter (the same place on any
   // screen) plus the scroll (this screen's). `at` changes only when the
@@ -5999,7 +6116,7 @@ function flushAllSaves(e) {
   }
   flushAux();
   flushStickiesSave();
-  if (moved || metaSig(book) !== savedMetaSig) saveMeta();
+  if (moved || timeDirty || metaSig(book) !== savedMetaSig) saveMeta();
 }
 
 /* ================================================================== */
@@ -6225,21 +6342,24 @@ async function refreshFromDisk() {
     refreshing = false;
   }
 }
-window.addEventListener('focus', () => setTimeout(refreshFromDisk, 300));
+window.addEventListener('focus', () => { timeMark = Date.now(); setTimeout(refreshFromDisk, 300); });
 // and a quiet look every half minute while NEO is on screen, for the writer
 // who left both machines open
 setInterval(() => { if (document.visibilityState === 'visible') refreshFromDisk(); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') setTimeout(refreshFromDisk, 300);
-  else if (book) flushAllSaves(); // iOS may end a backgrounded app without warning
+  else if (book) { creditWritingTime(); flushAllSaves(); } // iOS may end a backgrounded app without warning
 });
 
-window.addEventListener('beforeunload', flushAllSaves);
+window.addEventListener('beforeunload', () => { if (book) creditWritingTime(); flushAllSaves(); });
 // flush whenever focus leaves NEO, and every 20 seconds
-window.addEventListener('blur', () => { if (book) flushAllSaves(); });
+window.addEventListener('blur', () => { if (book) { creditWritingTime(); flushAllSaves(); } });
 setInterval(() => { if (book) flushAllSaves('tick'); }, 20000);
 
 async function backToShelf() {
+  creditWritingTime(); // catch the last words before the editor goes away
+  stopTimeTimer();
+  timeMark = 0;
   flushAllSaves();
   tabPlaces = {};
   book = null;
@@ -7431,10 +7551,12 @@ function openStats() {
         <div><div class="big">${fmtNum(total)}</div><div class="lbl">${t('total words')}</div></div>
         <div><div class="big">${fmtNum(wordsToday)}</div><div class="lbl">${t('today')}</div></div>
         <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">${t('of book goal')}</div></div>
+        ${(library.dailyTimeGoal || 0) > 0 ? `<div><div class="big">${fmtDuration(timeToday())}</div><div class="lbl">${t('time today')}</div></div>` : ''}
       </div>
       ${statsChartSvg()}` : ''}
       <div class="stats-row stats-goals" style="margin-top:${hasBook ? 18 : 6}px">
         <label>${t('Daily goal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
+        <label>${t('Daily time goal')} <input id="st-timegoal" type="number" min="0" value="${library.dailyTimeGoal || ''}" placeholder="30"/> ${t('min')}</label>
         ${hasBook ? `<label>${t('Book goal')} <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
       </div>
       <div class="stats-row stats-goals">
@@ -7456,6 +7578,7 @@ function openStats() {
   document.body.appendChild(bd);
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
+    library.dailyTimeGoal = parseInt(bd.querySelector('#st-timegoal').value, 10) || 0;
     library.dayEndsAt = parseInt(bd.querySelector('#st-dayends').value, 10) || 0;
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
@@ -7463,6 +7586,7 @@ function openStats() {
     }
     await writeLibrary(library);
     bd.remove();
+    ensureTimeTimer();
     if (hasBook) updateCounters();
   };
   bd.querySelector('.m-ok').onclick = close;
