@@ -7566,7 +7566,7 @@ function openStats() {
           <button type="button" class="seg-btn${chartMode === 'time' ? ' on' : ''}" data-mode="time" role="tab" aria-selected="${chartMode === 'time'}">${t('Time')}</button>
         </div>
       </div>
-      ${statsChartSvg()}` : ''}
+      <div id="stats-chart-wrap">${statsChartSvg()}</div>` : ''}
       <div class="stats-row stats-goals" style="margin-top:${hasBook ? 18 : 6}px">
         <label>${t('Daily goal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
         <label>${t('Daily time goal (minutes)')} <input id="st-timegoal" type="number" min="0" value="${library.dailyTimeGoal || ''}" placeholder="30"/></label>
@@ -7634,7 +7634,7 @@ function openStats() {
         b.classList.toggle('on', on);
         b.setAttribute('aria-selected', String(on));
       }
-      bd.querySelector('svg').outerHTML = statsChartSvg();
+      bd.querySelector('#stats-chart-wrap').innerHTML = statsChartSvg();
     }
   };
 }
