@@ -2160,7 +2160,7 @@ async function openBook(bookId) {
   migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
   reconcileMarks();        // re-adopt any note marks orphaned by cut/paste
   updateCounters();
-  timeMark = Date.now();   // a fresh book starts the stopwatch from here
+  timeMark = 0;            // the watch starts on the first word, not the open
   lastWriteActivity = 0;
   ensureTimeTimer();
 
@@ -5814,9 +5814,11 @@ const TIME_GRACE_MS = 120000; // two minutes of thinking still counts
 // The span from the last mark up to now, but never past the grace window
 // after the last touch. A closed form like this is exact whatever the tick
 // size, so a throttled or delayed timer can't drift or dump a sleep into the
-// day — and a pause of mind stops the watch on its own.
+// day — and a pause of mind stops the watch on its own. With no touch yet
+// there is nothing to credit: the watch waits for the first word.
 function writingSpanMs(now, mark, lastActivity, grace = TIME_GRACE_MS) {
-  const end = Math.min(now, (lastActivity || now) + grace);
+  if (!lastActivity || !mark) return 0;
+  const end = Math.min(now, lastActivity + grace);
   return Math.max(0, end - mark);
 }
 
@@ -5840,9 +5842,21 @@ let timeMark = 0;       // the last instant already credited
 let timeDirty = false;  // seconds changed since the last save
 let timeTimer = null;   // the 1s live tick; only while a time goal is set
 
-function writingTimeActive() {
+// Time counts only while the writer is actually writing, and only once the
+// first word has landed: an open, untouched page is not writing time.
+function recentWriting(now = Date.now()) {
+  return lastWriteActivity > 0 && now - lastWriteActivity < TIME_GRACE_MS;
+}
+function writingTimeActive(now = Date.now()) {
   return !!book && !$('#editor-view').hidden &&
-    document.visibilityState === 'visible' && document.hasFocus();
+    document.visibilityState === 'visible' && document.hasFocus() && recentWriting(now);
+}
+
+// The first touch starts the watch, not the open book: until then there is
+// no mark to measure from.
+function noteWriting(now = Date.now()) {
+  lastWriteActivity = now;
+  if (!timeMark) timeMark = now;
 }
 
 function timeToday() {
@@ -5852,14 +5866,14 @@ function timeToday() {
 // Credit the span since the last mark. Callers only call this while the page
 // is live — or once, as the window is leaving, to catch the last word.
 function creditWritingTime(now = Date.now()) {
-  if (!book) { timeMark = now; return 0; }
-  if (!timeMark) { timeMark = now; return 0; }
+  if (!book || !timeMark) { timeMark = now; return 0; }
   const got = writingSpanMs(now, timeMark, lastWriteActivity);
   timeMark = now;
   if (got <= 0) return 0;
   book.dailyTime = book.dailyTime || {};
   const day = todayStr();
-  book.dailyTime[day] = (book.dailyTime[day] || 0) + got / 1000;
+  // whole seconds: the file stays tidy and diffable across devices
+  book.dailyTime[day] = Math.round((book.dailyTime[day] || 0) + got / 1000);
   timeDirty = true;
   return got;
 }
@@ -5870,10 +5884,11 @@ function creditWritingTime(now = Date.now()) {
 function ensureTimeTimer() {
   const want = !!book && !$('#editor-view').hidden && (library.dailyTimeGoal || 0) > 0;
   if (want && !timeTimer) {
-    if (!timeMark) timeMark = Date.now();
     timeTimer = setInterval(() => {
+      // the watch is already running only while writing; otherwise hold the
+      // mark at now so a later first keystroke starts from zero
       if (writingTimeActive()) { creditWritingTime(); renderGoalCounter(); }
-      else timeMark = Date.now();
+      else timeMark = lastWriteActivity || 0;
     }, TIME_TICK_MS);
   } else if (!want && timeTimer) {
     clearInterval(timeTimer);
@@ -5885,10 +5900,10 @@ function stopTimeTimer() {
 }
 
 // A key, or a click in the editor, keeps the stopwatch alive — where the
-// writer is working, not necessarily which pane.
-document.addEventListener('keydown', () => { lastWriteActivity = Date.now(); }, true);
+// writer is working, not necessarily which pane. The first one starts it.
+document.addEventListener('keydown', () => { noteWriting(); }, true);
 document.addEventListener('pointerdown', (e) => {
-  if (e.target && e.target.closest && e.target.closest('#editor-view')) lastWriteActivity = Date.now();
+  if (e.target && e.target.closest && e.target.closest('#editor-view')) noteWriting();
 }, true);
 
 // The bottom counter: the day's words exactly as before, with the day's
@@ -6332,7 +6347,7 @@ async function refreshFromDisk() {
     refreshing = false;
   }
 }
-window.addEventListener('focus', () => { timeMark = Date.now(); setTimeout(refreshFromDisk, 300); });
+window.addEventListener('focus', () => { timeMark = lastWriteActivity || 0; setTimeout(refreshFromDisk, 300); });
 // and a quiet look every half minute while NEO is on screen, for the writer
 // who left both machines open
 setInterval(() => { if (document.visibilityState === 'visible') refreshFromDisk(); }, 30000);

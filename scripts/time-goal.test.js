@@ -40,11 +40,12 @@ test('the clock face is mm:ss, and h:mm:ss past an hour', () => {
   assert.equal(fmtClock(-10), '0:00');
 });
 
-test('an active second is credited in full', () => {
-  // wrote a moment ago: the tick from mark to now counts
+test('the watch waits for the first word', () => {
+  // no touch yet: an open page is not writing time, however long it sits
+  assert.equal(writingSpanMs(1000000, 1000000, 0, 120000), 0);
+  assert.equal(writingSpanMs(1000000, 0, 0, 120000), 0);
+  // but once there is a touch, the span from the mark counts
   assert.equal(writingSpanMs(10000, 9000, 10000), 1000);
-  // touching the page right now, whatever the grace
-  assert.equal(writingSpanMs(50000, 49000, 50000, 120000), 1000);
 });
 
 test('the grace tail is counted, then the watch stops', () => {
@@ -58,8 +59,6 @@ test('a delayed tick can never dump idle time into the day', () => {
   // the timer slept: last touch was 2s after the mark, but the span stops at
   // the grace window, not at "now"
   assert.equal(writingSpanMs(10000000, 1000, 2000, 120000), 121000);
-  // and an untouched page (no activity ever) credits nothing
-  assert.equal(writingSpanMs(100000, 100000, 0, 120000), 0);
 });
 
 test('the grace window is the two minutes NEO promises', () => {
