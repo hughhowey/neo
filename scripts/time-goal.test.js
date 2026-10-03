@@ -14,6 +14,12 @@ vm.runInContext(app.slice(app.indexOf('// ---- time-goal helpers'), app.indexOf(
 vm.runInContext('this.api = { TIME_GRACE_MS, writingSpanMs, fmtClock };', context);
 const { TIME_GRACE_MS, writingSpanMs, fmtClock } = context.api;
 
+// the chart's model — what the bars and the line plot, in words or time
+const chart = vm.createContext({});
+vm.runInContext(app.slice(app.indexOf('function chartModel'), app.indexOf('function statsChartSvg')), chart);
+vm.runInContext('this.api = { chartModel };', chart);
+const { chartModel } = chart.api;
+
 test('the clock face is mm:ss, and h:mm:ss past an hour', () => {
   assert.equal(fmtClock(0), '0:00');
   assert.equal(fmtClock(5), '0:05');
@@ -50,4 +56,44 @@ test('a delayed tick can never dump idle time into the day', () => {
 
 test('the grace window is the two minutes NEO promises', () => {
   assert.equal(TIME_GRACE_MS, 120000);
+});
+
+test('the chart plots daily words and a carried-forward total', () => {
+  const days = ['2026-10-01', '2026-10-02', '2026-10-03'];
+  const book = {
+    dailyCounts: {
+      '2026-10-01': { start: 100, end: 180 }, // 80 words
+      '2026-10-03': { start: 180, end: 260 }  // 80 words, a gap on the 2nd
+    },
+    wordGoal: 1000
+  };
+  const m = chartModel(book, { dailyGoal: 500 }, days, false);
+  assert.deepEqual(m.daily, [80, 0, 80]);
+  // the line carries the last known total forward through the gap
+  assert.deepEqual(m.cumulative, [180, 180, 260]);
+  assert.equal(m.goal, 1000);
+  assert.equal(m.maxD, Math.max(80, 0, 80, 500, 1000));
+});
+
+test('the chart plots daily minutes and the time goal, with no line', () => {
+  const days = ['2026-10-01', '2026-10-02'];
+  const book = { dailyTime: { '2026-10-01': 3600, '2026-10-02': 1800 }, dailyCounts: {} };
+  const m = chartModel(book, { dailyTimeGoal: 30 }, days, true);
+  assert.deepEqual(m.daily, [60, 30]);
+  assert.equal(m.cumulative, undefined); // time has no cumulative total
+  assert.equal(m.goal, 30);
+  assert.equal(m.maxD, 60);
+  assert.equal(m.maxC, 1);
+});
+
+test('an empty book charts as flat lines, never a crash', () => {
+  const days = ['2026-10-01', '2026-10-02'];
+  const m = chartModel({}, {}, days, false);
+  assert.deepEqual(m.daily, [0, 0]);
+  assert.deepEqual(m.cumulative, [0, 0]);
+  assert.equal(m.maxD, 1);
+  assert.equal(m.maxC, 1);
+  const mt = chartModel({}, {}, days, true);
+  assert.deepEqual(mt.daily, [0, 0]);
+  assert.equal(mt.maxD, 1);
 });

@@ -640,5 +640,11 @@
   "Move to stretch it, then y to copy or d to cut.": "Перемещайтесь, чтобы расширить выделение, затем y — копировать, d — вырезать.",
   "Delete the letter under the caret": "Удалить букву под курсором",
   "Daily time goal (minutes)": "Цель по времени на день (минуты)",
-  "time today": "время сегодня"
+  "time today": "время сегодня",
+  "Words": "Слова",
+  "Time": "Время",
+  "Chart": "График",
+  "daily time": "время за день",
+  "Time written over the last 30 days": "Время письма за последние 30 дней",
+  "daily goal": "цель на день"
 }

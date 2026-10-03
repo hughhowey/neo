@@ -541,5 +541,11 @@
   "Move to stretch it, then y to copy or d to cut.": "Genişletmek için hareket et, sonra kopyalamak için y, kesmek için d.",
   "Delete the letter under the caret": "İmlecin altındaki harfi sil",
   "Daily time goal (minutes)": "Günlük süre hedefi (dakika)",
-  "time today": "bugünkü süre"
+  "time today": "bugünkü süre",
+  "Words": "Kelimeler",
+  "Time": "Süre",
+  "Chart": "Grafik",
+  "daily time": "günlük süre",
+  "Time written over the last 30 days": "Son 30 günde yazılan süre",
+  "daily goal": "günlük hedef"
 }

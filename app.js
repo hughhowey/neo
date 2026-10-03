@@ -7360,6 +7360,33 @@ document.addEventListener('input', () => {
 /* ================================================================== */
 
 let sprint = null;
+let chartMode = 'words'; // what the 30-day chart plots: words or time
+
+function chartModel(book, library, days, useTime) {
+  const counts = (book && book.dailyCounts) || {};
+  const times = (book && book.dailyTime) || {};
+  const daily = days.map((d) => {
+    if (useTime) return (times[d] || 0) / 60;
+    return counts[d] ? Math.max(0, counts[d].end - counts[d].start) : 0;
+  });
+  const goal = useTime ? ((library && library.dailyTimeGoal) || 0) : ((book && book.wordGoal) || 0);
+  const model = { daily, goal };
+  if (useTime) {
+    model.maxC = 1;
+  } else {
+    // cumulative: carry the last known total forward
+    let last = 0;
+    const firstKnown = days.find((d) => counts[d]);
+    if (firstKnown) last = counts[firstKnown].start;
+    model.cumulative = days.map((d) => {
+      if (counts[d]) last = counts[d].end;
+      return last;
+    });
+    model.maxC = Math.max(...model.cumulative, goal, 1);
+  }
+  model.maxD = Math.max(...daily, goal, useTime ? 1 : ((library && library.dailyGoal) || 0), 1);
+  return model;
+}
 
 function statsChartSvg() {
   const W = 520, H = 200, PAD = 6;
@@ -7369,42 +7396,32 @@ function statsChartSvg() {
     d.setDate(d.getDate() - i);
     days.push(writingDay(d));
   }
-  const counts = book.dailyCounts || {};
-  const daily = days.map((d) => counts[d] ? Math.max(0, counts[d].end - counts[d].start) : 0);
-  // cumulative: carry the last known total forward
-  let last = 0;
-  const firstKnown = days.find((d) => counts[d]);
-  if (firstKnown) last = counts[firstKnown].start;
-  const cumulative = days.map((d) => {
-    if (counts[d]) last = counts[d].end;
-    return last;
-  });
-  const goal = book.wordGoal || 0;
-  const maxC = Math.max(...cumulative, goal, 1);
-  const maxD = Math.max(...daily, library.dailyGoal || 0, 1);
+  const time = chartMode === 'time';
+  const { daily, cumulative, goal, maxC, maxD } = chartModel(book, library, days, time);
   const bw = (W - PAD * 2) / 30;
 
   const bars = daily.map((v, i) => {
     const h = Math.round((v / maxD) * (H * 0.45));
     return `<rect x="${(PAD + i * bw).toFixed(1)}" y="${H - PAD - h}" width="${(bw - 2).toFixed(1)}" height="${h}" rx="1.5" fill="#3d5a4f"/>`;
   }).join('');
-  const line = cumulative.map((v, i) => {
+  const line = cumulative ? cumulative.map((v, i) => {
     const x = (PAD + i * bw + bw / 2).toFixed(1);
     const y = (H - PAD - (v / maxC) * (H - PAD * 2 - 20)).toFixed(1);
     return (i === 0 ? 'M' : 'L') + x + ',' + y;
-  }).join(' ');
+  }).join(' ') : '';
   const goalLine = goal
-    ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxC) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxC) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
+    ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
     : '';
-  return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(t('Words written over the last 30 days')).replace(/"/g, '&quot;')}">
+  const label = time ? t('Time written over the last 30 days') : t('Words written over the last 30 days');
+  return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(label).replace(/"/g, '&quot;')}">
     ${bars}
-    <path d="${line}" fill="none" stroke="#c9a86a" stroke-width="2"/>
+    ${line ? `<path d="${line}" fill="none" stroke="#c9a86a" stroke-width="2"/>` : ''}
     ${goalLine}
   </svg>
   <div class="stats-legend">
     <span>${t('30 days ago')}</span>
-    <span class="sl-daily">▮ ${t('daily words')}</span>
-    <span style="color:var(--accent)">— ${t('total')}${goal ? ' · - - ' + t('goal') : ''}</span>
+    <span class="sl-daily">▮ ${time ? t('daily time') : t('daily words')}</span>
+    <span style="color:var(--accent)">${time ? t('daily goal') : t('total')}${goal ? ' · - - ' + t('goal') : ''}</span>
     <span>${t('today')}</span>
   </div>`;
 }
@@ -7543,6 +7560,12 @@ function openStats() {
         <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">${t('of book goal')}</div></div>
         ${(library.dailyTimeGoal || 0) > 0 ? `<div><div class="big">${fmtClock(timeToday())}</div><div class="lbl">${t('time today')}</div></div>` : ''}
       </div>
+      <div class="stats-row chart-toggle">
+        <div id="chart-switch" class="seg" role="tablist" aria-label="${t('Chart')}">
+          <button type="button" class="seg-btn${chartMode === 'words' ? ' on' : ''}" data-mode="words" role="tab" aria-selected="${chartMode === 'words'}">${t('Words')}</button>
+          <button type="button" class="seg-btn${chartMode === 'time' ? ' on' : ''}" data-mode="time" role="tab" aria-selected="${chartMode === 'time'}">${t('Time')}</button>
+        </div>
+      </div>
       ${statsChartSvg()}` : ''}
       <div class="stats-row stats-goals" style="margin-top:${hasBook ? 18 : 6}px">
         <label>${t('Daily goal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
@@ -7600,6 +7623,20 @@ function openStats() {
       close();
     };
   }
+  // the chart's Words / Time switch redraws only what it changes
+  const sw = bd.querySelector('#chart-switch');
+  if (sw) sw.onclick = (e) => {
+    const btn = e.target.closest('[data-mode]');
+    if (btn && btn.dataset.mode !== chartMode) {
+      chartMode = btn.dataset.mode;
+      for (const b of sw.querySelectorAll('.seg-btn')) {
+        const on = b.dataset.mode === chartMode;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-selected', String(on));
+      }
+      bd.querySelector('svg').outerHTML = statsChartSvg();
+    }
+  };
 }
 
 $('#goal-counter').onclick = openStats;

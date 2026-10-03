@@ -528,5 +528,11 @@
   "All": "Όλα",
   "Close (Esc)": "Κλείσιμο (Esc)",
   "Daily time goal (minutes)": "Ημερήσιος στόχος χρόνου (λεπτά)",
-  "time today": "χρόνος σήμερα"
+  "time today": "χρόνος σήμερα",
+  "Words": "Λέξεις",
+  "Time": "Χρόνος",
+  "Chart": "Γράφημα",
+  "daily time": "χρόνος ανά ημέρα",
+  "Time written over the last 30 days": "Χρόνος γραφής τις τελευταίες 30 ημέρες",
+  "daily goal": "ημερήσιος στόχος"
 }

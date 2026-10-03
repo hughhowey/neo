@@ -590,5 +590,11 @@
   "Move to stretch it, then y to copy or d to cut.": "Bewegen, um sie zu erweitern, dann y zum Kopieren oder d zum Ausschneiden.",
   "Delete the letter under the caret": "Den Buchstaben unter dem Cursor löschen",
   "Daily time goal (minutes)": "Zeitziel pro Tag (Minuten)",
-  "time today": "Zeit heute"
+  "time today": "Zeit heute",
+  "Words": "Wörter",
+  "Time": "Zeit",
+  "Chart": "Diagramm",
+  "daily time": "Zeit pro Tag",
+  "Time written over the last 30 days": "Geschriebene Zeit in den letzten 30 Tagen",
+  "daily goal": "Tagesziel"
 }

@@ -619,5 +619,11 @@
   "Move to stretch it, then y to copy or d to cut.": "Deplasează-te ca s-o extinzi, apoi y pentru copiere sau d pentru tăiere.",
   "Delete the letter under the caret": "Șterge litera de sub cursor",
   "Daily time goal (minutes)": "Obiectiv zilnic de timp (minute)",
-  "time today": "timp astăzi"
+  "time today": "timp astăzi",
+  "Words": "Cuvinte",
+  "Time": "Timp",
+  "Chart": "Grafic",
+  "daily time": "timp pe zi",
+  "Time written over the last 30 days": "Timp scris în ultimele 30 de zile",
+  "daily goal": "obiectiv zilnic"
 }

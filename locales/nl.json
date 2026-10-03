@@ -587,5 +587,11 @@
   "Move to stretch it, then y to copy or d to cut.": "Beweeg om ze te vergroten, dan y om te kopiëren of d om te knippen.",
   "Delete the letter under the caret": "De letter onder de cursor verwijderen",
   "Daily time goal (minutes)": "Dagtijddoel (minuten)",
-  "time today": "tijd vandaag"
+  "time today": "tijd vandaag",
+  "Words": "Woorden",
+  "Time": "Tijd",
+  "Chart": "Grafiek",
+  "daily time": "tijd per dag",
+  "Time written over the last 30 days": "Geschreven tijd in de laatste 30 dagen",
+  "daily goal": "dagdoel"
 }

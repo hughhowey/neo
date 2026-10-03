@@ -1203,6 +1203,19 @@ body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(25
 }
 .stats-legend .sl-daily { color: #3d8a6a; }
 
+/* the chart's Words / Time switch: a small segmented control, quiet until
+   one side is chosen */
+.chart-toggle { justify-content: flex-end; }
+.seg { display: inline-flex; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; }
+.seg-btn {
+  background: none; border: 0; color: #8a8a8a; font-size: 12px; padding: 5px 14px;
+  cursor: pointer; font-family: inherit;
+}
+.seg-btn + .seg-btn { border-left: 1px solid #3a3a3a; }
+.seg-btn.on { background: var(--accent); color: #191919; }
+body.light .seg { border-color: #cfcac0; }
+body.light .seg-btn + .seg-btn { border-left-color: #cfcac0; }
+
 /* Where the keyboard is: a gold ring on whatever Tab reaches. The mouse
    never sees it, and the page itself never gets one. */
 :where(button, [role="button"], [role="tab"], select, summary, a[href]):focus-visible {
