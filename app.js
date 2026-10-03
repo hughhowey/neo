@@ -7362,6 +7362,9 @@ document.addEventListener('input', () => {
 let sprint = null;
 let chartMode = 'words'; // what the 30-day chart plots: words or time
 
+// The 30-day chart, one design in both modes: a bar for each day, and one
+// gold dashed line for that mode's daily goal. Words count a day's words,
+// time counts a day's minutes; the two never share state.
 function chartModel(book, library, days, useTime) {
   const counts = (book && book.dailyCounts) || {};
   const times = (book && book.dailyTime) || {};
@@ -7370,22 +7373,8 @@ function chartModel(book, library, days, useTime) {
     return counts[d] ? Math.max(0, counts[d].end - counts[d].start) : 0;
   });
   const goal = useTime ? ((library && library.dailyTimeGoal) || 0) : ((book && book.wordGoal) || 0);
-  const model = { daily, goal };
-  if (useTime) {
-    model.maxC = 1;
-  } else {
-    // cumulative: carry the last known total forward
-    let last = 0;
-    const firstKnown = days.find((d) => counts[d]);
-    if (firstKnown) last = counts[firstKnown].start;
-    model.cumulative = days.map((d) => {
-      if (counts[d]) last = counts[d].end;
-      return last;
-    });
-    model.maxC = Math.max(...model.cumulative, goal, 1);
-  }
-  model.maxD = Math.max(...daily, goal, useTime ? 1 : ((library && library.dailyGoal) || 0), 1);
-  return model;
+  const maxD = Math.max(...daily, goal, useTime ? 1 : ((library && library.dailyGoal) || 0), 1);
+  return { daily, goal, maxD };
 }
 
 function statsChartSvg() {
@@ -7397,7 +7386,7 @@ function statsChartSvg() {
     days.push(writingDay(d));
   }
   const time = chartMode === 'time';
-  const { daily, cumulative, goal, maxC, maxD } = chartModel(book, library, days, time);
+  const { daily, goal, maxD } = chartModel(book, library, days, time);
   const bw = (W - PAD * 2) / 30;
 
   const bars = daily.map((v, i) => {
@@ -7407,24 +7396,18 @@ function statsChartSvg() {
     if (h <= 0) return '';
     return `<rect x="${(PAD + i * bw).toFixed(1)}" y="${H - PAD - h}" width="${(bw - 2).toFixed(1)}" height="${h}" rx="1.5" fill="#3d5a4f"/>`;
   }).join('');
-  const line = cumulative ? cumulative.map((v, i) => {
-    const x = (PAD + i * bw + bw / 2).toFixed(1);
-    const y = (H - PAD - (v / maxC) * (H - PAD * 2 - 20)).toFixed(1);
-    return (i === 0 ? 'M' : 'L') + x + ',' + y;
-  }).join(' ') : '';
   const goalLine = goal
     ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxD) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
     : '';
   const label = time ? t('Time written over the last 30 days') : t('Words written over the last 30 days');
   return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(label).replace(/"/g, '&quot;')}">
     ${bars}
-    ${line ? `<path d="${line}" fill="none" stroke="#c9a86a" stroke-width="2"/>` : ''}
     ${goalLine}
   </svg>
   <div class="stats-legend">
     <span>${t('30 days ago')}</span>
     <span class="sl-daily">▮ ${time ? t('daily time') : t('daily words')}</span>
-    <span style="color:var(--accent)">${time ? t('daily goal') : t('total')}${goal ? ' · - - ' + t('goal') : ''}</span>
+    <span style="color:var(--accent)">${t('daily goal')}${goal ? ' · ' + (time ? fmtClock(goal * 60) : fmtNum(goal)) : ''}</span>
     <span>${t('today')}</span>
   </div>`;
 }
