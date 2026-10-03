@@ -7568,6 +7568,7 @@ function openStats() {
         ${(library.dailyTimeGoal || 0) > 0 ? `<div><div class="big">${fmtClock(timeToday())}</div><div class="lbl">${t('time today')}</div></div>` : ''}
       </div>
       <div class="stats-row chart-toggle">
+        <span class="chart-toggle-label">${t('Chart')}</span>
         <div id="chart-switch" class="seg" role="tablist" aria-label="${t('Chart')}">
           <button type="button" class="seg-btn${chartMode === 'words' ? ' on' : ''}" data-mode="words" role="tab" aria-selected="${chartMode === 'words'}">${t('Words')}</button>
           <button type="button" class="seg-btn${chartMode === 'time' ? ' on' : ''}" data-mode="time" role="tab" aria-selected="${chartMode === 'time'}">${t('Time')}</button>
