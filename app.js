@@ -7402,6 +7402,9 @@ function statsChartSvg() {
 
   const bars = daily.map((v, i) => {
     const h = Math.round((v / maxD) * (H * 0.45));
+    // a zero word or minute day draws no bar: a rounded rect of height 0
+    // still paints a sliver, which reads as a dotted line across the chart
+    if (h <= 0) return '';
     return `<rect x="${(PAD + i * bw).toFixed(1)}" y="${H - PAD - h}" width="${(bw - 2).toFixed(1)}" height="${h}" rx="1.5" fill="#3d5a4f"/>`;
   }).join('');
   const line = cumulative ? cumulative.map((v, i) => {

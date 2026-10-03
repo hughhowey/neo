@@ -97,3 +97,14 @@ test('an empty book charts as flat lines, never a crash', () => {
   assert.deepEqual(mt.daily, [0, 0]);
   assert.equal(mt.maxD, 1);
 });
+
+test('a day with no words or minutes draws no bar', () => {
+  // the guard lives in statsChartSvg, which needs the DOM; the arithmetic it
+  // depends on is here, so a zero day must map to a height of zero
+  const days = ['2026-10-01', '2026-10-02', '2026-10-03'];
+  for (const useTime of [false, true]) {
+    const m = chartModel({ dailyCounts: {}, dailyTime: {} }, { dailyTimeGoal: 30, dailyGoal: 500 }, days, useTime);
+    const heights = m.daily.map((v) => Math.round((v / m.maxD) * 90));
+    assert.deepEqual(heights, [0, 0, 0]);
+  }
+});
