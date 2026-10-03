@@ -9,13 +9,10 @@ const { test } = require('node:test');
 // the clock, the readable duration, and the span the stopwatch credits, run
 // on their own (they are the whole arithmetic of the daily time goal)
 const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-const context = vm.createContext({
-  // the slice uses t() only for fmtDuration's units; placeholders are enough
-  t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s)
-});
+const context = vm.createContext({});
 vm.runInContext(app.slice(app.indexOf('// ---- time-goal helpers'), app.indexOf('// ---- end time-goal helpers')), context);
-vm.runInContext('this.api = { TIME_GRACE_MS, writingSpanMs, fmtClock, fmtDuration };', context);
-const { TIME_GRACE_MS, writingSpanMs, fmtClock, fmtDuration } = context.api;
+vm.runInContext('this.api = { TIME_GRACE_MS, writingSpanMs, fmtClock };', context);
+const { TIME_GRACE_MS, writingSpanMs, fmtClock } = context.api;
 
 test('the clock face is mm:ss, and h:mm:ss past an hour', () => {
   assert.equal(fmtClock(0), '0:00');
@@ -27,18 +24,6 @@ test('the clock face is mm:ss, and h:mm:ss past an hour', () => {
   assert.equal(fmtClock(3660), '1:01:00');
   // never negative, whatever a clock skew hands us
   assert.equal(fmtClock(-10), '0:00');
-});
-
-test('a duration reads the way a sentence does', () => {
-  assert.equal(fmtDuration(0), '0 sec');
-  assert.equal(fmtDuration(45), '45 sec');
-  assert.equal(fmtDuration(60), '1 min');
-  assert.equal(fmtDuration(90), '1 min');
-  assert.equal(fmtDuration(3540), '59 min');
-  assert.equal(fmtDuration(3600), '1 h 00 min');
-  assert.equal(fmtDuration(3660), '1 h 01 min');
-  assert.equal(fmtDuration(7200), '2 h 00 min');
-  assert.equal(fmtDuration(-5), '0 sec');
 });
 
 test('an active second is credited in full', () => {

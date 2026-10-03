@@ -424,7 +424,7 @@
   "Title": "Başlık",
   "Title Page": "Başlık Sayfası",
   "today": "bugün",
-  "Today's words — click for goals, sprints, and your progress chart": "Bugünün kelimeleri — hedefler, sprintler ve ilerleme grafiğiniz için tıklayın",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Bugünün kelimeleri ve süresi — hedefler, sprintler ve ilerleme grafiğiniz için tıklayın",
   "Toggle full screen": "Tam ekranı aç/kapat",
   "Toggle spellcheck pass": "Yazım denetimi taramasını aç/kapat",
   "Toggle typewriter scrolling": "Daktilo kaydırmasını aç/kapat",
@@ -539,5 +539,7 @@
   "Write in a new paragraph below or above": "Alta veya üste yeni bir paragrafa yaz",
   "Select": "Seç",
   "Move to stretch it, then y to copy or d to cut.": "Genişletmek için hareket et, sonra kopyalamak için y, kesmek için d.",
-  "Delete the letter under the caret": "İmlecin altındaki harfi sil"
+  "Delete the letter under the caret": "İmlecin altındaki harfi sil",
+  "Daily time goal (minutes)": "Günlük süre hedefi (dakika)",
+  "time today": "bugünkü süre"
 }

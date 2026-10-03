@@ -537,7 +537,7 @@
   "Title": "Titlu",
   "Title Page": "Pagină de titlu",
   "today": "astăzi",
-  "Today's words — click for goals, sprints, and your progress chart": "Cuvintele de astăzi. Clic pentru obiective, sprinturi și graficul de progres",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Cuvintele și timpul de astăzi. Clic pentru obiective, sprinturi și graficul de progres",
   "Toggle full screen": "Comută ecranul complet",
   "Toggle spellcheck pass": "Activează sau dezactivează verificarea ortografică",
   "Toggle typewriter scrolling": "Activează sau dezactivează derularea ca la mașina de scris",
@@ -617,5 +617,7 @@
   "Write in a new paragraph below or above": "Scrie într-un paragraf nou dedesubt sau deasupra",
   "Select": "Selectează",
   "Move to stretch it, then y to copy or d to cut.": "Deplasează-te ca s-o extinzi, apoi y pentru copiere sau d pentru tăiere.",
-  "Delete the letter under the caret": "Șterge litera de sub cursor"
+  "Delete the letter under the caret": "Șterge litera de sub cursor",
+  "Daily time goal (minutes)": "Obiectiv zilnic de timp (minute)",
+  "time today": "timp astăzi"
 }

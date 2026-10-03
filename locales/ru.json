@@ -558,7 +558,7 @@
   "Title": "Название",
   "Title Page": "Титульный лист",
   "today": "сегодня",
-  "Today's words — click for goals, sprints, and your progress chart": "Слова за сегодня. Щёлкните, чтобы открыть цели, спринты и график прогресса",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Слова и время за сегодня. Щёлкните, чтобы открыть цели, спринты и график прогресса",
   "Toggle full screen": "Полноэкранный режим",
   "Toggle spellcheck pass": "Включить или выключить проверку орфографии",
   "Toggle typewriter scrolling": "Включить или выключить режим пишущей машинки",
@@ -638,5 +638,7 @@
   "Write in a new paragraph below or above": "Писать в новом абзаце ниже или выше",
   "Select": "Выделить",
   "Move to stretch it, then y to copy or d to cut.": "Перемещайтесь, чтобы расширить выделение, затем y — копировать, d — вырезать.",
-  "Delete the letter under the caret": "Удалить букву под курсором"
+  "Delete the letter under the caret": "Удалить букву под курсором",
+  "Daily time goal (minutes)": "Цель по времени на день (минуты)",
+  "time today": "время сегодня"
 }

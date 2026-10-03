@@ -5828,17 +5828,6 @@ function fmtClock(seconds) {
   const ss = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
-
-// The same duration the way a sentence reads it: seconds under a minute,
-// minutes under an hour, hours and minutes above.
-function fmtDuration(seconds) {
-  const s = Math.max(0, Math.round(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (h) return t('{h} h {m} min', { h, m: String(m).padStart(2, '0') });
-  if (m) return t('{n} min', { n: m });
-  return t('{n} sec', { n: s });
-}
 // ---- end time-goal helpers ----
 
 // ---- daily time tracking ----
@@ -5925,7 +5914,8 @@ function renderGoalCounter() {
   const goalSec = (library.dailyTimeGoal || 0) * 60;
   if (goalSec > 0) {
     const secs = timeToday();
-    gc.textContent = t('{words} · {done} / {goal}', { words, done: fmtClock(secs), goal: fmtClock(goalSec) });
+    // the word text in the writer's language, then a language-neutral clock
+    gc.textContent = words + ' · ' + fmtClock(secs) + ' / ' + fmtClock(goalSec);
     gc.classList.toggle('goal-met', secs >= goalSec);
   } else {
     gc.textContent = words;
@@ -7551,12 +7541,12 @@ function openStats() {
         <div><div class="big">${fmtNum(total)}</div><div class="lbl">${t('total words')}</div></div>
         <div><div class="big">${fmtNum(wordsToday)}</div><div class="lbl">${t('today')}</div></div>
         <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">${t('of book goal')}</div></div>
-        ${(library.dailyTimeGoal || 0) > 0 ? `<div><div class="big">${fmtDuration(timeToday())}</div><div class="lbl">${t('time today')}</div></div>` : ''}
+        ${(library.dailyTimeGoal || 0) > 0 ? `<div><div class="big">${fmtClock(timeToday())}</div><div class="lbl">${t('time today')}</div></div>` : ''}
       </div>
       ${statsChartSvg()}` : ''}
       <div class="stats-row stats-goals" style="margin-top:${hasBook ? 18 : 6}px">
         <label>${t('Daily goal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
-        <label>${t('Daily time goal')} <input id="st-timegoal" type="number" min="0" value="${library.dailyTimeGoal || ''}" placeholder="30"/> ${t('min')}</label>
+        <label>${t('Daily time goal (minutes)')} <input id="st-timegoal" type="number" min="0" value="${library.dailyTimeGoal || ''}" placeholder="30"/></label>
         ${hasBook ? `<label>${t('Book goal')} <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
       </div>
       <div class="stats-row stats-goals">

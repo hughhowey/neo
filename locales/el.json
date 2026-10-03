@@ -515,7 +515,7 @@
   "Back to your bookshelf": "Επιστροφή στη βιβλιοθήκη σας",
   "Notes": "Σημειώσεις",
   "Drag any selection here. It's saved, not gone.": "Σύρετε εδώ οποιαδήποτε επιλογή. Αποθηκεύεται, δεν χάνεται.",
-  "Today's words — click for goals, sprints, and your progress chart": "Σημερινές λέξεις — κλικ για στόχους, sprint και γράφημα προόδου",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Σημερινές λέξεις και χρόνος — κλικ για στόχους, sprint και γράφημα προόδου",
   "Click to cycle book / chapter word count": "Κλικ για εναλλαγή μέτρησης λέξεων βιβλίου / κεφαλαίου",
   "Scroll to zoom, or pinch / Ctrl+Scroll anywhere on the page": "Κύλιση για ζουμ ή χειρονομία σύγκλισης / Ctrl+κύλιση οπουδήποτε στη σελίδα",
   "Zoom out": "Σμίκρυνση",
@@ -526,5 +526,7 @@
   "Replace with": "Αντικατάσταση με",
   "Replace": "Αντικατάσταση",
   "All": "Όλα",
-  "Close (Esc)": "Κλείσιμο (Esc)"
+  "Close (Esc)": "Κλείσιμο (Esc)",
+  "Daily time goal (minutes)": "Ημερήσιος στόχος χρόνου (λεπτά)",
+  "time today": "χρόνος σήμερα"
 }

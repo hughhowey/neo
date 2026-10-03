@@ -417,7 +417,7 @@
   "This story just passed {n} words — add an API key under File → Cover Art… and NEO will paint it a cover.": "Dit verhaal is net {n} woorden gepasseerd: voeg een API-sleutel toe via Bestand → Omslag… en NEO schildert er een omslag bij.",
   "Title Page": "Titelpagina",
   "today": "vandaag",
-  "Today's words — click for goals, sprints, and your progress chart": "Woorden van vandaag: klik voor doelen, sprints en je voortgangsgrafiek",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Woorden en tijd van vandaag: klik voor doelen, sprints en je voortgangsgrafiek",
   "total": "totaal",
   "total words": "woorden in totaal",
   "Typewriter Scrolling": "Typemachine-scrollen",
@@ -585,5 +585,7 @@
   "Write in a new paragraph below or above": "Schrijven in een nieuwe alinea eronder of erboven",
   "Select": "Selecteren",
   "Move to stretch it, then y to copy or d to cut.": "Beweeg om ze te vergroten, dan y om te kopiëren of d om te knippen.",
-  "Delete the letter under the caret": "De letter onder de cursor verwijderen"
+  "Delete the letter under the caret": "De letter onder de cursor verwijderen",
+  "Daily time goal (minutes)": "Dagtijddoel (minuten)",
+  "time today": "tijd vandaag"
 }
