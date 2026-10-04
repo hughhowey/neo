@@ -1848,3 +1848,191 @@ html[lang^="el"] .book.cv-fat .b-line.b-ital,
 html[lang^="el"] .book.cv-cinzel .b-title {
   font-family: Georgia, "Times New Roman", serif;
 }
+
+/* ========================= SCREENPLAYS ========================= */
+/* A script (book.json "format": "screenplay") is set as it will print:
+   Courier Prime, 12 point, on letter paper. Every length below is in em of
+   the script's type, so the page is 51em wide (8.5in) and a line is 1em
+   tall (12pt): the text wraps the same at every zoom, on every screen and
+   in the PDF, and app.js can count lines to place the page breaks. The
+   page numbers, the gaps between pages, (CONT'D) and the gray suggestions
+   are drawn here from data-* marks that app.js sets and never saves. */
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-700-italic.woff2') format('woff2'); font-weight: 700; font-style: italic; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-ext-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-ext-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-ext-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Courier Prime'; src: url('fonts/courier-prime-latin-ext-700-italic.woff2') format('woff2'); font-weight: 700; font-style: italic; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+:root { --sp-font: 'Courier Prime', 'Courier New', Courier, monospace; --sp-gap: 44px; }
+
+/* --- the script on the shelf: white card stock, its title typed, two brass brads --- */
+.book.script-tile {
+  width: 116px; border-radius: 2px 3px 3px 2px; display: block;
+  background: #f4f1ea; color: #1c1c1c;
+  box-shadow: inset 3px 0 6px -3px rgba(0,0,0,0.22), 2px 3px 8px rgba(0,0,0,0.45);
+}
+.script-tile .st-text {
+  position: absolute; left: 20px; right: 10px; top: 30%;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; font-family: var(--sp-font); pointer-events: none;
+}
+.script-tile .st-title { font-size: 10px; line-height: 1.25; text-transform: uppercase; overflow-wrap: anywhere; }
+.script-tile .st-title.long { font-size: 8px; }
+.script-tile .st-author { font-size: 7px; line-height: 1.3; color: #55524c; overflow-wrap: anywhere; }
+.script-tile .st-brad {
+  position: absolute; left: 6px; width: 8px; height: 8px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c4 0, #e6c56f 28%, #b08a3a 62%, #6e5420 100%);
+  box-shadow: 0 1px 1.5px rgba(0,0,0,0.55);
+}
+.script-tile .st-brad.top { top: 15px; }
+.script-tile .st-brad.bot { bottom: 15px; }
+.script-tile .st-hole {
+  position: absolute; left: 8px; top: 50%; margin-top: -2px; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--bg); box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
+}
+body.light .book.script-tile { background: #fffefb; box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 1px 2px 6px rgba(0,0,0,0.18); }
+/* the + of a shelf, right-clicked: a book or a script */
+
+/* --- the page --- */
+#editor-view.script-mode #paper-scroll { container-type: inline-size; overflow-x: hidden; }
+#paper.script {
+  font-size: min(calc(var(--page-w) * var(--page-zoom, 1) / 51), calc((100cqw - 40px) / 51));
+  width: 51em; max-width: none;
+}
+#paper.script #chapters {
+  background: var(--paper); color: var(--ink);
+  box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+  padding: 6em 5.7em calc((var(--sp-last, 54) + 6) * 1em) 9em;
+  margin-bottom: 44px;
+}
+body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
+#paper.script .chapter.sheet {
+  background: none; box-shadow: none; border: none; padding: 0; margin: 0; min-height: 0;
+}
+#paper.script .chapter-head, #paper.script .toc-list { display: none; }
+/* a second chapter in a script is another device's copy, kept when both
+   sides changed (see refreshFromDisk): it says so, faintly; Backspace at
+   its start joins it to the script above */
+#paper.script .chapter + .chapter .chapter-head {
+  display: block; margin: 2em 0 1em; font-family: var(--sp-font); font-size: 0.85em; letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--ink) 50%, var(--paper));
+}
+
+/* the lines: each element where it prints. Widths carry half a letter of
+   room, so a full 60-letter line never wraps a letter early. */
+.sp-geom {
+  font-family: var(--sp-font); font-size: 1em; line-height: 1em; min-height: 1em;
+  --ind: 0em;
+}
+#paper.script .chapter-body.sp-geom { font-size: 1em; line-height: 1em; }
+.sp-geom > p {
+  margin: 1em 0 0; text-indent: 0 !important; width: 36.3em;
+  white-space: pre-wrap; overflow-wrap: anywhere; position: relative;
+}
+.sp-geom > p:first-child { margin-top: 0; }
+.chapter + .chapter .sp-geom > p:first-child { margin-top: 1em; }
+.sp-geom > p.sp-dialogue, .sp-geom > p.sp-paren,
+.chapter + .chapter .sp-geom > p.sp-dialogue:first-child, .chapter + .chapter .sp-geom > p.sp-paren:first-child { margin-top: 0; }
+.sp-geom > p.sp-heading, .sp-geom > p.sp-character, .sp-geom > p.sp-transition, .sp-geom > p.sp-shot { text-transform: uppercase; }
+.sp-geom > p.sp-character { margin-left: 13.2em; width: 23.1em; --ind: 13.2em; }
+.sp-geom > p.sp-paren { margin-left: 9.6em; width: 15.3em; --ind: 9.6em; }
+.sp-geom > p.sp-dialogue { margin-left: 6em; width: 21.3em; --ind: 6em; }
+.sp-geom > p.sp-transition { text-align: right; }
+
+/* a new page: the rest of the last page, its foot, the gap, the next page's
+   head with its number (page one has none) */
+.sp-geom > p[data-pg] { margin-top: calc((var(--fill, 0) + 12) * 1em + var(--sp-gap)) !important; }
+.sp-geom > p[data-pg]::before {
+  content: attr(data-pg) '.';
+  position: absolute; z-index: 1; pointer-events: none;
+  left: calc(-9em - var(--ind) - 40px); width: calc(51em + 80px);
+  top: calc(-6em - var(--sp-gap)); height: calc(6em + var(--sp-gap));
+  box-sizing: border-box; padding: calc(var(--sp-gap) + 2.5em) calc(5.7em + 40px) 0 0;
+  text-align: right; text-transform: none; font-weight: 400; font-style: normal; text-decoration: none;
+  color: var(--ink);
+  /* the room's color across the gap; the pages' edges shaded on the paper's width only */
+  background:
+    linear-gradient(to bottom, rgba(0,0,0,0.22), transparent 10px, transparent calc(var(--sp-gap) - 10px), rgba(0,0,0,0.22) var(--sp-gap), transparent var(--sp-gap)) 40px 0 / calc(100% - 80px) 100% no-repeat,
+    linear-gradient(to bottom, var(--bg) var(--sp-gap), transparent var(--sp-gap)) 0 0 / 100% 100% no-repeat;
+}
+/* (CONT'D) when a voice comes back after action, and the gray suggestion
+   at the caret. Neither is typed or saved: the exports write CONT'D out. */
+.sp-geom > p[data-contd]::after, .sp-narrow > p[data-contd]::after {
+  content: " (CONT'D)"; color: color-mix(in srgb, var(--ink) 55%, var(--paper));
+}
+.sp-geom > p[data-ghost]::after, .sp-narrow > p[data-ghost]::after {
+  content: attr(data-ghost); color: color-mix(in srgb, var(--ink) 36%, var(--paper));
+}
+.sp-geom > p[data-ghost-empty]::after, .sp-narrow > p[data-ghost-empty]::after { position: absolute; left: 0; top: 0; }
+
+/* the measuring room: lines laid out as they print, out of sight */
+.sp-measure {
+  position: fixed; left: -20000px; top: 0; width: 51em; font-size: 20px;
+  visibility: hidden; pointer-events: none; contain: layout style;
+}
+
+/* --- the title page, a sheet of its own --- */
+#paper.script #title-page {
+  display: block; position: relative; width: 51em; height: 66em; min-height: 0;
+  padding: 0; box-sizing: border-box; margin-bottom: 44px;
+  font-family: var(--sp-font); font-size: 1em; line-height: 1em; text-align: center;
+}
+#paper.script #title-page > [contenteditable] {
+  position: absolute; left: 9em; width: 36em; margin: 0;
+  font: inherit; line-height: 1em; letter-spacing: 0; color: var(--ink); min-height: 1em; outline: none;
+}
+#paper.script #tp-title { top: 21em; text-transform: uppercase; font-weight: 400; }
+#paper.script #tp-subtitle { display: none; }
+#paper.script #tp-credit { top: 24em; }
+#paper.script #tp-author { top: 26em; text-transform: none; }
+#paper.script #title-page > #tp-contact { top: auto; bottom: 6em; width: 21em; text-align: left; white-space: pre-wrap; }
+#paper.script #title-page > #tp-draft { top: auto; bottom: 6em; left: auto; right: 6em; width: 15em; text-align: right; white-space: pre-wrap; }
+#paper.script #title-page [data-ph]:empty::before { font-style: normal; }
+
+/* --- on a phone: the lines reflow to the screen; a page break is a rule
+   with the page number (the pages themselves are still counted as they print) --- */
+#paper.script.narrow { font-size: 15px; width: 100%; }
+#paper.script.narrow #chapters { padding: 28px 18px 60px; box-shadow: none; }
+.sp-narrow { font-family: var(--sp-font); font-size: 1em; line-height: 1.3; --ind: 0em; }
+#paper.script .chapter-body.sp-narrow { font-size: 1em; line-height: 1.3; }
+.sp-narrow > p { margin: 1.3em 0 0; text-indent: 0 !important; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
+.sp-narrow > p:first-child { margin-top: 0; }
+.sp-narrow > p.sp-dialogue, .sp-narrow > p.sp-paren { margin-top: 0; }
+.sp-narrow > p.sp-heading, .sp-narrow > p.sp-character, .sp-narrow > p.sp-transition, .sp-narrow > p.sp-shot { text-transform: uppercase; }
+.sp-narrow > p.sp-character { margin-left: 6.5em; --ind: 6.5em; }
+.sp-narrow > p.sp-paren { margin-left: 4.5em; margin-right: 3em; --ind: 4.5em; }
+.sp-narrow > p.sp-dialogue { margin-left: 2.5em; margin-right: 2em; --ind: 2.5em; }
+.sp-narrow > p.sp-transition { text-align: right; }
+.sp-narrow > p[data-pg] { margin-top: 2.6em !important; }
+.sp-narrow > p[data-pg]::before {
+  content: attr(data-pg) '.';
+  position: absolute; pointer-events: none;
+  left: calc(-18px - var(--ind)); width: var(--sp-fullw, 100vw); top: -1.9em;
+  box-sizing: border-box; padding: 2px 18px 0 0; border-top: 1px dashed color-mix(in srgb, var(--ink) 25%, var(--paper));
+  text-align: right; line-height: 1.2; text-transform: none; font-weight: 400; font-style: normal;
+  color: color-mix(in srgb, var(--ink) 50%, var(--paper));
+}
+#paper.script.narrow #title-page {
+  width: auto; height: auto; min-height: 60vh; padding: 48px 18px; display: flex; flex-direction: column;
+  justify-content: center; gap: 1.3em; line-height: 1.3;
+}
+#paper.script.narrow #title-page > [contenteditable] { position: static; width: auto; }
+#paper.script.narrow #title-page > #tp-contact, #paper.script.narrow #title-page > #tp-draft { width: auto; margin-top: 2em; }
+
+/* --- the pane: the elements on top, the scenes beneath --- */
+#nav-pane.script .nav-item.sp-el { padding-top: 7px; padding-bottom: 7px; }
+#nav-pane.script .nav-item.sp-el .n-row { cursor: pointer; }
+#nav-pane.script .nav-item.sp-el.current .n-words { color: var(--accent); }
+#nav-pane.script .sp-scenes-head {
+  padding: 22px 16px 10px 18px; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted);
+}
+#nav-pane.script .nav-item.sp-scene .n-label {
+  font-family: var(--sp-font); font-size: 12px; letter-spacing: 0.2px; text-transform: uppercase; max-width: 160px;
+}
+#nav-pane.script .nav-item.sp-scene .n-num { color: #5d5d5d; font-size: 11px; min-width: 18px; flex-shrink: 0; }
+#nav-pane.script .nav-item.sp-scene .n-row { justify-content: flex-start; gap: 8px; }
+#nav-pane.script .nav-item.sp-scene .n-words { margin-left: auto; }
+body.light #nav-pane.script .nav-item.sp-scene .n-num { color: #8f8a80; }
