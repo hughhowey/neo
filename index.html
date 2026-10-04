@@ -89,6 +89,7 @@
         <span data-i18n>Notes &amp; Comments</span>
         <button id="side-pin" data-i18n-title title="Keep this pane open" data-i18n-label="Keep this pane open" aria-pressed="false">&#9737;</button>
       </div>
+      <div id="cast-strip" hidden></div>
       <div id="sticky-list"></div>
     </aside>
 
@@ -102,11 +103,12 @@
         </div>
         <div id="chapters"></div>
       </div>
-      <!-- Notes / Outline / Darlings live on the same paper, swapped in -->
+      <!-- Notes (and its cards) / Outline / Darlings live on the same paper, swapped in -->
       <div id="aux-paper" hidden>
         <h2 id="aux-title"></h2>
         <div id="aux-editor" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-labelledby="aux-title"></div>
         <div id="outline-list" hidden></div>
+        <div id="characters-list" hidden></div>
         <div id="darlings-list" hidden></div>
       </div>
     </main>
@@ -148,5 +150,6 @@
   <script src="i18n.js"></script>
   <script src="covers.js"></script>
   <script src="app.js"></script>
+  <script src="bible.js"></script>
 </body>
 </html>

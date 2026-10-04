@@ -36,7 +36,7 @@ First install only: sideload, then grant **All files access**
 (Settings → Apps → NEO Pocket).
 
 Local builds need Android Studio and: `cd pocket && npm install`, copy
-`../app.js`, `../covers.js`, `../styles.css`, `../i18n.js` and the `../fonts` and `../locales` folders into `www/`, `npx cap sync android`, then
+`../app.js`, `../bible.js`, `../covers.js`, `../styles.css`, `../i18n.js` and the `../fonts` and `../locales` folders into `www/`, `npx cap sync android`, then
 build from `android/`. Local builds are debug-signed and won't install over a
 robot build (or vice versa).
 
@@ -46,7 +46,7 @@ Needs Xcode (with the iOS simulator), CocoaPods (`brew install cocoapods`),
 and an Apple Developer account for a real device. Then:
 
     cd pocket && npm install
-    cp ../app.js ../covers.js ../styles.css ../i18n.js www/ && cp ../node_modules/jszip/dist/jszip.min.js www/ && cp -R ../fonts ../locales www/
+    cp ../app.js ../bible.js ../covers.js ../styles.css ../i18n.js www/ && cp ../node_modules/jszip/dist/jszip.min.js www/ && cp -R ../fonts ../locales www/
     npx cap sync ios
     npx cap open ios
 
