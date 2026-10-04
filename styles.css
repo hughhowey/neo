@@ -1072,6 +1072,7 @@ body.night .ol-part .ol-num, body.night .ol-part-name { color: #918b7d; }
   max-height: 300px; overflow-y: auto; font-size: 11px; color: #bbb;
   line-height: 1.5; margin: 8px 0; padding: 6px 8px;
   background: rgba(0, 0, 0, 0.25); border-radius: 4px; white-space: pre-wrap;
+  user-select: text; cursor: text;
 }
 .history-card-actions {
   display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; align-items: center;
@@ -1081,6 +1082,11 @@ body.night .ol-part .ol-num, body.night .ol-part-name { color: #918b7d; }
   cursor: pointer; padding: 2px 4px;
 }
 .history-card-restore:hover { text-decoration: underline; }
+.history-card-copy {
+  background: none; border: none; color: var(--accent); font-size: 11px; font-weight: 500;
+  cursor: pointer; padding: 2px 4px;
+}
+.history-card-copy:hover { text-decoration: underline; }
 .history-card-close {
   background: none; border: none; color: #777; font-size: 11px;
   cursor: pointer; padding: 2px 4px;

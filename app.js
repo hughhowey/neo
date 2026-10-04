@@ -4955,6 +4955,7 @@ function renderHistoryChapterGroup(chId, snaps, archived = false, openChapterIds
       <div class="history-card-full" style="display: none;"></div>
       <div class="history-card-actions" style="display: none;">
         <button class="history-card-restore">${t('Restore')}</button>
+        <button class="history-card-copy">${t('Copy')}</button>
         <button class="history-card-close">${t('Close')}</button>
       </div>
     `;
@@ -5064,6 +5065,7 @@ function renderHistoryTimeline() {
 function wireHistoryCard(card, group, snap) {
   const fullEl = card.querySelector('.history-card-full');
   const actionsEl = card.querySelector('.history-card-actions');
+  const copyBtn = card.querySelector('.history-card-copy');
   const restoreBtn = card.querySelector('.history-card-restore');
   const closeBtn = card.querySelector('.history-card-close');
 
@@ -5105,6 +5107,32 @@ function wireHistoryCard(card, group, snap) {
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       collapseCard(card, fullEl, actionsEl);
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const sel = window.getSelection();
+        let textToCopy = '';
+        if (sel && !sel.isCollapsed && fullEl && fullEl.contains(sel.anchorNode)) {
+          textToCopy = sel.toString();
+        } else if (fullEl && fullEl.textContent && fullEl.textContent !== t('Loading preview…')) {
+          textToCopy = fullEl.textContent;
+        } else {
+          const html = await window.neo.historyRead(book.id, snap.chapterId, snap.ts);
+          const temp = document.createElement('div');
+          temp.innerHTML = html || '';
+          textToCopy = temp.innerText || temp.textContent || '';
+        }
+        if (textToCopy) {
+          await navigator.clipboard.writeText(textToCopy);
+          toast(t('Copied to clipboard'));
+        }
+      } catch (err) {
+        toast(t('Could not copy to clipboard'));
+      }
     });
   }
 
