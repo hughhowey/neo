@@ -49,6 +49,18 @@ Kill your darlings, they say. Well, it never gets easy. You're a writer, and we 
 
 Instead of deleting it, select it and drag it down onto the **Darlings** tab at the bottom of the screen. It leaves your manuscript, but it's saved forever. If you change your mind, you can restore what you deleted to the exact spot it came from. Kill without remorse. You can now resurrect your beloveds.
 
+**Outlining with cards**
+
+Click the Outline tab at the bottom and your book is laid out as index cards. They read like a page: left to right, then down to the next line. Each chapter starts with a card showing its number in big type, and its sections follow it on the same dark mat. When a chapter runs past the edge of the window, its mat continues on the next line, cut square so you can see it carries on. A Part starts a fresh line, the same as it starts a fresh page in your book.
+
+Click any card to write on it. Enter starts the next card. Enter on an empty new card turns it into a new chapter (Enter, Enter, just like in the manuscript). A section's card becomes a gray ghost paragraph in your manuscript, and when you start writing over it, the note rides one line below whatever you're typing so you don't lose track of what the scene was supposed to do. Click Dismiss when you're done with it.
+
+Drag a card to move it. Your writing moves with it, so you can rearrange scenes and chapters right here. ⌘Z puts things back. Right-click a card to make a section its own chapter, or to jump to it on the page.
+
+Pantsers, this is for you too. You don't have to outline anything. Every chapter and every section between your *** breaks is already a card, showing its first line in quotes until you give it a note of its own.
+
+Have an idea that doesn't have a home yet? Open the right-hand panel while you're in the Outline and add a loose card. Drag it onto the board when it finds its place. ⌘− and ⌘+ make the cards smaller and larger; small enough, and a whole novel fits on one screen. If you'd rather have the old outline list, it's one click away at the top of the Outline tab.
+
 **The hidden panels**
 
 The screen stays distraction-free until you need something. Roll your mouse to the **left edge** and the chapter list slides out — every chapter, its word count, a note field where you can jot what happens in it. You can outline an entire novel from this panel if you want. Push to the **right edge** for your notes and comments. The little ☉ here pins it open if you're doing a revision pass.
@@ -75,10 +87,11 @@ Type a title and hit Enter, same as a book. Then write. NEO works out what each 
 - Start a line with INT. or EXT. and it becomes a scene heading. Hit Tab after INT and NEO adds the period; Tab after the place adds the dash. Places you've already used, and DAY or NIGHT, show up in gray as you type.
 - Type a character's name in capitals and hit Enter. The name jumps to the middle of the page, and the next line is dialogue.
 - Hit Enter at the end of a speech and you're back to action. Hit Enter AGAIN on that empty line and it turns into the next speaker's name, with whoever is being answered already filled in gray. Enter once more accepts the suggestion.
-- Start a line of dialogue with ( and it's a parenthetical.
+- Start a line of dialogue with ( and it's a parenthetical. Enter after it goes back to dialogue, and a ( on the next line down makes another one, so a speech can have a (beat) in the middle.
+- Scene headings are bold, on the page and in the PDF.
 - Capitals ending in TO: (CUT TO:, SMASH CUT TO:) make a transition.
 
-Gray text is only ever a suggestion, built from names and places you've already written. Tab or the → key accepts it. Keep typing and it goes away. And if NEO guesses wrong (a sound effect in capitals can look like a character's name), hit Backspace on the empty dialogue line below it and it goes back to being action.
+Gray text is only ever a suggestion, built from names and places you've already written. Tab, Enter, or the → key accepts it. Keep typing or hit Esc and it goes away. And if NEO guesses wrong (a sound effect in capitals can look like a character's name), hit Backspace on the empty dialogue line below it and it goes back to being action.
 
 If you'd rather choose for yourself, ⌘1 through ⌘7 (Ctrl on Windows) are Scene Heading, Action, Character, Parenthetical, Dialogue, Transition, and Shot. Those are Final Draft's keys, so some of you might already know them. Tab steps through them as well, and you can click any of them in the left panel.
 

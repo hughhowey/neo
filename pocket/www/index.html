@@ -227,6 +227,12 @@
         seg('Page', [['night', 'Night'], ['paper', 'Paper'], ['light', 'Light']], lib.pageTheme || 'night', (v) => ({ type: 'pageTheme', value: v })) +
         seg('Focus mode', [['off', 'Off'], ['paragraph', 'Paragraph'], ['sentence', 'Sentence']], focusNow, (v) => ({ type: 'focus', value: v })) +
         tick('Typewriter scrolling', st.typewriter, { type: 'typewriter' }) +
+        tick('Spellcheck', typeof spellOn !== 'undefined' && spellOn, { type: 'spellcheck' }) +
+        // the dictionary, only while spellcheck is on (the desktop's choice comes along in library.json)
+        (typeof spellOn !== 'undefined' && spellOn && window.pocketSpellLanguages
+          ? `<div class="pm-row"><span class="pm-label">Dictionary</span><span class="pm-seg pm-wrap">` +
+            Object.entries(window.pocketSpellLanguages()).map(([code, name]) => `<button class="${code === (lib.spellLanguage || window.pocketSpellLanguage()) ? 'on' : ''}" data-msg='${JSON.stringify({ type: 'spellLanguage', value: code })}'>${name}</button>`).join('') + '</span></div>'
+          : '') +
         (script ? '' : tick('Flush paragraph  ⇧Enter', st.flush, { type: 'flush' }) +
         tick('Poetry paragraph  Ctrl+⇧Enter', st.poetry, { type: 'poetry' })) +
         (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios' ? '' :
@@ -254,6 +260,7 @@
         send(msg);
         if (msg.type === 'stats' || msg.type === 'help' || msg.type === 'export') { closeMenu(); return; }
         setTimeout(buildMenu, 60); // reflect the new state
+        if (msg.type === 'spellLanguage') setTimeout(buildMenu, 1500); // once the dictionary is in
       }
     });
     document.addEventListener('keydown', (e) => {

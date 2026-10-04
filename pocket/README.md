@@ -35,9 +35,10 @@ uninstall/reinstall.
 First install only: sideload, then grant **All files access**
 (Settings → Apps → NEO Pocket).
 
-Local builds need Android Studio and: `cd pocket && npm install`, copy
-`../app.js`, `../covers.js`, `../styles.css`, `../i18n.js` and the `../fonts` and `../locales` folders into `www/`, `npx cap sync android`, then
-build from `android/`. Local builds are debug-signed and won't install over a
+Local builds need Android Studio and: `npm install` at the top of the repo,
+`node scripts/pocket-www.js` (copies the editor, fonts, locales, and the
+spellchecker with its dictionaries into `www/`), then `cd pocket && npm install`,
+`npx cap sync android`, and build from `android/`. Local builds are debug-signed and won't install over a
 robot build (or vice versa).
 
 ## Building for iOS
@@ -45,8 +46,8 @@ robot build (or vice versa).
 Needs Xcode (with the iOS simulator), CocoaPods (`brew install cocoapods`),
 and an Apple Developer account for a real device. Then:
 
+    npm install && node scripts/pocket-www.js
     cd pocket && npm install
-    cp ../app.js ../covers.js ../styles.css ../i18n.js www/ && cp ../node_modules/jszip/dist/jszip.min.js www/ && cp -R ../fonts ../locales www/
     npx cap sync ios
     npx cap open ios
 
@@ -54,7 +55,8 @@ In Xcode: pick your Team under Signing & Capabilities, add the **iCloud**
 capability with **iCloud Documents** ticked and the container
 `iCloud.com.hughhowey.neo.pocket`, choose an iPad simulator or a plugged-in
 iPad, and press Run. After changing `app.js`, `styles.css` or anything in
-`www/`, repeat the `cp` and `npx cap copy ios`, then Run again.
+`www/`, repeat `node scripts/pocket-www.js` (from the top of the repo) and
+`npx cap copy ios`, then Run again.
 
 `ios/App/App/LibraryHome.swift` is the one piece of native code: it tells the
 bridge where the library folder is (iCloud or on-device) and pulls down files
@@ -95,5 +97,5 @@ Punch list, in rough order:
 
 ## Not planned
 
-Exports, email, spellcheck pass, and import stay on the desktop. Pocket is
+Email and import stay on the desktop. Pocket is
 the writing chair, not the cockpit.

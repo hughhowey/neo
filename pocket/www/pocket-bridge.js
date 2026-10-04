@@ -4,7 +4,7 @@
 /* Android: Documents/NEO Library, shared with the Mac via Syncthing.    */
 /* iOS: the app's own folder — inside iCloud Drive when the writer has  */
 /* it on (so desktop NEO can point at the same folder), else On My iPad. */
-/* Desktop-only powers (export, email, spellcheck, import) stub out      */
+/* Desktop-only powers (email, import) stub out                          */
 /* quietly; writing never does.                                          */
 
 (function () {
@@ -318,10 +318,27 @@
     openRelease: async () => true,
     fullscreenEscape: async () => false,
     fullscreenToggle: async () => true,
-    spellCheckWords: async (words) => { const o = {}; for (const w of words) o[w] = true; return o; },
-    spellSuggest: async () => [],
-    spellLearn: async () => true,
-    setSpellLanguage: async () => false, // the spellcheck pass is a desktop thing
+    spellCheckWords: async (words) => {
+      const out = {};
+      for (const w of words) out[w] = true; // no checker: nothing is wrong
+      if (!(await spellEnsure())) return out;
+      spellCatchUp();
+      const r = await spellEngine()({ type: 'check', words });
+      return r.ok ? r.result : out;
+    },
+    spellSuggest: async (word) => {
+      if (!(await spellEnsure())) return [];
+      const r = await spellEngine()({ type: 'suggest', word });
+      return r.ok ? r.result : [];
+    },
+    spellLearn: async (word) => {
+      if (typeof word === 'string' && word) {
+        spellAdded.add(word);
+        if (spellReady) await spellEngine()({ type: 'add', word });
+      }
+      return true;
+    },
+    setSpellLanguage: async (code) => spellEnsure(code),
     appVersion: async () => 'Pocket 0.1.0',
     logError: async (msg) => {
       try {
@@ -364,6 +381,117 @@
     return { locale: regional ? want : base, dict: { ...(baseDict || {}), ...(regional || {}) }, base: english };
   }
   try { window.neo.i18n = loadLocale(); } catch { /* English it is */ }
+
+  // Spellcheck: desktop NEO's Hunspell and dictionaries (pocket-spell.js),
+  // in a web worker so the page never waits on a dictionary. The language
+  // is the library's (library.json syncs it from the desktop), else the
+  // interface's when NEO has its dictionary, else US English: the same rule
+  // as defaultSpellLanguage() in main.js.
+  let spellCodes = null;   // { code: label }, from dict/languages.json
+  let spellReady = null;   // { language, ok: Promise<boolean> }
+  const spellAdded = new Set(); // the writer's own words, given to the checker
+  let engine = null;
+  window.pocketSpellLanguages = () => spellCodes || {};
+  window.pocketSpellLanguage = () => (spellReady ? spellReady.language : spellCodes ? wantedLanguage(spellCodes) : null);
+
+  async function spellLanguages() {
+    if (!spellCodes) {
+      try { spellCodes = JSON.parse(await (await fetch('dict/languages.json')).text()); } catch { spellCodes = null; return {}; }
+    }
+    return spellCodes;
+  }
+  const lib = () => (typeof library !== 'undefined' && library) || {}; // app.js's library.json
+  function wantedLanguage(codes) {
+    const chosen = lib().spellLanguage;
+    if (codes[chosen]) return chosen;
+    const ui = String((window.neo.i18n && window.neo.i18n.locale) || 'en');
+    if (codes[ui]) return ui;
+    if (ui === 'pt' || ui === 'pt-BR') return 'pt-BR';
+    const base = ui.split('-')[0];
+    return codes[base] ? base : 'en-US';
+  }
+
+  function spellEngine() {
+    if (engine) return engine;
+    // an older web view without module workers: check on the page instead
+    let direct = null;
+    let queue = Promise.resolve();
+    const onPage = (msg) => (queue = queue.then(async () => {
+      if (!direct) direct = await import('./pocket-spell.js');
+      return direct.handle(msg);
+    }).catch((err) => ({ ok: false, error: String(err && err.message || err) })));
+    let worker = null;
+    try { worker = new Worker('pocket-spell.js', { type: 'module' }); } catch { worker = null; }
+    if (!worker) return (engine = onPage);
+    const waiting = new Map();
+    let seq = 0;
+    let broken = false;
+    worker.onmessage = (e) => {
+      const w = waiting.get(e.data && e.data.id);
+      if (w) { waiting.delete(e.data.id); w.done(e.data); }
+    };
+    worker.onerror = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      broken = true;
+      try { worker.terminate(); } catch { /* gone */ }
+      for (const w of waiting.values()) onPage(w.msg).then(w.done);
+      waiting.clear();
+    };
+    return (engine = (msg) => broken ? onPage(msg) : new Promise((resolve) => {
+      const id = ++seq;
+      waiting.set(id, { msg, done: resolve });
+      worker.postMessage({ ...msg, id });
+    }));
+  }
+
+  spellLanguages(); // the list is tiny; the ⋯ sheet wants it at hand
+
+  // load the dictionary the writer wants (or the one asked for), once
+  async function spellEnsure(code) {
+    const codes = await spellLanguages();
+    const language = code || wantedLanguage(codes);
+    if (!codes[language]) return false;
+    if (spellReady && spellReady.language === language) return spellReady.ok;
+    const custom = (lib().customWords || []).filter((w) => typeof w === 'string' && w);
+    const ready = {
+      language,
+      ok: spellEngine()({ type: 'load', language, custom }).then((r) => {
+        if (!r.ok) window.neo.logError('spell: ' + language + ' did not load: ' + r.error);
+        return !!r.ok;
+      })
+    };
+    spellReady = ready;
+    spellAdded.clear();
+    for (const w of custom) spellAdded.add(w);
+    return ready.ok;
+  }
+
+  // words learned on another device since the dictionary loaded
+  function spellCatchUp() {
+    for (const w of lib().customWords || []) {
+      if (typeof w !== 'string' || !w || spellAdded.has(w)) continue;
+      spellAdded.add(w);
+      spellEngine()({ type: 'add', word: w });
+    }
+  }
+
+  // No right-click on a phone: with spellcheck on, a tap on an underlined
+  // word opens the same suggestions (app.js answers the contextmenu event)
+  document.addEventListener('click', (e) => {
+    const hl = window.CSS && CSS.highlights && CSS.highlights.get('neo-spell');
+    if (!hl || !hl.size || !document.caretRangeFromPoint) return;
+    if (!e.target.closest || !e.target.closest('.chapter-body, #aux-editor')) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    const pos = document.caretRangeFromPoint(e.clientX, e.clientY);
+    if (!pos) return;
+    let hit = false;
+    for (const r of hl) {
+      try { if (r.isPointInRange(pos.startContainer, pos.startOffset)) { hit = true; break; } } catch { /* stale range */ }
+    }
+    if (!hit) return;
+    e.target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY }));
+  });
 
   // iOS puts a shortcuts bar (bold, italic, mic, ⌘ hints) above its keyboard;
   // it covers Pocket's own bar, and NEO has its own idea of formatting

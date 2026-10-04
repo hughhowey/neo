@@ -1855,11 +1855,19 @@ ipcMain.on('uizoom:state', (_e, z) => {
   uiZoomState = z;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
-// View menu ticks: the focus level, the page, and Brighter Interface
-let viewState = { focus: 'off', pageTheme: 'night', uiBright: false };
+// View and Format menu ticks: the focus level, the page, Brighter Interface, and the writing
+// format the page is using (body font, drop cap style, paragraph alignment).
+let viewState = { focus: 'off', pageTheme: 'night', uiBright: false, bodyFont: '', dropCap: 'literary', align: null };
 ipcMain.on('view:state', (e, st) => {
   st = st || {};
-  const next = { focus: st.focus || 'off', pageTheme: st.pageTheme || 'night', uiBright: !!st.uiBright };
+  const next = {
+    focus: st.focus || 'off',
+    pageTheme: st.pageTheme || 'night',
+    uiBright: !!st.uiBright,
+    bodyFont: typeof st.bodyFont === 'string' ? st.bodyFont : '',
+    dropCap: typeof st.dropCap === 'string' ? st.dropCap : 'literary',
+    align: ['left', 'center', 'right', 'justify'].includes(st.align) ? st.align : null
+  };
   if (JSON.stringify(next) === JSON.stringify(viewState)) return;
   if (next.pageTheme !== viewState.pageTheme) {
     const w = BrowserWindow.fromWebContents(e.sender);
@@ -2004,6 +2012,8 @@ function buildMenu() {
           submenu: [
             ...bodyFonts.map((f) => ({
               label: f,
+              type: 'radio',
+              checked: viewState.bodyFont === f,
               click: () => sendToWindow({ type: 'bodyFont', value: f })
             })),
             { type: 'separator' },
@@ -2014,21 +2024,21 @@ function buildMenu() {
           visible: !scriptState.on,
           label: t('Drop Cap Style'),
           submenu: [
-            { label: t('Literary'), click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
-            { label: t('Fantasy'), click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
-            { label: t('Sci-Fi'), click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) },
+            { label: t('Literary'), type: 'radio', checked: viewState.dropCap === 'literary', click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
+            { label: t('Fantasy'), type: 'radio', checked: viewState.dropCap === 'fantasy', click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
+            { label: t('Sci-Fi'), type: 'radio', checked: viewState.dropCap === 'scifi', click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) },
             { type: 'separator' },
-            { label: t('Off'), click: () => sendToWindow({ type: 'dropCap', value: 'none' }) }
+            { label: t('Off'), type: 'radio', checked: viewState.dropCap === 'none', click: () => sendToWindow({ type: 'dropCap', value: 'none' }) }
           ]
         },
         {
           visible: !scriptState.on, // a script's elements are placed where they print
           label: t('Align Paragraph'),
           submenu: [
-            { label: t('Left'), accelerator: 'CmdOrCtrl+Shift+L', click: () => sendToWindow({ type: 'align', value: 'left' }) },
-            { label: t('Center'), accelerator: 'CmdOrCtrl+Shift+C', click: () => sendToWindow({ type: 'align', value: 'center' }) },
-            { label: t('Right'), accelerator: 'CmdOrCtrl+Shift+R', click: () => sendToWindow({ type: 'align', value: 'right' }) },
-            { label: t('Justify'), accelerator: 'CmdOrCtrl+Shift+J', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
+            { label: t('Left'), accelerator: 'CmdOrCtrl+Shift+L', type: 'radio', checked: viewState.align === 'left', click: () => sendToWindow({ type: 'align', value: 'left' }) },
+            { label: t('Center'), accelerator: 'CmdOrCtrl+Shift+C', type: 'radio', checked: viewState.align === 'center', click: () => sendToWindow({ type: 'align', value: 'center' }) },
+            { label: t('Right'), accelerator: 'CmdOrCtrl+Shift+R', type: 'radio', checked: viewState.align === 'right', click: () => sendToWindow({ type: 'align', value: 'right' }) },
+            { label: t('Justify'), accelerator: 'CmdOrCtrl+Shift+J', type: 'radio', checked: viewState.align === 'justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
         { type: 'separator' },
