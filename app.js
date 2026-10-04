@@ -188,6 +188,11 @@ let currentTab = 'manuscript';
 let currentChapterId = null; // chapter the caret/scroll is in
 let wordMode = 'book';       // 'book' | 'chapter'
 let saveTimers = {};
+let historyTimer = null;              // autosave snapshot timer (every 5 min)
+let historySnapshots = [];            // cached list of all snapshots
+let historyPanelOpen = false;         // whether the history panel is showing
+let currentSideTab = 'notes';         // 'notes' | 'history'
+let historyDirty = false;             // true if typed since last snapshot
 
 // Every library.json write from this window goes through here. A look at the
 // disk (refreshFromDisk) can then tell its own writes from another device's:
@@ -2206,6 +2211,22 @@ async function openBook(bookId) {
 
   renderChapters();
   renderStickies();
+  switchSideTab('notes');
+
+  // Baseline snapshots on book open (so every chapter has at least one snapshot immediately)
+  (async () => {
+    for (const chId of book.chapterOrder) {
+      try {
+        const snaps = await window.neo.historyList(bookId, chId);
+        if (!snaps || snaps.length === 0) {
+          await window.neo.historySnapshot(bookId, chId, chapterHTML[chId] || '<p><br></p>');
+        }
+      } catch (err) {
+        console.error('history baseline error:', err);
+      }
+    }
+  })();
+  startHistoryTimer();
   migrateDarlingAnchors(); // sweep legacy invisible markers out of the prose
   reconcileMarks();        // re-adopt any note marks orphaned by cut/paste
   updateCounters();
@@ -2359,6 +2380,7 @@ function renderChapters() {
     wireChapterBody(body, chId);
   });
   renderNav();
+  if (currentSideTab === 'history') renderHistoryTimeline();
 }
 
 async function deleteChapterToDarlings(chId) {
@@ -2481,6 +2503,7 @@ function wireChapterBody(body, chId) {
     }, 1000);
   };
   body.addEventListener('input', () => {
+    historyDirty = true;
     breakRun = 0; // fresh typing: ⌘Z belongs to the engine again
     markDialogueOpening(body);
     chapterHTML[chId] = captureBody(body);
@@ -4578,6 +4601,8 @@ async function deleteChapterQuiet(chId) {
   // a save still queued for this chapter must not resurrect it (nejcc, #70)
   clearTimeout(saveTimers[chId]);
   delete saveTimers[chId];
+  const label = historyChapterName(chId);
+  window.neo.historyArchive(book.id, chId, label).catch(() => {});
   book.chapterOrder = book.chapterOrder.filter((c) => c !== chId);
   delete chapterHTML[chId];
   delete wordCache[chId];
@@ -4590,6 +4615,9 @@ async function deleteChapterQuiet(chId) {
   await saveMeta();
   renderChapters();
   renderStickies();
+  if (currentSideTab === 'history') {
+    loadHistoryList().then(() => renderHistoryTimeline());
+  }
 }
 
 function focusChapter(chId) {
@@ -4683,6 +4711,7 @@ function returnToMark(sid) {
 }
 
 function renderStickies() {
+  if (currentSideTab !== 'notes') return;
   const wrap = $('#sticky-list');
   wrap.innerHTML = '';
   const open = stickies.filter((s) => !s.resolved);
@@ -4804,10 +4833,368 @@ function resolveSticky(sid) {
 }
 
 function focusSticky(sid) {
+  if (currentSideTab !== 'notes') switchSideTab('notes');
   $('#side-pane').classList.add('open');
   const el = document.querySelector(`.sticky[data-sid="${sid}"] textarea`);
   if (el) el.focus();
 }
+
+/* ================================================================== */
+/*  CHAPTER VERSION HISTORY                                            */
+/* ================================================================== */
+
+function startHistoryTimer() {
+  stopHistoryTimer();
+  // Autosave every 5 minutes of active typing (5 * 60 * 1000 ms)
+  historyTimer = setInterval(() => {
+    if (!book || !historyDirty) return;
+    historyDirty = false;
+    const chId = currentChapterId || (book.chapterOrder && book.chapterOrder[0]);
+    if (chId) takeHistorySnapshot(chId);
+  }, 5 * 60 * 1000);
+}
+
+function stopHistoryTimer() {
+  if (historyTimer) {
+    clearInterval(historyTimer);
+    historyTimer = null;
+  }
+}
+
+async function takeHistorySnapshot(chId) {
+  if (!book) return null;
+  const targetId = chId || currentChapterId || (book.chapterOrder && book.chapterOrder[0]);
+  if (!targetId) return null;
+  const body = document.querySelector(`.chapter[data-id="${targetId}"] .chapter-body`);
+  const html = body ? captureBody(body) : (chapterHTML[targetId] || '');
+  if (!html || !html.trim()) return null;
+  const ts = await window.neo.historySnapshot(book.id, targetId, html);
+  if (currentSideTab === 'history') {
+    await loadHistoryList();
+    renderHistoryTimeline();
+  }
+  return ts;
+}
+
+async function loadHistoryList() {
+  if (!book) {
+    historySnapshots = [];
+    return historySnapshots;
+  }
+  try {
+    historySnapshots = await window.neo.historyListAll(book.id);
+  } catch (err) {
+    console.error('loadHistoryList error:', err);
+    historySnapshots = [];
+  }
+  return historySnapshots;
+}
+
+function historyChapterName(chId) {
+  if (!chId) return t('Chapter');
+  if (book && book.chapterOrder && book.chapterOrder.includes(chId)) {
+    return chapterName(chId);
+  }
+  const snap = historySnapshots.find((s) => s.chapterId === chId && s.label);
+  if (snap && snap.label) return snap.label;
+  return t('Archived Chapter');
+}
+
+function parseHistoryTimestamp(ts) {
+  if (!ts) return { time: '', date: '' };
+  const parts = ts.split('_');
+  const datePart = parts[0] || '';
+  const timePart = (parts[1] || '').split('-').slice(0, 3).join(':');
+  return { date: datePart, time: timePart };
+}
+
+function renderHistoryChapterGroup(chId, snaps, archived = false, openChapterIds = null, expandedCardTs = null) {
+  const group = document.createElement('div');
+  group.className = 'history-group';
+  group.dataset.chId = chId;
+  if (archived) group.classList.add('archived');
+
+  const header = document.createElement('div');
+  header.className = 'history-group-header';
+  header.setAttribute('role', 'button');
+  header.setAttribute('tabindex', '0');
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'history-group-title';
+  const label = archived ? ((snaps[0] && snaps[0].label) || historyChapterName(chId)) : historyChapterName(chId);
+  const wasOpen = openChapterIds && openChapterIds.has(chId);
+  titleSpan.innerHTML = `<span class="hg-arrow">${wasOpen ? '▾' : '▸'}</span> <span class="hg-name">${escHtml(label)}</span>`;
+
+  const countSpan = document.createElement('span');
+  countSpan.className = 'history-group-count';
+  countSpan.textContent = t('{n} versions', { n: snaps.length });
+
+  header.appendChild(titleSpan);
+  header.appendChild(countSpan);
+  group.appendChild(header);
+
+  const itemsContainer = document.createElement('div');
+  itemsContainer.className = 'history-group-items';
+  itemsContainer.style.display = wasOpen ? 'block' : 'none';
+  if (wasOpen) group.classList.add('open');
+
+  snaps.forEach((snap) => {
+    const card = document.createElement('div');
+    card.className = 'history-card' + (archived ? ' archived' : '');
+    card.dataset.ts = snap.ts;
+    card.dataset.chId = chId;
+
+    const parsed = parseHistoryTimestamp(snap.ts);
+
+    card.innerHTML = `
+      <div class="history-card-header">
+        <span class="history-card-time">${escHtml(parsed.time)}</span>
+        <span class="history-card-date">${escHtml(parsed.date)}</span>
+      </div>
+      <div class="history-card-snippet">${escHtml(snap.snippet || t('(empty snapshot)'))}</div>
+      <div class="history-card-full" style="display: none;"></div>
+      <div class="history-card-actions" style="display: none;">
+        <button class="history-card-restore">${t('Restore')}</button>
+        <button class="history-card-close">${t('Close')}</button>
+      </div>
+    `;
+
+    wireHistoryCard(card, group, snap);
+
+    if (expandedCardTs && snap.ts === expandedCardTs) {
+      card.classList.add('expanded');
+      const fullEl = card.querySelector('.history-card-full');
+      const actionsEl = card.querySelector('.history-card-actions');
+      if (fullEl) {
+        fullEl.style.display = 'block';
+        window.neo.historyRead(book.id, snap.chapterId, snap.ts).then((html) => {
+          if (html) {
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            fullEl.textContent = temp.innerText || temp.textContent || '';
+          }
+        });
+      }
+      if (actionsEl) actionsEl.style.display = 'flex';
+    }
+
+    itemsContainer.appendChild(card);
+  });
+
+  group.appendChild(itemsContainer);
+
+  const toggle = () => {
+    const isOpen = itemsContainer.style.display !== 'none';
+    itemsContainer.style.display = isOpen ? 'none' : 'block';
+    group.classList.toggle('open', !isOpen);
+    const arrow = titleSpan.querySelector('.hg-arrow');
+    if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
+  };
+  header.onclick = toggle;
+  header.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle();
+    }
+  };
+
+  return group;
+}
+
+function renderHistoryTimeline() {
+  const wrap = $('#sticky-list');
+  if (!wrap || currentSideTab !== 'history') return;
+
+  const openChapterIds = new Set(
+    $$('.history-group.open').map((el) => el.dataset.chId)
+  );
+  const expandedCardTs = document.querySelector('.history-card.expanded')?.dataset?.ts;
+
+  wrap.innerHTML = '';
+
+  if (!historySnapshots || historySnapshots.length === 0) {
+    wrap.innerHTML = `<div class="history-empty">${t('No snapshots yet.')}<br><br>${t('NEO automatically takes snapshots while you write, or hit {key} to take one now.', { key: IS_MAC ? '⌘⇧S' : 'Ctrl+Shift+S' })}</div>`;
+    return;
+  }
+
+  const container = document.createElement('div');
+  container.className = 'history-timeline';
+
+  const activeMap = new Map();
+  const archivedMap = new Map();
+
+  if (book && book.chapterOrder) {
+    for (const chId of book.chapterOrder) {
+      activeMap.set(chId, []);
+    }
+  }
+
+  for (const snap of historySnapshots) {
+    if (snap.archived) {
+      if (!archivedMap.has(snap.chapterId)) archivedMap.set(snap.chapterId, []);
+      archivedMap.get(snap.chapterId).push(snap);
+    } else {
+      if (!activeMap.has(snap.chapterId)) activeMap.set(snap.chapterId, []);
+      activeMap.get(snap.chapterId).push(snap);
+    }
+  }
+
+  for (const [chId, snaps] of activeMap.entries()) {
+    if (snaps && snaps.length > 0) {
+      container.appendChild(renderHistoryChapterGroup(chId, snaps, false, openChapterIds, expandedCardTs));
+    }
+  }
+
+  if (archivedMap.size > 0) {
+    const archHeader = document.createElement('div');
+    archHeader.className = 'history-section-header';
+    archHeader.textContent = t('Archived Chapters');
+    container.appendChild(archHeader);
+
+    for (const [chId, snaps] of archivedMap.entries()) {
+      if (snaps && snaps.length > 0) {
+        container.appendChild(renderHistoryChapterGroup(chId, snaps, true, openChapterIds, expandedCardTs));
+      }
+    }
+  }
+
+  wrap.appendChild(container);
+}
+
+function wireHistoryCard(card, group, snap) {
+  const fullEl = card.querySelector('.history-card-full');
+  const actionsEl = card.querySelector('.history-card-actions');
+  const restoreBtn = card.querySelector('.history-card-restore');
+  const closeBtn = card.querySelector('.history-card-close');
+
+  card.addEventListener('click', async (e) => {
+    if (e.target.closest('.history-card-actions')) return;
+
+    if (card.classList.contains('expanded')) {
+      collapseCard(card, fullEl, actionsEl);
+      return;
+    }
+
+    $$('.history-card.expanded').forEach((other) => {
+      collapseCard(other, other.querySelector('.history-card-full'), other.querySelector('.history-card-actions'));
+    });
+
+    card.classList.add('expanded');
+    if (fullEl) fullEl.style.display = 'block';
+    if (actionsEl) actionsEl.style.display = 'flex';
+
+    if (fullEl && !fullEl.dataset.loaded) {
+      fullEl.textContent = t('Loading preview…');
+      try {
+        const html = await window.neo.historyRead(book.id, snap.chapterId, snap.ts);
+        fullEl.dataset.loaded = '1';
+        if (html) {
+          const temp = document.createElement('div');
+          temp.innerHTML = html;
+          fullEl.textContent = temp.innerText || temp.textContent || '';
+        } else {
+          fullEl.textContent = t('(Snapshot could not be read)');
+        }
+      } catch (err) {
+        fullEl.textContent = t('(Snapshot could not be read)');
+      }
+    }
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      collapseCard(card, fullEl, actionsEl);
+    });
+  }
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await restoreHistorySnapshot(snap.ts, snap.chapterId);
+    });
+  }
+}
+
+function collapseCard(card, fullEl, actionsEl) {
+  if (!card) return;
+  card.classList.remove('expanded');
+  if (fullEl) fullEl.style.display = 'none';
+  if (actionsEl) actionsEl.style.display = 'none';
+}
+
+async function restoreHistorySnapshot(ts, chId) {
+  if (!book || !chId || !ts) return;
+  const content = await window.neo.historyRead(book.id, chId, ts);
+  if (content === null || content === undefined) {
+    toast(t('Could not read snapshot'));
+    return;
+  }
+  snapshotStructure('restore snapshot');
+  const isArchived = !book.chapterOrder.includes(chId);
+  chapterHTML[chId] = content;
+  await persistChapter(chId, content);
+
+  if (isArchived) {
+    book.chapterOrder.push(chId);
+    try {
+      await window.neo.historyUnarchive(book.id, chId);
+    } catch (err) {
+      console.error('historyUnarchive failed:', err);
+    }
+    await saveMeta();
+    renderChapters();
+  } else {
+    const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
+    if (body) {
+      body.innerHTML = content;
+      markDialogueOpening(body);
+      wireChapterBody(body, chId);
+    }
+  }
+
+  focusChapter(chId);
+  const chSec = document.querySelector(`.chapter[data-id="${chId}"]`);
+  if (chSec) chSec.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+
+  updateCounters();
+  scheduleNavRefresh();
+  await loadHistoryList();
+  renderHistoryTimeline();
+
+  const label = historyChapterName(chId);
+  toast(t('Restored {label} from snapshot', { label }));
+}
+
+function switchSideTab(tab) {
+  currentSideTab = tab;
+  $$('.side-tab').forEach((b) => {
+    const active = b.dataset.sideTab === tab;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  if (tab === 'notes') {
+    renderStickies();
+  } else if (tab === 'history') {
+    loadHistoryList().then(() => renderHistoryTimeline());
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'KeyS') {
+    if (book && !$('#editor-view').hidden) {
+      e.preventDefault();
+      e.stopPropagation();
+      const chId = currentChapterId || (book.chapterOrder && book.chapterOrder[0]);
+      if (chId) {
+        takeHistorySnapshot(chId).then(() => {
+          toast(t('Snapshot saved for {chapter}', { chapter: historyChapterName(chId) }));
+        });
+      }
+    }
+  }
+}, true);
+
 
 /* ================================================================== */
 /*  NAV PANE                                                           */
@@ -4943,6 +5330,7 @@ function renderNav() {
   list.appendChild(gap(book.chapterOrder.length));
   justAddedEntry = null;
   renderContentsLists();
+  if (currentSideTab === 'history') renderHistoryTimeline();
 }
 
 // the first words of a page, for its box in the Chapters pane
@@ -5196,6 +5584,9 @@ function pinPane(side, on) {
   } catch { /* fine: it just won't be remembered */ }
 }
 $('#side-pin').onclick = () => pinPane('side', $('#side-pane').dataset.pinned !== '1');
+$$('.side-tab').forEach((tab) => {
+  tab.onclick = () => switchSideTab(tab.dataset.sideTab);
+});
 $('#nav-pin').onclick = () => pinPane('nav', $('#nav-pane').dataset.pinned !== '1');
 if (!NO_HOVER) {
   try {
@@ -6435,13 +6826,24 @@ document.addEventListener('visibilitychange', () => {
   else if (book) flushAllSaves(); // iOS may end a backgrounded app without warning
 });
 
-window.addEventListener('beforeunload', flushAllSaves);
+window.addEventListener('beforeunload', () => {
+  if (book && currentChapterId && historyDirty) {
+    takeHistorySnapshot(currentChapterId);
+  }
+  flushAllSaves();
+});
 // flush whenever focus leaves NEO, and every 20 seconds
 window.addEventListener('blur', () => { if (book) flushAllSaves(); });
 setInterval(() => { if (book) flushAllSaves('tick'); }, 20000);
 
 async function backToShelf() {
   if (reading) stopReadAloud(false);
+  if (book && currentChapterId) {
+    try { await takeHistorySnapshot(currentChapterId); } catch {}
+  }
+  stopHistoryTimer();
+  historySnapshots = [];
+  historyDirty = false;
   flushAllSaves();
   tabPlaces = {};
   book = null;
