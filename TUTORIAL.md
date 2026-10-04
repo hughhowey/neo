@@ -66,6 +66,30 @@ Click the word counter that says "0 today" and you get the progress room: set a 
 New books are automatically given cover art with a seeded abstract look (six art styles, six type templates, typefaces bundled with NEO) so no two stories on the shelf look alike. Once a story passes 1,000 words, NEO can read it and paint a cover from the text. This is a bit more work but totally worth it. Get an OpenAI API key from their website and paste it into **File → Cover Art…**. The art is generated in the background for about a penny a picture. (These are not meant for publication, just writing inspiration!) The API key is stored encrypted in NEO's own settings, never in your library folder. The title and author are always set in real type on top, so the lettering is never left to a gen-AI model. The ↻ on any book re-rolls its type and colors, or paints it again. And you can always switch back and forth from the seeded modern look to the painted variety.
 
 
+**Writing a screenplay**
+
+NEO writes scripts now! It's tucked away so it doesn't clutter things up for novelists: right-click the + on any shelf and choose **New Script**. (On a phone or tablet, press and hold the +) Your script lands on the shelf looking like a script, white card stock and brass brads.
+
+Type a title and hit Enter, same as a book. Then write. NEO works out what each line is:
+
+- Start a line with INT. or EXT. and it becomes a scene heading. Hit Tab after INT and NEO adds the period; Tab after the place adds the dash. Places you've already used, and DAY or NIGHT, show up in gray as you type.
+- Type a character's name in capitals and hit Enter. The name jumps to the middle of the page, and the next line is dialogue.
+- Hit Enter at the end of a speech and you're back to action. Hit Enter AGAIN on that empty line and it turns into the next speaker's name, with whoever is being answered already filled in gray. Enter once more accepts the suggestion.
+- Start a line of dialogue with ( and it's a parenthetical.
+- Capitals ending in TO: (CUT TO:, SMASH CUT TO:) make a transition.
+
+Gray text is only ever a suggestion, built from names and places you've already written. Tab or the → key accepts it. Keep typing and it goes away. And if NEO guesses wrong (a sound effect in capitals can look like a character's name), hit Backspace on the empty dialogue line below it and it goes back to being action.
+
+If you'd rather choose for yourself, ⌘1 through ⌘7 (Ctrl on Windows) are Scene Heading, Action, Character, Parenthetical, Dialogue, Transition, and Shot. Those are Final Draft's keys, so some of you might already know them. Tab steps through them as well, and you can click any of them in the left panel.
+
+In a script the left panel stays open (click the little ☉ to tuck it away). Under the elements is every scene, with how long it runs in eighths of a page. Click a scene to jump there. Drag one to move the whole scene; ⌘Z puts it back. Down at the bottom, NEO shows what page you're on and how long the script runs, figured at a page a minute. Click the page counter to count scenes instead.
+
+Scroll up to the title page and fill it in: "Written by," your name, your contact info at the bottom left (type it once and every script uses it), and your draft and date at the bottom right.
+
+When it's done, **File → Export** makes a PDF formatted the way the industry expects, on US letter paper, ready to send. It also exports Fountain and Final Draft (.fdx) files for when someone wants to open it in another program. To bring a script into NEO, drag a .fountain or .fdx file onto a shelf, or use Import. You can also paste in a whole script written in Fountain (the plain-text format most screenwriting apps can save), and NEO sorts the lines into scene headings, dialogue, and the rest.
+
+Everything else works in scripts too: Notes, Darlings, ⌘⇧X placeholders, goals and sprints, and ⌘E, which emails you a PDF of the script.
+
 **Getting your book out**
 
 When your draft is done, the File menu exports to Word for your editor so they can track changes, or PDF, plain text, or Markdown. There's a proper **EPUB** option with a real table of contents built to Amazon's guidelines, but this is not highly tested yet, so use at your own risk!

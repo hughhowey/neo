@@ -217,21 +217,23 @@
         opts.map(([v, t]) => `<button class="${v === current ? 'on' : ''}" data-msg='${JSON.stringify(mk(v))}'>${t}</button>`).join('') + '</span></div>';
       const tick = (label, on, msg) => `<div class="pm-row"><span class="pm-label">${label}</span><span class="pm-seg"><button class="${on ? 'on' : ''}" data-msg='${JSON.stringify(msg)}'>${on ? '✓ On' : 'Off'}</button></span></div>`;
       const choices = (typeof BODY_FONT_CHOICES !== 'undefined') ? BODY_FONT_CHOICES : ['Georgia'];
+      // a script is set in Courier Prime, its lines are its elements, and it leaves as Fountain
+      const script = typeof book !== 'undefined' && book && typeof isScript === 'function' && isScript();
       sheet.innerHTML =
-        `<div class="pm-row pm-fonts"><span class="pm-label">Typeface</span><span class="pm-seg pm-wrap">` +
-          choices.map((f) => `<button class="${fonts.body === f ? 'on' : ''}" data-msg='${JSON.stringify({ type: 'bodyFont', value: f })}' style="font-family:${f}">${f}</button>`).join('') + '</span></div>' +
+        (script ? '' : `<div class="pm-row pm-fonts"><span class="pm-label">Typeface</span><span class="pm-seg pm-wrap">` +
+          choices.map((f) => `<button class="${fonts.body === f ? 'on' : ''}" data-msg='${JSON.stringify({ type: 'bodyFont', value: f })}' style="font-family:${f}">${f}</button>`).join('') + '</span></div>') +
         seg('Text size', [[-1, 'Smaller'], [0, 'Reset'], [1, 'Larger']], null, (v) => ({ type: 'fontSize', value: v })) +
-        seg('Drop cap', [['literary', 'Literary'], ['fantasy', 'Fantasy'], ['scifi', 'Sci-Fi'], ['none', 'Off']], fonts.dropcap || 'literary', (v) => ({ type: 'dropCap', value: v })) +
+        (script ? '' : seg('Drop cap', [['literary', 'Literary'], ['fantasy', 'Fantasy'], ['scifi', 'Sci-Fi'], ['none', 'Off']], fonts.dropcap || 'literary', (v) => ({ type: 'dropCap', value: v }))) +
         seg('Page', [['night', 'Night'], ['paper', 'Paper'], ['light', 'Light']], lib.pageTheme || 'night', (v) => ({ type: 'pageTheme', value: v })) +
         seg('Focus mode', [['off', 'Off'], ['paragraph', 'Paragraph'], ['sentence', 'Sentence']], focusNow, (v) => ({ type: 'focus', value: v })) +
         tick('Typewriter scrolling', st.typewriter, { type: 'typewriter' }) +
-        tick('Flush paragraph  ⇧Enter', st.flush, { type: 'flush' }) +
-        tick('Poetry paragraph  Ctrl+⇧Enter', st.poetry, { type: 'poetry' }) +
+        (script ? '' : tick('Flush paragraph  ⇧Enter', st.flush, { type: 'flush' }) +
+        tick('Poetry paragraph  Ctrl+⇧Enter', st.poetry, { type: 'poetry' })) +
         (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios' ? '' :
           `<div class="pm-row"><span class="pm-label">On-screen keyboard</span><span class="pm-seg"><button data-act="keyboard">${window.pocketSoftKeyboardOn && !window.pocketSoftKeyboardOn() ? 'Off' : '✓ On'}</button></span></div>`) +
         (typeof book !== 'undefined' && book
           ? `<div class="pm-row"><span class="pm-label">Export</span><span class="pm-seg pm-wrap">` +
-            [['txt', 'Text'], ['md', 'Markdown'], ['html', 'HTML'], ['docx', 'Word'], ['epub', 'EPUB']].map(([f, l]) => `<button data-msg='${JSON.stringify({ type: 'export', format: f })}'>${l}</button>`).join('') + '</span></div>'
+            (script ? [['fountain', 'Fountain'], ['fdx', 'Final Draft']] : [['txt', 'Text'], ['md', 'Markdown'], ['html', 'HTML'], ['docx', 'Word'], ['epub', 'EPUB']]).map(([f, l]) => `<button data-msg='${JSON.stringify({ type: 'export', format: f })}'>${l}</button>`).join('') + '</span></div>'
           : '') +
         `<div class="pm-row pm-actions"><button data-msg='${JSON.stringify({ type: 'stats' })}'>Goals…</button><button data-msg='${JSON.stringify({ type: 'help' })}'>Keyboard shortcuts</button><button data-act="close">Done</button></div>`;
     }
