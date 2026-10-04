@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const JS_FILES = ['app.js', 'main.js', 'covers.js'];
+const JS_FILES = ['app.js', 'outline-cards.js', 'main.js', 'covers.js'];
 const LOCALES = path.join(ROOT, 'locales');
 
 function unescapeJs(s) {

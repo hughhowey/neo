@@ -23,6 +23,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `index.html` | Two views: `#bookshelf-view` and `#editor-view`. CSP is `script-src 'self'` |
 | `app.js` | The whole UI, in banner-marked sections. Search for the banner before reading the file |
 | `styles.css` | All styling. Tokens are CSS variables at the top |
+| `outline-cards.js` | The Outline as index cards (`book.outlineView`): moving a card moves the chapter, or the section. Loads after `app.js` and shares its globals |
 | `covers.js` | Shelf covers in the window: seeded canvas art plus real title type. `window.NeoCovers` |
 | `art.js` | Painted covers in the main process. OpenAI only. Title and author are never sent to the image model |
 | `i18n.js` | `t()` / `tk()`, shared by main and the window. English source text is the key |
@@ -100,7 +101,7 @@ node scripts/i18n.js template
 node scripts/i18n.js check fr
 ```
 
-`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, and `index.html`. A new string in another file will not enter the template until that list includes it.
+`scripts/i18n.js` only scans `app.js`, `outline-cards.js`, `main.js`, `covers.js`, and `index.html`. A new string in another file will not enter the template until that list includes it.
 
 Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 
@@ -110,7 +111,7 @@ Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.
 
 `pocket/` is a Capacitor app that runs the desktop editor. Its bridge (`pocket/www/pocket-bridge.js`) implements `window.neo` against the phone's library folder. Android shares `Documents/NEO Library` via sync. iOS uses the app folder, optionally iCloud, with `LibraryHome.swift` locating that folder.
 
-CI copies `app.js`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, and `locales/` into `pocket/www/` at build time. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app.js`.
+CI copies `app.js`, `outline-cards.js`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, and `locales/` into `pocket/www/` at build time. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app.js`.
 
 ## Commands
 

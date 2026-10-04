@@ -5519,10 +5519,12 @@ function focusAfterSectionRemoved(list, index, chId) {
 }
 
 function renderOutline(focusTarget) {
+  if (renderOutlineCards(focusTarget)) return; // outline-cards.js: the index-card view
   book.sectionNotes = book.sectionNotes || {};
   book.chapterNotes = book.chapterNotes || {};
   const wrap = $('#outline-list');
   wrap.innerHTML = '';
+  wrap.classList.remove('oc-mode');
 
   // the story's lines, with each part standing over its chapters (the pages
   // a book carries have nothing to outline)
@@ -5536,6 +5538,8 @@ function renderOutline(focusTarget) {
       wrap.appendChild(outlineLine('section', chId, sec.id, j, secLetter(j), sec.text));
     });
   });
+
+  outlineViewSwitch(wrap); // outline-cards.js: List | Index cards
 
   const hint = document.createElement('div');
   hint.className = 'ol-hint';
