@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<FinalDraft DocumentType="Script" Template="No" Version="1">
+
+  <Content>
+    <Paragraph Type="Scene Heading">
+      <Text>EXT. LEEVILLE MARINA - NIGHT</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Fog sits on the bayou like it was poured there. Shrimp boats nod against their fenders, rigging slack.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Out past the channel markers, a bell buoy rings. Slow. Even. Patient.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>There is no wind.</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>INT. HARBOR OFFICE - CONTINUOUS</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Tide charts on every wall. A VHF radio hisses on the desk. VERNON LIRETTE (70s), suspenders over an undershirt gone gray, stands at the window with a cold cup of coffee.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>The door bangs open. KIM BROUSSARD (40s) shoulders in, wetsuit peeled to the waist, hair still dripping.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>That's three nights.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON</Text>
+    </Paragraph>
+    <Paragraph Type="Parenthetical">
+      <Text>(not turning)</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Four. You slept through Sunday.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>There's no buoy on the chart out there, Vernon.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>She drops a coil of chain on his desk. Rust-black, heavy, still streaming water. The last link has been cut clean through.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>The cut shines like a new dime.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Somebody anchored it. And somebody came back for it.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Vernon sets the coffee down. He looks at the chain for a long time.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Fuel up the Louella.</Text>
+    </Paragraph>
+    <Paragraph Type="Transition">
+      <Text>CUT TO:</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>EXT. MISS LOUELLA - NIGHT</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>The trawler noses through the fog, running lights haloed. Kim at the bow with a spotlight. Vernon at the wheel.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>The bell. Close now.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>There.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>The beam finds it. A buoy, all right. Old iron, crusted with barnacles, rocking on dead-flat water.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Rocking.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Leave it. We go home.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Parenthetical">
+      <Text>(quiet)</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>We should call somebody. The Coast Guard. Shana's brother still runs the station at Grand Isle, doesn't he? He'd come out. He owes you for the thing with the outboard, and you know he does, and you know he'd come out tonight if you called him instead of standing there like the fog is going to answer for you.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>He'd laugh at us.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>He'd laugh at you.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Vernon throttles down. The engine ticks. The buoy keeps rocking.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Under the bell, faint, something else. A voice. Counting.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>You hear that?</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>I hear it.</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>INT. MISS LOUELLA - WHEELHOUSE - CONTINUOUS</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Vernon grabs the radio handset. Static. He twists the dial. Static.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Leeville harbor, this is the Miss Louella. Anybody up?</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Static. Then, under it, the counting again. Closer.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM (O.S.)</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>Vernon!</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>EXT. MISS LOUELLA - BOW - CONTINUOUS</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Kim leans over the rail with the spotlight. In the water, just under the surface, a second chain. It runs straight down. Taut.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Something below is holding the buoy still. Something below is making it rock.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>KIM</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>It's not anchored. It's tethered.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>VERNON (O.S.)</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>To what?</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>She doesn't answer. She's already pulling on her mask.</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>EXT. GULF - UNDERWATER - CONTINUOUS</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Dark. Bubbles. Kim's light cuts a narrow tunnel through silt.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>The chain descends. Ten feet. Twenty. At thirty she stops.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>A second buoy. Upside down. Hanging below the first, its bell swinging in the black water. Ringing.</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>There is no current down here either.</Text>
+    </Paragraph>
+    <Paragraph Type="Transition">
+      <Text>SMASH CUT TO:</Text>
+    </Paragraph>
+    <Paragraph Type="Scene Heading">
+      <Text>INT. HARBOR OFFICE - DAWN</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Gray light. Vernon asleep in his chair. The chain still on the desk. The cut link is gone.</Text>
+    </Paragraph>
+  </Content>
+</FinalDraft>
