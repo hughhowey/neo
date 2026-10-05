@@ -853,6 +853,199 @@ body.night .ol-part .ol-num, body.night .ol-part-name { color: #918b7d; }
   line-height: 1.7; text-align: center;
 }
 
+/* --- Outline cards: the outline set like a page (app.js, OUTLINE CARDS) --- */
+#outline-views { display: flex; justify-content: center; gap: 2px; margin: -30px 0 24px; opacity: 0; transition: opacity 0.15s; }
+#aux-paper:hover #outline-views, #outline-views:focus-within { opacity: 1; }
+@media (hover: none) { #outline-views { opacity: 1; } }
+#outline-views button {
+  background: none; border: none; border-bottom: 2px solid transparent; padding: 4px 10px;
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; letter-spacing: 1px;
+  color: var(--muted); cursor: pointer;
+}
+#outline-views button.on { color: var(--ink); border-bottom-color: var(--accent); }
+#editor-view.board-on #outline-views button.on { color: color-mix(in srgb, var(--accent) 35%, #e8e4da); }
+body.light #editor-view.board-on #outline-views button.on { color: #2b2926; }
+
+/* the board takes the whole window, in the room rather than on a page */
+#editor-view.board-on #paper-scroll { left: 0; right: 0; width: auto; transform: none; }
+#editor-view.board-on.nav-pinned #paper-scroll { left: 248px; }
+#editor-view.board-on.side-pinned #paper-scroll { right: 250px; }
+#editor-view.board-on #aux-paper {
+  width: auto; max-width: none; background: none; box-shadow: none; border: none;
+  margin: 0; padding: 30px clamp(18px, 3vw, 44px) 90px; min-height: 0; color: var(--muted);
+}
+#editor-view.board-on #aux-paper h2 { color: var(--muted); }
+
+#outline-board {
+  --cz: 1;
+  --mat: color-mix(in srgb, var(--accent) 10%, transparent);
+  --card: #f4f1e8; --card-head: #fbfaf7; --card-ink: #1c1c1c; --card-soft: #6f6a5e; --card-mark: #7a6538;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(176px * var(--cz)), 1fr));
+  row-gap: calc(14px * var(--cz)); position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+body.night #outline-board { --card: #e2ddd1; --card-head: #ebe7dd; }
+/* a part starts a fresh line, the way it starts a fresh page */
+.ob-part {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 10px 6px 0;
+  font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent);
+}
+.ob-part .ob-rule { flex: 1; height: 1px; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+/* one mat under a chapter's cards: rounded where it starts and ends,
+   square where it runs on to the next line */
+.ob-cell { position: relative; background: var(--mat); padding: calc(8px * var(--cz)) calc(4px * var(--cz)); outline: none; }
+.ob-cell.first { margin-left: 5px; padding-left: calc(8px * var(--cz)); border-radius: 10px 0 0 10px; }
+.ob-cell.last { margin-right: 5px; padding-right: calc(8px * var(--cz)); border-radius: 0 10px 10px 0; }
+.ob-cell.first.last { border-radius: 10px; }
+.ob-card {
+  height: calc(112px * var(--cz)); box-sizing: border-box; border-radius: 3px;
+  background: var(--card); color: var(--card-ink);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 5px 12px rgba(0,0,0,0.3);
+  padding: calc(7px * var(--cz)) calc(11px * var(--cz)); display: flex; flex-direction: column; gap: 3px;
+  overflow: hidden; cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  font-size: calc(13px * var(--cz));
+}
+body.light .ob-card { box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.12); }
+.ob-cell:focus-visible .ob-card { box-shadow: 0 0 0 2px var(--accent), 0 5px 12px rgba(0,0,0,0.3); }
+.ob-chapter { background: var(--card-head); }
+.ob-head { display: flex; align-items: baseline; gap: 7px; min-height: 0; }
+.ob-chapter .ob-head { align-items: flex-end; border-bottom: 1px solid #e3b4ae; padding-bottom: 2px; }
+.ob-mark { font-family: var(--dropcap-font); font-size: 2.6em; line-height: 1; color: var(--card-mark); }
+.ob-mark.ob-word { font-family: inherit; font-size: 0.82em; letter-spacing: 2px; text-transform: uppercase; padding-bottom: 4px; }
+.ob-words { margin-left: auto; font-size: 0.82em; color: var(--card-soft); padding-bottom: 3px; white-space: nowrap; }
+.ob-letter { font-size: 0.82em; font-weight: 600; color: var(--card-mark); }
+.ob-flag { width: 7px; height: 7px; border-radius: 50%; background: var(--red); align-self: center; flex: none; }
+.ob-section .ob-flag { margin-left: auto; }
+.ob-text {
+  flex: 1; min-height: 0; font-family: var(--body-font); line-height: 1.4; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; outline: none;
+}
+.ob-chapter .ob-text { padding-top: 3px; }
+.ob-text.excerpt { color: #4a463e; }
+.ob-text.empty { color: #9a9486; font-style: italic; }
+.ob-card.unwritten .ob-text:not(.empty) { color: #807a6c; font-style: italic; }
+.ob-foot { font-size: 0.82em; color: var(--card-soft); }
+
+/* a script's board: each scene its own card, no chapters to gather them */
+#outline-board.script-board { row-gap: calc(16px * var(--cz)); }
+#outline-board.script-board .ob-cell { background: none; padding: 0 calc(7px * var(--cz)); margin: 0; border-radius: 0; }
+#outline-board.script-board .ob-card { height: calc(146px * var(--cz)); }
+.ob-slug {
+  font-family: var(--sp-font, 'Courier Prime', 'Courier New', monospace); font-weight: bold; text-transform: uppercase;
+  font-size: 0.95em; line-height: 1.3; border-bottom: 1px solid #e3b4ae; padding-bottom: 3px; outline: none;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.ob-slug:empty::before { content: attr(data-ph); color: #b0a998; }
+.ob-cell.open .ob-slug { display: block; overflow: visible; cursor: text; }
+.ob-scene .ob-foot { letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#outline-board.tiles.script-board .ob-card { height: 64px; }
+#outline-board.tiles .ob-scene .ob-text { display: none; }
+
+/* the + on the seam after a card, and the card that ends the board */
+.ob-plus {
+  position: absolute; right: -11px; top: 50%; transform: translateY(-50%); z-index: 3;
+  width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); background: var(--bg);
+  color: var(--accent); font: 15px/19px -apple-system, BlinkMacSystemFont, sans-serif; text-align: center;
+  opacity: 0; transition: opacity 0.12s; cursor: pointer;
+}
+.ob-cell:hover .ob-plus, .ob-cell:focus-visible .ob-plus { opacity: 1; }
+.ob-cell.open .ob-plus, .ob-cell[data-new] .ob-plus, body.ob-dragging .ob-plus { display: none; }
+.ob-plus:hover { background: var(--accent); color: var(--bg); }
+.ob-add {
+  margin: calc(8px * var(--cz)) 5px; min-height: calc(112px * var(--cz)); border-radius: 6px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); background: none;
+  color: var(--muted); font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; cursor: pointer;
+}
+.ob-add:hover, .ob-add:focus-visible { color: var(--accent); border-color: var(--accent); }
+#outline-board.tiles .ob-add { min-height: 58px; }
+#outline-board.script-board .ob-add { margin: 0 calc(7px * var(--cz)); min-height: calc(146px * var(--cz)); }
+.ob-from {
+  font-family: var(--body-font); font-size: 0.85em; line-height: 1.4; color: #6f6a5e;
+  border-left: 2px solid #e3b4ae; padding-left: 8px; margin: 2px 0 4px;
+}
+
+/* tiles: zoomed out, a whole novel on one screen */
+#outline-board.tiles .ob-card { height: 58px; font-size: 11px; padding: 5px 8px; }
+#outline-board.tiles .ob-mark { font-size: 24px; }
+#outline-board.tiles .ob-mark.ob-word { font-size: 9px; }
+#outline-board.tiles .ob-text { -webkit-line-clamp: 2; }
+#outline-board.tiles .ob-foot, #outline-board.tiles .ob-words { display: none; }
+#outline-board.tiles .ob-chapter .ob-head { border-bottom: none; }
+#outline-board.tiles .ob-chapter .ob-text { display: none; }
+
+/* a card being written on lifts and grows */
+.ob-cell.open { z-index: 20; }
+.ob-cell.open .ob-card {
+  position: absolute; left: 0; top: 0; width: calc(200% - 8px); height: auto;
+  min-height: calc(180px * var(--cz)); cursor: auto; user-select: text; -webkit-user-select: text;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.4), 0 24px 48px rgba(0,0,0,0.55); font-size: calc(15px * var(--cz));
+}
+.ob-cell.open-left .ob-card { left: auto; right: 0; }
+.ob-cell.open .ob-text { -webkit-line-clamp: unset; display: block; overflow: visible; min-height: 4.2em; color: var(--card-ink); font-style: normal; cursor: text; }
+.ob-text[contenteditable="true"]:empty::before { content: attr(data-ph); color: #9a9486; font-style: italic; }
+.ob-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11px; color: var(--card-soft); padding-top: 6px; }
+.ob-tools button { white-space: nowrap; }
+.ob-tools button {
+  background: none; border: 1px solid #cfc8b8; border-radius: 12px; padding: 3px 10px;
+  font: inherit; color: #5b5648; cursor: pointer;
+}
+.ob-tools button:hover { border-color: var(--accent); color: var(--card-ink); }
+.ob-tools span { margin-left: auto; }
+
+/* dragging */
+body.ob-dragging, body.ob-dragging * { cursor: grabbing !important; user-select: none !important; }
+.ob-cell.ob-lifted .ob-card { opacity: 0.3; }
+.ob-float {
+  position: fixed; z-index: 900; pointer-events: none; transform: rotate(-2deg);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.4), 0 22px 40px rgba(0,0,0,0.55) !important;
+}
+#ob-caret {
+  position: fixed; z-index: 899; width: 3px; border-radius: 2px; pointer-events: none;
+  background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+#outline-board-hint { margin-top: 34px; }
+
+/* loose cards: the right-hand pane while the Outline is up */
+.side-title-loose, #loose-list { display: none; }
+#editor-view.outline-tab .side-title-notes, #editor-view.outline-tab #sticky-list { display: none; }
+#editor-view.outline-tab .side-title-loose { display: inline; }
+#editor-view.outline-tab #loose-list { display: flex; }
+#loose-list { flex-direction: column; gap: 12px; padding: 0 14px; --cz: 1; }
+#loose-list .ob-card { height: auto; min-height: 64px; background: #f4f1e8; color: #1c1c1c; }
+#loose-list .ob-text { -webkit-line-clamp: 5; }
+#loose-list .ob-cell { background: none; padding: 0; }
+#loose-list .ob-cell.open .ob-card { position: static; width: auto; min-height: 120px; }
+#loose-list .ob-cell:nth-child(odd) .ob-card { transform: rotate(0.6deg); }
+#loose-list .ob-cell:nth-child(even) .ob-card { transform: rotate(-0.5deg); }
+#loose-list .ob-cell.open .ob-card { transform: none; }
+.loose-add {
+  height: 40px; border: 1px dashed #4a4a4a; border-radius: 4px; background: none;
+  color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+}
+.loose-add:hover { color: var(--accent); border-color: var(--accent); }
+.loose-tip { font-size: 12px; line-height: 1.5; color: var(--muted); font-style: italic; padding: 0 2px; }
+#side-pane.drop-over { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* the outline note walking a line ahead of the writer (app.js, the note
+   walks ahead): room under the caret's paragraph, the note set in it */
+.chapter.sheet { position: relative; }
+.chapter-body p[data-walk] { margin-bottom: var(--walk-h, 2em); }
+.walk-note {
+  position: absolute; z-index: 2; box-sizing: border-box; padding: 2px 0 0 2em;
+  font-family: var(--body-font); font-style: italic; line-height: 1.5;
+  font-size: calc(var(--editor-size, 17px) * 0.82 * var(--page-zoom, 1));
+  color: color-mix(in srgb, var(--ink) 38%, var(--paper));
+  user-select: none; -webkit-user-select: none; pointer-events: none;
+}
+.walk-note .wn-dismiss {
+  pointer-events: auto; margin-left: 10px; background: none; border: none; padding: 0;
+  font: 11px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; font-style: normal;
+  color: color-mix(in srgb, var(--ink) 30%, var(--paper)); cursor: pointer; opacity: 0.7;
+}
+.walk-note .wn-dismiss:hover, .walk-note .wn-dismiss:focus-visible { color: var(--accent); opacity: 1; }
+body.focus-mode .walk-note { opacity: 0.6; }
+
 /* Ghost paragraphs: outline notes waiting in the manuscript to become prose */
 .chapter-body p.ghost {
   color: #a9a294; font-style: italic; text-indent: 0 !important;
@@ -1937,6 +2130,10 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 .sp-geom > p.sp-dialogue, .sp-geom > p.sp-paren,
 .chapter + .chapter .sp-geom > p.sp-dialogue:first-child, .chapter + .chapter .sp-geom > p.sp-paren:first-child { margin-top: 0; }
 .sp-geom > p.sp-heading, .sp-geom > p.sp-character, .sp-geom > p.sp-transition, .sp-geom > p.sp-shot { text-transform: uppercase; }
+/* scene headings stand out as you write, and print the same way */
+.sp-geom > p.sp-heading, .sp-narrow > p.sp-heading { font-weight: bold; }
+/* two blank lines above a scene heading (SP_BEFORE in app.js) */
+.sp-geom > p.sp-heading:not(:first-child) { margin-top: 2em; }
 .sp-geom > p.sp-character { margin-left: 13.2em; width: 23.1em; --ind: 13.2em; }
 .sp-geom > p.sp-paren { margin-left: 9.6em; width: 15.3em; --ind: 9.6em; }
 .sp-geom > p.sp-dialogue { margin-left: 6em; width: 21.3em; --ind: 6em; }
@@ -2001,6 +2198,7 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 .sp-narrow > p { margin: 1.3em 0 0; text-indent: 0 !important; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
 .sp-narrow > p:first-child { margin-top: 0; }
 .sp-narrow > p.sp-dialogue, .sp-narrow > p.sp-paren { margin-top: 0; }
+.sp-narrow > p.sp-heading:not(:first-child) { margin-top: 2.6em; }
 .sp-narrow > p.sp-heading, .sp-narrow > p.sp-character, .sp-narrow > p.sp-transition, .sp-narrow > p.sp-shot { text-transform: uppercase; }
 .sp-narrow > p.sp-character { margin-left: 6.5em; --ind: 6.5em; }
 .sp-narrow > p.sp-paren { margin-left: 4.5em; margin-right: 3em; --ind: 4.5em; }

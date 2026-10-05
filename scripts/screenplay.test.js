@@ -97,6 +97,8 @@ test('pages: 54 lines, a heading never alone at the foot, a speech kept with its
   assert.ok(sp.spPaginate(d).at[26].brk, 'the speech goes over with its speaker');
   const long = [lines('action', 120), lines('action', 1)];
   assert.equal(sp.spPaginate(long).pages, 3, 'a paragraph longer than a page runs on');
+  const two = sp.spPaginate([lines('heading', 1), lines('action', 1), lines('heading', 1), lines('action', 1)]);
+  assert.deepEqual(two.at.map((a) => a.before), [0, 1, 2, 1], 'two blank lines above a scene heading, none at the top');
   assert.equal(sp.spEighths(54), 8);
   assert.equal(sp.spEighths(7), 1);
 });

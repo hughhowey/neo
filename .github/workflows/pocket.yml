@@ -28,6 +28,8 @@ on:
       - 'fonts/**'
       - 'i18n.js'
       - 'locales/**'
+      - 'main.js'
+      - 'scripts/pocket-www.js'
       - '.github/workflows/pocket.yml'
     tags:
       - 'pocket-v*'
@@ -67,15 +69,9 @@ jobs:
       - name: Install and assemble web assets
         run: |
           npm install --ignore-scripts
+          node scripts/pocket-www.js
           cd pocket
           npm install
-          cp ../app.js www/app.js
-          cp ../bible.js www/bible.js
-          cp ../covers.js www/covers.js
-          cp ../styles.css www/styles.css
-          cp ../i18n.js www/i18n.js
-          cp ../node_modules/jszip/dist/jszip.min.js www/jszip.min.js
-          rm -rf www/fonts www/locales && cp -R ../fonts www/fonts && cp -R ../locales www/locales
           npx cap sync android
 
       - name: Restore signing key
