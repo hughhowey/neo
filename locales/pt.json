@@ -500,8 +500,7 @@
   "This story just passed {n} words — add an API key under File → Cover Art… and NEO will paint it a cover.": "Esta história acabou de passar de {n} palavras: adicione uma chave de API em Arquivo → Arte da capa… e o NEO vai pintar uma capa para ela.",
   "Title Page": "Página de título",
   "today": "hoje",
-  "Today's words — click for goals, sprints, and your progress chart": "Palavras de hoje: clique para metas, sprints e o seu gráfico de progresso",
-  "total": "total",
+  "Today's words and time — click for goals, sprints, and your progress chart": "Palavras e tempo de hoje: clique para metas, sprints e o seu gráfico de progresso",
   "total words": "palavras no total",
   "Transition": "Transição",
   "Try Again": "Tentar de novo",
@@ -681,5 +680,15 @@
   "Write in a new paragraph below or above": "Escrever em um novo parágrafo abaixo ou acima",
   "Select": "Selecionar",
   "Move to stretch it, then y to copy or d to cut.": "Mova-se para ampliá-la; depois y para copiar ou d para recortar.",
-  "Delete the letter under the caret": "Apagar a letra sob o cursor"
+  "Delete the letter under the caret": "Apagar a letra sob o cursor",
+  "Daily time goal (minutes)": "Meta diária de tempo (minutos)",
+  "time today": "tempo hoje",
+  "Words": "Palavras",
+  "Time": "Tempo",
+  "Chart": "Gráfico",
+  "daily time": "tempo por dia",
+  "Time written over the last 30 days": "Tempo escrito nos últimos 30 dias",
+  "daily goal": "meta diária",
+  "{value} words": "{value} palavras",
+  "{value} written": "{value} escritas"
 }

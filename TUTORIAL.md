@@ -75,7 +75,7 @@ The UI is deliberately difficult to see unless you roll your mouse over the semi
 
 **Goals, sprints, and the chart**
 
-Click the word counter that says "0 today" and you get the progress room: set a daily goal, set a book goal, start a word sprint, and watch a chart of your last thirty days that looks a lot like the NaNoWriMo graph, because that graph is what got me through many of my novels. Get addicted to writing, to the daily habit!
+Click the word counter that says "0 today" and you get the progress room: set a daily goal, set a book goal, set a daily time goal if you'd rather count minutes than words, start a word sprint, and watch a chart of your last thirty days that looks a lot like the NaNoWriMo graph, because that graph is what got me through many of my novels. Get addicted to writing, to the daily habit!
 
 **Cover Art**
 
