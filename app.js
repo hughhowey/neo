@@ -220,6 +220,7 @@ function setText(el, text) {
 
 // Platform-aware key labels: Macs read ⌘⇧X, everyone else reads Ctrl+Shift+X
 const IS_MAC = navigator.platform.toLowerCase().includes('mac');
+const IS_LINUX = !IS_MAC && /linux/i.test(navigator.platform) && !window.Capacitor;
 // a touch screen (Pocket): nothing to hover, no right button
 const NO_HOVER = !!(window.matchMedia && window.matchMedia('(hover: none)').matches) || !!window.Capacitor;
 // NEO Pocket (the Android and iOS shell)
@@ -2228,6 +2229,7 @@ async function openBook(bookId) {
 
   $('#bookshelf-view').hidden = true;
   $('#editor-view').hidden = false;
+  applyBright();
   document.execCommand('defaultParagraphSeparator', false, 'p');
 
   $('#tp-title').textContent = isUntitled(book.title) ? '' : book.title;
@@ -2258,7 +2260,16 @@ async function openBook(bookId) {
       // pick up right where you left off — here, or on the other device
       currentChapterId = book.lastPosition.chapterId;
       const pos = book.lastPosition;
-      requestAnimationFrame(() => { resumePosition(pos); vimRest(); });
+      requestAnimationFrame(() => {
+        resumePosition(pos);
+        vimRest();
+        // closed on the Outline, Notes or Darlings: it opens there again, at
+        // the same scroll (the manuscript keeps its own place underneath)
+        if (['outline', 'notes', 'darlings'].includes(pos.tab) && book && book.id === bookId) {
+          tabPlaces[pos.tab] = { scroll: pos.tabScroll || 0 };
+          switchTab(pos.tab);
+        }
+      });
     }
   }
 
@@ -4021,9 +4032,17 @@ function smartKeys(e, body) {
   };
 
   if (markdownEmphasis(e, body, range)) return;
+  // German sets its dash as an en dash – like this –, so there -- makes
+  // one, and a third hyphen the em dash (#286)
+  const german = writingLanguage().toLowerCase().startsWith('de');
   if (e.key === '-' && prevChars(1) === '-') {
     e.preventDefault();
-    replaceBefore(1, '—'); // —
+    replaceBefore(1, german ? '–' : '—');
+    return;
+  }
+  if (german && e.key === '-' && prevChars(1) === '–') {
+    e.preventDefault();
+    replaceBefore(1, '—');
     return;
   }
   if (e.key === '.' && prevChars(2) === '..') {
@@ -4047,15 +4066,21 @@ function smartKeys(e, body) {
     e.preventDefault();
     const before = prevChars(1);
     const q = e.key === '"' ? bookQuotes(body) : quoteStyle();
-    let opening = before === '' || /[\s\(\[\{‘“«„>]/.test(before);
+    let opening = before === '' || /[\s\(\[\{‘“«„‚»›‹>]/.test(before);
     // after a dash, a quote usually closes speech that was cut off ("I was
     // just—"); it opens one only when no quotation is open in the paragraph
     if (before === '—' || before === '–') opening = !quoteIsOpen(range, e.key === '"' ? q : { open: '‘', close: '’' }, e.key === '"' ? '"' : '');
     let ch;
     if (e.key === "'") {
-      // most languages type ' as an apostrophe only; English and Dutch also
-      // open single quotes with it
-      ch = q.singles && opening ? '‘' : '’';
+      // most languages type ' as an apostrophe only; English, Dutch and
+      // German also open (and German closes) single quotes with it
+      const sq = singleQuotes(body);
+      if (!sq) ch = '’';
+      else if (opening) ch = sq.open;
+      // German's closing mark isn't its apostrophe: it closes only a single
+      // quotation that is open in the paragraph
+      else if (sq.close !== '’' && quoteIsOpen(range, sq, '')) ch = sq.close;
+      else ch = '’';
     } else {
       ch = opening ? q.open : q.close;
     }
@@ -4110,6 +4135,18 @@ const QUOTE_STYLES = {
   ru: { open: '«', close: '»' },
   el: { open: '«', close: '»' }
 };
+// The single quotation marks, where ' types them: English and Dutch ‘…’;
+// German ‚…‘, or ›…‹ in a book set in »…«, or ‹…› in Swiss «…» (#286).
+// Elsewhere ' is an apostrophe only.
+function singleQuotes(el) {
+  const q = quoteStyle();
+  if (q.singles) return { open: '‘', close: '’' };
+  if (!writingLanguage().toLowerCase().startsWith('de')) return null;
+  const d = bookQuotes(el).open.trim();
+  if (d === '»') return { open: '›', close: '‹' };
+  if (d === '«') return { open: '‹', close: '›' };
+  return { open: '‚', close: '‘' };
+}
 function writingLanguage() {
   return (library && library.spellLanguage) || NeoI18n.getLocale();
 }
@@ -4245,8 +4282,10 @@ $('#tp-author').addEventListener('input', () => {
 // skips the character the menu already handles, so one press fires one action.
 function isSpellcheckShortcut(e) {
   if (!(e.metaKey || e.ctrlKey) || e.altKey) return false;
-  if (e.shiftKey && e.key === ';') return true;
-  return e.code === 'Semicolon' && e.key !== ';';
+  // the menu shows ⌘; but leaves the key to the window (main.js), so the
+  // character itself, Shift or not, is the shortcut
+  if (e.key === ';') return true;
+  return e.code === 'Semicolon' && ![';', ':', '/', '?'].includes(e.key);
 }
 function isLargerTextShortcut(e) {
   if (!(e.metaKey || e.ctrlKey) || e.altKey) return false;
@@ -5782,6 +5821,8 @@ function spEditorMode() {
   $('#paper').classList.toggle('narrow', narrow);
   $('#editor-view').classList.toggle('script-mode', on);
   $('#nav-pane').classList.toggle('script', on);
+  // novel and script each keep their own page zoom: entering one applies its own
+  applyPageZoom();
   const tabM = $('.tab[data-tab="manuscript"]');
   if (tabM) setText(tabM, on ? t('Script') : t('Manuscript'));
   const tabO = $('.tab[data-tab="outline"]');
@@ -6915,6 +6956,7 @@ function switchTab(name) {
       : { scroll: scroller.scrollTop };
   }
   currentTab = name;
+  applyBright();
   $$('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.tab === name);
     t.setAttribute('aria-selected', t.dataset.tab === name ? 'true' : 'false');
@@ -6948,7 +6990,8 @@ function switchTab(name) {
   auxEditor.hidden = true;
   dList.hidden = true;
   oList.hidden = true;
-  cList.hidden = true;
+  // the outline's cards, their List/Cards switch and their hint belong to the Outline alone
+  for (const id of ['#outline-board', '#outline-views', '#outline-board-hint']) { const el = $(id); if (el) el.hidden = true; }
 
   if (name === 'darlings') {
     $('#aux-title').textContent = t('Darlings');
@@ -7034,7 +7077,7 @@ function renderOutline(focusTarget) {
 
   const hint = document.createElement('div');
   hint.className = 'ol-hint';
-  hint.textContent = t('Enter — new chapter (or section, from a section line) · Tab — turn a fresh chapter line into a section · Shift+Tab — turn a section into a chapter · Backspace on an empty line removes it');
+  hint.textContent = t('Enter — new chapter · Tab — make it a section, or a new section below one · ⇧Tab — make it a chapter again · Backspace on an empty line removes it');
   wrap.appendChild(hint);
 
   if (focusTarget) {
@@ -7149,23 +7192,19 @@ function outlineLine(kind, chId, secId, index, label, text) {
       e.stopPropagation();
       return;
     }
-    if (e.key === 'Enter') {
+    // Enter: always a new chapter. From a chapter's line it goes right after
+    // that chapter (or before it, from the very start of a line with words);
+    // from a section's line, after the whole chapter the section is in.
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
       e.preventDefault();
-      const above = caretAtStart();
+      if (e.isComposing || e.keyCode === 229) return;
+      const above = kind === 'chapter' && caretAtStart();
       save();
-      snapshotStructure(kind === 'chapter' ? 'outline new chapter' : 'outline new section', { outlineFocus: here() });
-      if (kind === 'chapter') {
-        const at = book.chapterOrder.indexOf(chId) + (above ? 0 : 1);
-        const newId = createChapterAt(at);
-        renderOutline({ chId: newId });
-      } else {
-        const list = book.sectionNotes[chId];
-        const newSec = { id: 'sec-' + Date.now().toString(36), text: '' };
-        list.splice(index + (above ? 0 : 1), 0, newSec);
-        scheduleMetaSave();
-        syncGhosts(chId);
-        renderOutline({ secId: newSec.id });
-      }
+      snapshotStructure('outline new chapter', { outlineFocus: here() });
+      const at = book.chapterOrder.indexOf(chId) + (above ? 0 : 1);
+      const newId = createChapterAt(at);
+      updateCounters();
+      renderOutline({ chId: newId });
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
@@ -7173,32 +7212,28 @@ function outlineLine(kind, chId, secId, index, label, text) {
       const next = lines[lines.indexOf(txt) + (e.key === 'ArrowDown' ? 1 : -1)];
       if (next) focusOutlineTextEnd(next);
     }
+    // Tab: always a section. A section's line makes a new one below it; a
+    // chapter's line becomes a section of the chapter above, writing and all
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
-      if (kind !== 'chapter') {
-        // A section line is already as indented as an outline line can get, so Tab
-        // moves on to the end of the next line (chapter included) instead of doing
-        // nothing. Tab on a chapter keeps its convert-to-section meaning below.
-        const lines = [...document.querySelectorAll('.ol-line .ol-text')];
-        const next = lines[lines.indexOf(txt) + 1];
-        if (next) focusOutlineTextEnd(next);
+      e.stopPropagation();
+      save();
+      if (kind === 'section') {
+        snapshotStructure('outline new section', { outlineFocus: here() });
+        const list = book.sectionNotes[chId];
+        const newSec = { id: newSectionId(), text: '' };
+        list.splice(index + 1, 0, newSec);
+        scheduleMetaSave();
+        syncGhosts(chId);
+        renderOutline({ secId: newSec.id });
         return;
       }
       const prevCh = storyBefore(chId);
       if (!prevCh) { toast(t('The first line has to be a chapter')); return; }
-      if (countWords(chapterText(chId)) > 0) {
-        toast(t('This chapter already has words in it — only empty chapter lines can become sections'));
-        return;
-      }
-      save();
-      snapshotStructure('outline chapter to section', { outlineFocus: here() });
-      book.sectionNotes[prevCh] = book.sectionNotes[prevCh] || [];
-      const newSec = { id: 'sec-' + Date.now().toString(36), text: txt.textContent.trim() };
-      book.sectionNotes[prevCh].push(newSec);
-      deleteChapterQuiet(chId).then(() => {
-        syncGhosts(prevCh);
-        renderOutline({ secId: newSec.id });
+      joinChapter(chId, prevCh).then((secId) => {
+        if (currentTab === 'outline') renderOutline(secId ? { secId } : { chId: prevCh });
       });
+      return;
     }
     if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
@@ -7420,7 +7455,39 @@ function orderSectionNotes(chId) {
   book.sectionNotes[chId] = placed.concat(list.filter((s) => !ids.includes(s.id)));
 }
 
-function cardZoom() { return Math.min(1.5, Math.max(0.55, library.cardZoom || 1)); }
+// Zoom is per mode and per device. Novel and script keep their own page zoom, and the outline's
+// cards keep their own; none of them travel in library.json, so a phone never inherits the zoom a
+// desktop set. `library.pageZoom` / `library.cardZoom` stay as the fallback for devices that have
+// not chosen yet, which keeps an existing zoom as the default.
+const PAGE_ZOOM_RANGE = { min: 0.75, max: 3 };
+const CARD_ZOOM_RANGE = { min: 0.55, max: 1.5 };
+const CARD_ZOOM_KEY = 'neo.cardZoom';
+const pageZoomKey = () => 'neo.pageZoom.' + (isScript() ? 'script' : 'novel');
+
+/** The stored zoom, or the fallback, always inside the range. Split out so a test can hold it. */
+function resolveStoredZoom(raw, fallback, min, max) {
+  const value = raw === null || raw === '' ? NaN : Number(raw);
+  const chosen = Number.isFinite(value) ? value : fallback;
+  return Math.min(max, Math.max(min, chosen));
+}
+
+function readStoredZoom(key, fallback, range) {
+  let raw = null;
+  try { raw = localStorage.getItem(key); } catch { /* storage can be off */ }
+  return resolveStoredZoom(raw, fallback || 1, range.min, range.max);
+}
+
+function rememberZoom(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch { /* storage can be off */ }
+}
+
+const activePageZoom = () => readStoredZoom(pageZoomKey(), library.pageZoom || 1, PAGE_ZOOM_RANGE);
+function applyPageZoom() {
+  document.documentElement.style.setProperty('--page-zoom', activePageZoom());
+  updateZoomDisplay();
+}
+
+function cardZoom() { return readStoredZoom(CARD_ZOOM_KEY, library.cardZoom || 1, CARD_ZOOM_RANGE); }
 const CARD_ZOOMS = [0.55, 0.7, 0.85, 1, 1.15, 1.3, 1.5];
 function stepCardZoom(dir) {
   const now = cardZoom();
@@ -7429,8 +7496,7 @@ function stepCardZoom(dir) {
   else if (dir > 0) next = CARD_ZOOMS.find((z) => z > now + 0.001) || now;
   else next = [...CARD_ZOOMS].reverse().find((z) => z < now - 0.001) || now;
   if (next === now) return;
-  library.cardZoom = next;
-  writeLibrary(library);
+  rememberZoom(CARD_ZOOM_KEY, next);
   renderBoard();
   updateZoomDisplay();
 }
@@ -8314,6 +8380,55 @@ function looseToSection(looseId, to) {
   renderLooseCards();
 }
 
+// ---- one chapter becomes a section of another ----
+// Tab on a chapter's line in the List, or a chapter card dropped on the
+// middle of another: the chapter's writing goes to the end of the other
+// one, after a ***, its note (or its title) becomes that section's note,
+// and its own sections come along. Nothing is lost; ⌘Z puts it back.
+// Resolves to the new section's id, or null when it can't be done.
+async function joinChapter(chId, intoCh) {
+  if (!book || !intoCh || chId === intoCh) return null;
+  if (!isStory(chId) || !isStory(intoCh)) { toast(t('Only chapters can become sections')); return null; }
+  const from = chapterBodyEl(chId);
+  const into = chapterBodyEl(intoCh);
+  if (!from || !into) return null;
+  closeCardEditor();
+  snapshotStructure('chapter joined', { outlineFocus: { chId } });
+  book.sectionNotes = book.sectionNotes || {};
+  const notes = book.sectionNotes[intoCh] = book.sectionNotes[intoCh] || [];
+  const sec = { id: newSectionId(), text: ((book.chapterNotes || {})[chId] || '').trim() || ((book.chapterTitles || {})[chId] || '').trim() };
+  // what the chapter holds (a chapter of one empty line holds nothing)
+  const kids = [...from.children];
+  const hasLines = kids.some((el) => el.textContent.trim() || el.querySelector('.ph-mark'));
+  const moving = hasLines ? kids : [];
+  const intoBlank = !into.innerText.trim() && !into.querySelector('.scene-break, .ghost, .ph-mark');
+  if (hasLines) {
+    if (intoBlank) into.innerHTML = '';
+    else if (!(into.lastElementChild && into.lastElementChild.classList.contains('scene-break'))) into.appendChild(newSceneBreak(sec.id));
+    // a chapter that opened with a *** keeps just the one
+    if (moving[0].classList.contains('scene-break') && into.lastElementChild && into.lastElementChild.classList.contains('scene-break')) moving.shift().remove();
+    for (const el of moving) into.appendChild(el);
+    // the chapter's opening carries the new section's note; an opening
+    // that's only outline gets the note as a ghost of its own
+    const opening = moving[0] && !moving[0].classList.contains('scene-break') && !moving[0].classList.contains('ghost') ? moving[0] : null;
+    if (opening) opening.dataset.secId = sec.id;
+    else if (sec.text && moving[0]) placeGhost(into, sec, moving[0]);
+    repointStickies(moving, intoCh);
+  }
+  notes.push(sec);
+  for (const n of book.sectionNotes[chId] || []) notes.push(n);
+  delete book.sectionNotes[chId];
+  if (!hasLines && sec.text) placeGhost(into, sec, null);
+  orderSectionNotes(intoCh);
+  syncChapter(into, intoCh);
+  // the words are safe in the other chapter before this one's file goes
+  try { await persistChapter(intoCh); } catch (err) { window.neo.logError('join: ' + (err && err.message || err)); return null; }
+  if (book.chapterTitles) delete book.chapterTitles[chId];
+  await deleteChapterQuiet(chId);
+  updateCounters();
+  return sec.id;
+}
+
 // ---- dragging (pointer events, so a finger works the same as a mouse) ----
 
 let cardDrag = null;
@@ -8387,6 +8502,8 @@ function endCardDrag(st) {
   document.body.classList.remove('ob-dragging');
   $('#side-pane').classList.remove('drop-ready', 'drop-over');
   $('#ob-caret')?.remove();
+  $('#ob-join-tip')?.remove();
+  for (const c of $$('.ob-cell.ob-join')) c.classList.remove('ob-join');
   clearInterval(st.scroller);
 }
 
@@ -8427,6 +8544,12 @@ function dragTarget(st) {
     if (d < bestD) { bestD = d; best = c; }
   }
   const r = best.getBoundingClientRect();
+  // over the middle of a chapter card: into that chapter (a chapter joins
+  // it as a section; a section or loose card goes to its end)
+  const middle = st.x > r.left + r.width * 0.25 && st.x < r.right - r.width * 0.25 && st.y >= r.top && st.y <= r.bottom;
+  if (middle && best.dataset.kind === 'chapter' && (kind === 'section' || kind === 'loose' || (kind === 'chapter' && best.dataset.ch !== st.src.cell.dataset.ch))) {
+    return { cell: best, side: 'into' };
+  }
   let side = st.x < r.left + r.width / 2 ? 'before' : 'after';
   // a chapter goes in only between chapters
   if (kind === 'chapter') {
@@ -8442,6 +8565,26 @@ function dragTarget(st) {
 
 function showDropCaret(target) {
   let caret = $('#ob-caret');
+  for (const c of $$('.ob-cell.ob-join')) if (!target || c !== target.cell || target.side !== 'into') c.classList.remove('ob-join');
+  let tip = $('#ob-join-tip');
+  if (target && target.side === 'into') {
+    if (caret) caret.remove();
+    target.cell.classList.add('ob-join');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'ob-join-tip';
+      document.body.appendChild(tip);
+    }
+    const name = chapterName(target.cell.dataset.ch);
+    tip.textContent = cardDrag && cardDrag.src.kind === 'chapter'
+      ? t('becomes a section of {chapter}', { chapter: name })
+      : t('goes to the end of {chapter}', { chapter: name });
+    const r = target.cell.getBoundingClientRect();
+    tip.style.left = (r.left + 8) + 'px';
+    tip.style.top = (r.bottom + 4) + 'px';
+    return;
+  }
+  if (tip) tip.remove();
   if (!target || !target.cell) { if (caret) caret.remove(); return; }
   if (!caret) {
     caret = document.createElement('div');
@@ -8462,6 +8605,15 @@ function dropCard(src, target) {
     return;
   }
   const tc = target.cell;
+  if (target.side === 'into') {
+    const into = tc.dataset.ch;
+    if (src.kind === 'chapter') { joinChapter(cell.dataset.ch, into).then(() => { if (currentTab === 'outline') renderBoard(); }); return; }
+    if (src.kind === 'loose') looseToSection(cell.dataset.loose, { ch: into, before: null });
+    else if (cell.dataset.virtual) moveVirtualNote(cell.dataset.ch, cell.dataset.sec, into);
+    else moveSection(cell.dataset.ch, Number(cell.dataset.seg), { ch: into, before: null });
+    renderBoard();
+    return;
+  }
   if (tc.dataset.kind === 'scene') {
     const idx = Number(tc.dataset.scene);
     const to = target.side === 'before' ? idx : idx + 1;
@@ -9278,17 +9430,28 @@ function flushAllSaves(e) {
   // caret does, so a device that merely scrolled never calls the other
   // one back to an old spot.
   const prev = book.lastPosition || {};
-  const caret = captureCaret();
+  // On another tab, the manuscript's place is the one it had when you left
+  // it (tabPlaces): the Notes page's scroll is not a place in the book.
+  const writing = currentTab === 'manuscript';
+  const kept = !writing ? tabPlaces.manuscript : null;
+  const caret = writing ? captureCaret() : (kept && kept.caret) || null;
   const spot = caret
     ? { chapterId: caret.chId, pIdx: caret.pIdx, off: caret.off }
-    : prev.chapterId === currentChapterId ? { chapterId: prev.chapterId, pIdx: prev.pIdx, off: prev.off } : { chapterId: currentChapterId };
-  const scroll = $('#paper-scroll').scrollTop;
+    : (!writing || prev.chapterId === currentChapterId) && prev.chapterId ? { chapterId: prev.chapterId, pIdx: prev.pIdx, off: prev.off } : { chapterId: currentChapterId };
+  const scroll = writing ? $('#paper-scroll').scrollTop : kept && typeof kept.scroll === 'number' ? kept.scroll : (prev.scroll || 0);
+  // …and the tab you were on, with its own scroll, so the book opens there
+  const tab = currentTab || 'manuscript';
+  const tabScroll = writing ? undefined : $('#paper-scroll').scrollTop;
   const newSpot = spot.chapterId !== prev.chapterId || spot.pIdx !== prev.pIdx;
   const newLetter = newSpot || spot.off !== prev.off;
   // the regular tick while writing saves a new paragraph; leaving NEO (a
   // blur, the app going to the background, closing) saves the exact letter
-  const moved = newSpot || (e !== 'tick' && newLetter) || Math.abs((prev.scroll || 0) - scroll) > 40;
-  if (moved) book.lastPosition = { ...spot, scroll, at: newLetter ? Date.now() : (prev.at || Date.now()) };
+  const newTab = tab !== (prev.tab || 'manuscript') || (!writing && Math.abs((prev.tabScroll || 0) - tabScroll) > 40);
+  const moved = newSpot || newTab || (e !== 'tick' && newLetter) || Math.abs((prev.scroll || 0) - scroll) > 40;
+  if (moved) {
+    book.lastPosition = { ...spot, scroll, at: newLetter ? Date.now() : (prev.at || Date.now()), tab };
+    if (!writing) book.lastPosition.tabScroll = tabScroll;
+  }
   for (const chId of book.chapterOrder) {
     if (chapterHTML[chId] !== undefined && chapterHTML[chId] !== savedHTML[chId]) {
       persistChapter(chId);
@@ -9546,6 +9709,7 @@ async function backToShelf() {
   undoStack = [];
   $('#editor-view').hidden = true;
   $('#bookshelf-view').hidden = false;
+  applyBright();
   spEditorMode(); // a script's pane, page and title page go
   spReportState();
   renderShelves();
@@ -9967,7 +10131,9 @@ function stopReadAloud(leaveCaret) {
 }
 document.addEventListener('keydown', (e) => {
   const cmd = e.metaKey || e.ctrlKey;
-  if (cmd && e.shiftKey && !e.altKey && e.code === 'KeyU') {
+  // on Linux, Ctrl+Shift+U belongs to the input method (it types a Unicode
+  // character by its code), so Read Aloud there is Ctrl+Shift+K (#287)
+  if (cmd && e.shiftKey && !e.altKey && (e.code === 'KeyU' || (IS_LINUX && e.code === 'KeyK'))) {
     if (!book || $('#editor-view').hidden) return;
     e.preventDefault();
     e.stopPropagation();
@@ -10697,6 +10863,21 @@ function currentAlign() {
 // alignment) follow the page. Selection changes call this often, so an unchanged payload is
 // not sent again.
 let viewStateSent = '';
+
+// Brighter Interface, remembered two ways: while writing (where a faint
+// interface keeps out of the way) and everywhere else in a book, the
+// Outline, Notes and Darlings, where the tips need reading (bright unless
+// the writer turns it down). The shelf goes with writing.
+const brightAside = () => !!book && !$('#editor-view').hidden && currentTab !== 'manuscript';
+function brightNow() {
+  if (brightAside()) return library.uiBrightAside === undefined ? true : !!library.uiBrightAside;
+  return library.uiBright === undefined ? SYSTEM_CONTRAST.matches : !!library.uiBright;
+}
+function applyBright() {
+  if (!library) return;
+  document.body.classList.toggle('bright', brightNow());
+  reportViewState();
+}
 function reportViewState() {
   if (!window.neo.viewState || !library) return;
   const payload = {
@@ -11114,8 +11295,7 @@ function applyFonts() {
   document.body.classList.toggle('light', library.pageTheme === 'light');
   // the system's "Increase contrast" turns it on too, until the writer
   // chooses in the View menu
-  document.body.classList.toggle('bright', library.uiBright === undefined ? SYSTEM_CONTRAST.matches : !!library.uiBright);
-  reportViewState();
+  applyBright();
   // View → Interface Size: everything but the page
   const uiZoom = [1, 1.25, 1.5, 2, 2.5, 3].includes(library.uiZoom) ? library.uiZoom : 1;
   document.documentElement.style.setProperty('--ui-zoom', uiZoom);
@@ -11123,9 +11303,7 @@ function applyFonts() {
   if (window.neo.uiZoomState) window.neo.uiZoomState(uiZoom);
   const size = Math.min(22, Math.max(14, library.editorFontSize || 17));
   document.documentElement.style.setProperty('--editor-size', size + 'px');
-  const zoom = Math.min(3, Math.max(0.75, library.pageZoom || 1));
-  document.documentElement.style.setProperty('--page-zoom', zoom);
-  updateZoomDisplay();
+  applyPageZoom();
 }
 
 // A built-in choice, or a font the writer picked from their own computer.
@@ -11197,11 +11375,10 @@ async function pickLocalFont() {
 
 // Pinch (trackpad) or Ctrl+scroll: page and text zoom together.
 // A pinch arrives as a wheel event with ctrlKey set.
-let zoomSaveTimer = null;
 function updateZoomDisplay() {
   const el = $('#zoom-level');
   // on the outline's cards, the zoom is the cards' size
-  const z = boardShowing() ? cardZoom() : (library.pageZoom || 1);
+  const z = boardShowing() ? cardZoom() : activePageZoom();
   if (el) el.textContent = Math.round(z * 100) + '%';
 }
 const boardShowing = () => !!book && currentTab === 'outline' && $('#editor-view').classList.contains('board-on');
@@ -11244,12 +11421,10 @@ function setPageZoom(next, at) {
   // up to 300%: on a large monitor 160% still read small. The page itself
   // never grows past the window (max-width in styles.css), only the type does.
   next = Math.min(3, Math.max(0.75, next));
-  if (next === (library.pageZoom || 1)) return;
-  library.pageZoom = next;
+  if (next === activePageZoom()) return;
+  rememberZoom(pageZoomKey(), next);
   keepReadingPlace(() => document.documentElement.style.setProperty('--page-zoom', next), at);
   updateZoomDisplay();
-  clearTimeout(zoomSaveTimer);
-  zoomSaveTimer = setTimeout(() => { writeLibrary(library); }, 600);
 }
 let cardWheel = 0;
 $('#editor-view').addEventListener('wheel', (e) => {
@@ -11261,12 +11436,12 @@ $('#editor-view').addEventListener('wheel', (e) => {
     if (Math.abs(cardWheel) > 40) { stepCardZoom(cardWheel < 0 ? 1 : -1); cardWheel = 0; }
     return;
   }
-  setPageZoom((library.pageZoom || 1) * Math.exp(-e.deltaY * 0.005), { x: e.clientX, y: e.clientY });
+  setPageZoom(activePageZoom() * Math.exp(-e.deltaY * 0.005), { x: e.clientX, y: e.clientY });
 }, { passive: false });
 
 // zoom control in the bottom bar: buttons, click-to-reset, and scroll
-$('#zoom-in').onclick = () => (boardShowing() ? stepCardZoom(1) : setPageZoom((library.pageZoom || 1) + 0.1));
-$('#zoom-out').onclick = () => (boardShowing() ? stepCardZoom(-1) : setPageZoom((library.pageZoom || 1) - 0.1));
+$('#zoom-in').onclick = () => (boardShowing() ? stepCardZoom(1) : setPageZoom(activePageZoom() + 0.1));
+$('#zoom-out').onclick = () => (boardShowing() ? stepCardZoom(-1) : setPageZoom(activePageZoom() - 0.1));
 $('#zoom-level').onclick = () => (boardShowing() ? stepCardZoom(0) : setPageZoom(1));
 $('#zoom-control').addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -11275,7 +11450,7 @@ $('#zoom-control').addEventListener('wheel', (e) => {
     if (Math.abs(cardWheel) > 40) { stepCardZoom(cardWheel < 0 ? 1 : -1); cardWheel = 0; }
     return;
   }
-  setPageZoom((library.pageZoom || 1) * Math.exp(-e.deltaY * 0.002));
+  setPageZoom(activePageZoom() * Math.exp(-e.deltaY * 0.002));
 }, { passive: false });
 
 // Format → Align Paragraph: applies to every paragraph the selection touches
@@ -11329,8 +11504,7 @@ function bookShortcutSections() {
       [K('⌘⇧Enter', 'Ctrl+Shift+Enter'), tk('Start or continue a poetry paragraph'), tk('Also works from a chapter heading.')],
       [KPH, tk('Insert a placeholder note')],
       [KDA, tk('Move selected text to Darlings')],
-      [K('⌘⇧U', 'Ctrl+Shift+U'), tk('Read aloud from the cursor'), tk('Again, Esc or any key stops it. Uses your computer’s own voice.')],
-      [['@'], tk('Name a character'), tk('Type @ and a few letters, then pick the name. Esc keeps the @.')]
+      [K('⌘⇧U', IS_LINUX ? 'Ctrl+Shift+K' : 'Ctrl+Shift+U'), tk('Read aloud from the cursor'), tk('Again, Esc or any key stops it. Uses your computer’s own voice.')]
     ] },
     { title: tk('Formatting'), rows: [
       [['*…*', '**…**', '***…***'], tk('Italic, bold, the Markdown way'), tk('Typed around a word (or pasted). Undo right after keeps the asterisks. Format → Markdown Emphasis turns it off.')],
@@ -11779,7 +11953,7 @@ function buildHtml(data, opts = {}) {
   }
   if (!placed) body += contents;
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${escHtml(d.title)}</title>
+<html lang="${escHtml(d.language || writingLanguage())}"><head><meta charset="utf-8"><title>${escHtml(d.title)}</title>
 <style>
   ${opts.fonts || ''}
   body { font-family: ${exportBodyFont()}; color: #1c1c1c; max-width: 620px; margin: 40px auto; line-height: 1.7; font-size: 13pt; }
@@ -11793,8 +11967,11 @@ function buildHtml(data, opts = {}) {
   /* headings in small capitals rather than capitals, so the PDF's bookmarks
      read "Chapter 3", not "CHAPTER 3" */
   .chapter .hd, .contents .hd { text-align: center; letter-spacing: 4px; font-variant-caps: all-small-caps; font-variant-numeric: oldstyle-nums; font-size: 17pt; font-weight: normal; color: #555; margin: 54px 0 36px; }
-  .chapter p { text-indent: 2em; margin: 0; }
-  .chapter .hd + p, .chapter .byline + p, .brk + p, .chapter p.first { text-indent: 0; }
+  /* set like a printed book: justified, hyphenated in the book's language,
+     no line left alone at the top or foot of a page */
+  .chapter p { text-indent: 2em; margin: 0; text-align: justify; hyphens: auto; -webkit-hyphens: auto; widows: 2; orphans: 2; }
+  .chapter p.poetry { text-align: left; hyphens: manual; -webkit-hyphens: manual; }
+  .chapter .hd + p, .chapter .byline + p, .chapter .brk + p, .brk + p, .chapter p.first { text-indent: 0; }
   .chapter p.dialogue { text-indent: 2em; }
   /* the drop cap the page sets, two lines deep in its own face. An initial
      letter, not a float: it stays inside its word, so the PDF's copy,
@@ -11803,7 +11980,7 @@ function buildHtml(data, opts = {}) {
      that can't set one gets a raised initial. */
   ${(library.fonts || {}).dropcap === 'none' ? '' : `.chapter p.first:not(.dialogue)::first-letter { -webkit-initial-letter: 2; initial-letter: 2; padding-right: 4px; font-family: ${exportDropCapFont()}; }
   @supports not ((initial-letter: 2) or (-webkit-initial-letter: 2)) { .chapter p.first:not(.dialogue)::first-letter { font-size: 1.8em; line-height: 1; padding-right: 0; } }`}
-  .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
+  .chapter .brk, .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .chapter p.poetry { text-indent: 0; margin: 0 2.5em; }
   .chapter p.flush { text-indent: 0 !important; }
   .chapter p:not(.poetry) + p.poetry, .chapter .hd + p.poetry { margin-top: 0.9em; }
@@ -12106,9 +12283,11 @@ ${ch.subtitle ? `<p class="sub">${escXml(ch.subtitle)}</p>` : ''}${ch.byline ? `
 ${paras}
 </section>`;
   }
+  // the language on the page too, so a reader hyphenates in the right one
+  const lang = escXml(d.language || NeoI18n.getLocale());
   return `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${lang}" lang="${lang}">
 <head><title>${escXml(ch.heading || ch.label || d.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>${inner}</body></html>`;
 }
@@ -12207,7 +12386,9 @@ ${navList(toc)}
 </navMap></ncx>` },
     { path: 'OEBPS/style.css', content: `body { font-family: serif; line-height: 1.5; margin: 1em; }
 h1 { text-align: center; font-weight: normal; letter-spacing: 0.2em; text-transform: uppercase; font-size: 1.2em; margin: 3em 0 2em; }
-p { text-indent: 1.2em; margin: 0; }
+p { text-indent: 1.2em; margin: 0; text-align: justify; -webkit-hyphens: auto; -epub-hyphens: auto; hyphens: auto; widows: 2; orphans: 2; }
+h1, p.brk { -webkit-hyphens: none; -epub-hyphens: none; hyphens: none; }
+p.poetry, .dedication p, .epigraph p, .part p, .copyright p { text-align: left; -webkit-hyphens: manual; -epub-hyphens: manual; hyphens: manual; }
 p.first, p.brk + p, p.byline + p { text-indent: 0; }
 p.first.dialogue:not(.center):not(.right) { text-indent: 1.2em; }
 p.center { text-align: center; text-indent: 0; }
@@ -12776,12 +12957,12 @@ async function setEditorFontSize(value) {
   if (boardShowing()) { stepCardZoom(value); return; }
   // a script's type is the page's: larger and smaller zoom the page
   if (book && isScript()) {
-    setPageZoom(value === 0 ? 1 : (library.pageZoom || 1) * (value > 0 ? 1.1 : 1 / 1.1));
+    setPageZoom(value === 0 ? 1 : activePageZoom() * (value > 0 ? 1.1 : 1 / 1.1));
     return;
   }
   const cur = library.editorFontSize || 17;
   library.editorFontSize = value === 0 ? 17 : Math.min(22, Math.max(14, cur + value));
-  if (value === 0) library.pageZoom = 1; // ⌘0 resets pinch zoom too
+  if (value === 0) rememberZoom(pageZoomKey(), 1); // ⌘0 resets this mode's pinch zoom too
   await writeLibrary(library);
   keepReadingPlace(applyFonts);
 }
@@ -12850,7 +13031,9 @@ window.neo.onMenu(async (msg) => {
     applyFonts();
   }
   if (msg.type === 'uiBright') {
-    library.uiBright = !document.body.classList.contains('bright');
+    // the tab you're on decides which of the two settings this is
+    if (brightAside()) library.uiBrightAside = !document.body.classList.contains('bright');
+    else library.uiBright = !document.body.classList.contains('bright');
     await writeLibrary(library);
     applyFonts();
   }

@@ -1005,6 +1005,15 @@ body.ob-dragging, body.ob-dragging * { cursor: grabbing !important; user-select:
   background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 #outline-board-hint { margin-top: 34px; }
+#editor-view.board-on #outline-board-hint { color: #7d7a72; }
+body.bright #editor-view.board-on #outline-board-hint { color: #aca699; }
+body.light #editor-view.board-on #outline-board-hint { color: #6a665e; }
+
+.ob-cell.ob-join .ob-card { box-shadow: 0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 50%, transparent); }
+#ob-join-tip {
+  position: fixed; z-index: 899; pointer-events: none; font: 12px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: var(--accent); background: var(--bg); padding: 2px 8px; border-radius: 10px;
+}
 
 /* loose cards: the right-hand pane while the Outline is up */
 .side-title-loose, #loose-list { display: none; }

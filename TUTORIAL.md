@@ -55,7 +55,11 @@ Click the Outline tab at the bottom and your book is laid out as index cards. Th
 
 Click any card to write on it. Enter when you're done; Tab takes you on to the next card, so you can work your way through the whole outline from the keyboard. To add a card, hover over one and click the little + beside it, or press ⌥Enter (Alt+Enter on Windows) while you're writing on it. The dashed + Chapter card at the end of the board adds a chapter. A section's card becomes a gray ghost paragraph in your manuscript, and when you start writing over it, the note rides one line below whatever you're typing so you don't lose track of what the scene was supposed to do. Click Dismiss when you're done with it.
 
-Drag a card to move it. Your writing moves with it, so you can rearrange scenes and chapters right here. ⌘Z puts things back. Right-click a card to make a section its own chapter, or to jump to it on the page.
+Drag a card to move it. Your writing moves with it, so you can rearrange scenes and chapters right here. Drop a chapter card on the middle of another chapter's card and it becomes a section of that chapter, its writing following on after a ***. ⌘Z puts things back. Right-click a card to make a section its own chapter, or to jump to it on the page.
+
+If you'd rather type your outline, click List at the top of the Outline. Enter always makes a new chapter. Tab always makes a section: on a chapter's line it tucks that chapter under the one above, and on a section's line it starts a new section below. ⇧Tab turns a section back into a chapter. The List and the cards are the same outline, so switch whenever you like.
+
+The Outline, Notes and Darlings show the interface a little brighter than the manuscript does, so the tips at the bottom are easy to read. View → Brighter Interface changes whichever one you're looking at, and NEO remembers both.
 
 Pantsers, this is for you too. You don't have to outline anything. Every chapter and every section between your *** breaks is already a card, showing its first line in quotes until you give it a note of its own.
 

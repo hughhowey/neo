@@ -1,7 +1,7 @@
 {
   "name": "neo",
   "productName": "NEO",
-  "version": "1.3.4",
+  "version": "1.3.8",
   "description": "A word processor for authors. Distraction-free by default.",
   "homepage": "https://github.com/hughhowey/neo",
   "main": "main.js",
@@ -127,7 +127,10 @@
       "!locales/_template.json",
       "!node_modules/koffi/build/koffi/{freebsd,linux,musl,openbsd,win32}_*/**",
       "!node_modules/koffi/{src,vendor,doc}/**"
-    ]
+    ],
+    "toolsets": {
+      "appimage": "1.0.3"
+    }
   },
   "author": "Hugh Howey",
   "license": "MIT",
