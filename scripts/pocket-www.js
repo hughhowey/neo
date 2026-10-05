@@ -4,7 +4,7 @@
 // node scripts/pocket-www.js
 //
 // Fills pocket/www with what NEO Pocket shares with desktop NEO: the editor
-// (app.js, covers.js, styles.css, i18n.js, fonts, locales), JSZip, and the
+// (app.js, bible.js, covers.js, styles.css, i18n.js, fonts, locales), JSZip, and the
 // spellchecker (Hunspell's browser build plus the same dictionaries desktop
 // NEO bundles). The robot build runs this; so does a local Android or iOS
 // build, before `npx cap sync`.
@@ -25,7 +25,7 @@ const copyDir = (from, to) => {
   fs.cpSync(from, to, { recursive: true });
 };
 
-for (const f of ['app.js', 'covers.js', 'styles.css', 'i18n.js']) copy(path.join(root, f), path.join(www, f));
+for (const f of ['app.js', 'bible.js', 'covers.js', 'styles.css', 'i18n.js']) copy(path.join(root, f), path.join(www, f));
 copy(path.join(mods, 'jszip', 'dist', 'jszip.min.js'), path.join(www, 'jszip.min.js'));
 copyDir(path.join(root, 'fonts'), path.join(www, 'fonts'));
 copyDir(path.join(root, 'locales'), path.join(www, 'locales'));

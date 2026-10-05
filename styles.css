@@ -2234,3 +2234,6 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 #nav-pane.script .nav-item.sp-scene .n-row { justify-content: flex-start; gap: 8px; }
 #nav-pane.script .nav-item.sp-scene .n-words { margin-left: auto; }
 body.light #nav-pane.script .nav-item.sp-scene .n-num { color: #8f8a80; }
+
+/* the synopsis over the outline's cards, gone with them */
+#editor-view:not(.board-on) .ol-synopsis.over-board, #aux-paper:has(#outline-board[hidden]) .ol-synopsis.over-board { display: none; }

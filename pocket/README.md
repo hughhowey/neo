@@ -36,7 +36,7 @@ First install only: sideload, then grant **All files access**
 (Settings → Apps → NEO Pocket).
 
 Local builds need Android Studio and: `npm install` at the top of the repo,
-`node scripts/pocket-www.js` (copies the editor, fonts, locales, and the
+`node scripts/pocket-www.js` (copies the editor (app.js, bible.js…), fonts, locales, and the
 spellchecker with its dictionaries into `www/`), then `cd pocket && npm install`,
 `npx cap sync android`, and build from `android/`. Local builds are debug-signed and won't install over a
 robot build (or vice versa).

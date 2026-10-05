@@ -123,9 +123,7 @@ function castStats(text) {
   return out;
 }
 
-function chapterBodyEl(chId) {
-  return document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
-}
+// (chapterBodyEl is app.js's own)
 
 // the words of a chapter, a line per paragraph (ghost outline lines left out)
 function chapterPlain(chId) {
@@ -1448,8 +1446,20 @@ async function importCharacters() {
 
 /* --- The Outline: the synopsis on top, who is in each chapter ------ */
 
+// the cards of the outline (app.js's board) get the synopsis over them too
+// oxlint-disable-next-line no-unused-vars -- called from app.js
+function bibleBoard() {
+  document.querySelectorAll('.ol-synopsis.over-board').forEach((x) => x.remove());
+  const board = $('#outline-board');
+  if (!board || !book || (typeof isScript === 'function' && isScript())) return;
+  const syn = outlineSynopsis();
+  syn.classList.add('over-board');
+  board.before(syn);
+}
+
 // oxlint-disable-next-line no-unused-vars -- called from app.js
 function bibleOutline(wrap) {
+  document.querySelectorAll('.ol-synopsis.over-board').forEach((x) => x.remove());
   wrap.insertBefore(outlineSynopsis(), wrap.firstChild);
   const cast = castList();
   if (!cast.length) return;

@@ -7009,7 +7009,7 @@ function focusOutlineTextEnd(el) {
 
 function renderOutline(focusTarget) {
   // the outline as cards, unless the writer chose the list
-  if (showOutlineView()) { renderBoard(); return; }
+  if (showOutlineView()) { renderBoard(); bibleBoard(); return; } // bible.js: the synopsis over the cards
   const boardHint = $('#outline-board-hint');
   if (boardHint) boardHint.hidden = true;
   book.sectionNotes = book.sectionNotes || {};
@@ -9740,6 +9740,8 @@ async function structuralUndo() {
   renderStickies();
   if (currentTab === 'darlings') renderDarlings();
   if (currentTab === 'outline') { renderOutline(snap.outlineFocus || undefined); sidePaneForTab('outline'); }
+  if (currentTab === 'notes') renderCharacters();
+  scheduleCast();
   updateCounters();
   restoreCaret(snap.caret); // back to work, no announcement
   if (snap.rejoin) rejoinAtCaret();
