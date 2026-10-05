@@ -464,7 +464,11 @@ function renderCharacters(focusId) {
     sec.querySelector('.bible-h').appendChild(add);
     const list = document.createElement('div');
     list.className = 'bible-cards';
-    for (const o of items) list.appendChild(key === 'cast' ? characterCard(o, stats.get(o.id)) : worldCard(o));
+    // an index card, or open full width to write on it
+    for (const o of items) {
+      if (!bibleOpen.has(o.id)) list.appendChild(cardTile(o, key, stats.get(o.id)));
+      else list.appendChild(key === 'cast' ? characterCard(o, stats.get(o.id)) : worldCard(o));
+    }
     sec.appendChild(list);
     // a world rubric holds one type: reordering moves the card among its own kind
     wireReorder(list, key === 'cast' ? castList : () => worldReorderView(key));
@@ -481,6 +485,88 @@ function renderCharacters(focusId) {
     const card = wrap.querySelector(`[data-id="${focusId}"]`);
     const input = card && card.querySelector('input');
     if (input) { input.focus({ preventScroll: true }); card.scrollIntoView({ block: 'center', behavior: scrollBehavior() }); }
+  }
+}
+
+// A card, closed: an index card on the rubric's mat, the way the Outline
+// sets its cards. What it holds at a glance; a click (or Enter) opens it.
+function cardTile(o, key, s) {
+  const isChar = key === 'cast';
+  const tile = document.createElement('div');
+  tile.className = 'bc-tile' + (isChar ? ' bc-char' : '');
+  tile.dataset.id = o.id;
+  tile.tabIndex = 0;
+  tile.setAttribute('role', 'button');
+  const head = document.createElement('div');
+  head.className = 'bc-head';
+  if (isChar && o.portrait && canBibleImages()) {
+    const img = document.createElement('img');
+    img.className = 'bc-portrait';
+    img.alt = '';
+    loadInto(img, o.portrait);
+    head.appendChild(img);
+  }
+  const name = document.createElement('span');
+  name.className = 'bc-name';
+  name.textContent = isChar ? (charName(o) || t('Unnamed')) : (o.name || worldTypeName(o.type));
+  const grip = document.createElement('span');
+  grip.className = 'drag-grip';
+  grip.setAttribute('aria-hidden', 'true');
+  grip.textContent = '⋮⋮';
+  head.append(name, grip);
+  const body = document.createElement('div');
+  body.className = 'bc-text';
+  let sub = '';
+  let text = '';
+  if (isChar) {
+    sub = [o.role, o.gender, o.age].filter((x) => (x || '').trim()).join(' · ');
+    text = (o.note || '').trim() || (o.sketch || '').trim();
+  } else {
+    const [, fields] = WORLD_TYPES[o.type] || WORLD_TYPES.other;
+    text = [...fields.map((f) => f[0]), 'notes'].map((f) => (o[f] || '').trim()).find(Boolean) || '';
+  }
+  if (sub) {
+    const sl = document.createElement('div');
+    sl.className = 'bc-sub';
+    sl.textContent = sub;
+    body.appendChild(sl);
+  }
+  const tx = document.createElement('div');
+  tx.className = 'bc-note' + (text ? '' : ' empty');
+  tx.textContent = text || t('Write a note…');
+  body.appendChild(tx);
+  const foot = document.createElement('div');
+  foot.className = 'bc-foot';
+  const pics = galleryOf(o).length;
+  if (isChar) foot.textContent = s ? t('Mentions: {n}', { n: fmtNum(s.n) }) : t('Not in the text yet');
+  if (pics) foot.textContent += (foot.textContent ? ' · ' : '') + '▣ ' + fmtNum(pics);
+  tile.append(head, body, foot);
+  tile.setAttribute('aria-label', [name.textContent, sub, text].filter(Boolean).join('. '));
+  tile.title = t('Click to open');
+  const open = (e) => {
+    if (e && e.target.closest('.drag-grip')) return;
+    toggleCard(o.id, true);
+  };
+  tile.addEventListener('click', open);
+  tile.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+  });
+  wirePictureDrop(tile, o, 'gallery');
+  return tile;
+}
+
+// open a card to write on it, or close it back to its index card
+function toggleCard(id, open) {
+  if (open) bibleOpen.add(id); else { bibleOpen.delete(id); bibleMore.delete(id); }
+  renderCharacters();
+  const el = document.querySelector(`#characters-list [data-id="${id}"]`);
+  if (!el) return;
+  if (open) {
+    const first = el.querySelector('input, textarea');
+    if (first) first.focus({ preventScroll: true });
+    el.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
+  } else {
+    el.focus({ preventScroll: true });
   }
 }
 
@@ -536,10 +622,7 @@ function worldCard(w) {
   fold.textContent = open ? '▾' : '▸';
   fold.setAttribute('aria-expanded', open ? 'true' : 'false');
   fold.setAttribute('aria-label', open ? t('Fold') : t('Unfold'));
-  fold.onclick = () => {
-    if (bibleOpen.has(w.id)) bibleOpen.delete(w.id); else bibleOpen.add(w.id);
-    card.replaceWith(worldCard(w));
-  };
+  fold.onclick = () => toggleCard(w.id, !bibleOpen.has(w.id));
   const name = card.querySelector('.wc-name');
   name.value = w.name || '';
   name.placeholder = t('Name');
@@ -912,20 +995,22 @@ function wireReorder(list, getArr) {
       e.dataTransfer.setDragImage(card, 20, 20);
       card.classList.add('dragging');
     });
-    grip.addEventListener('dragend', () => { card.classList.remove('dragging'); list.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after')); dragId = null; });
+    grip.addEventListener('dragend', () => { card.classList.remove('dragging'); list.querySelectorAll('.drop-before, .drop-after, .drop-before-x, .drop-after-x').forEach((x) => x.classList.remove('drop-before', 'drop-after', 'drop-before-x', 'drop-after-x')); dragId = null; });
   });
   const target = (e) => {
     const card = e.target.closest && e.target.closest('[data-id]');
     if (!card || card.parentElement !== list || card.dataset.id === dragId) return null;
     const r = card.getBoundingClientRect();
-    return { card, after: e.clientY > r.top + r.height / 2 };
+    // cards side by side in a row: before or after by the middle of the card
+    const inRow = r.width < list.getBoundingClientRect().width * 0.8;
+    return { card, after: inRow ? e.clientX > r.left + r.width / 2 : e.clientY > r.top + r.height / 2, inRow };
   };
   list.addEventListener('dragover', (e) => {
     if (!dragId) return;
     e.preventDefault();
-    list.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+    list.querySelectorAll('.drop-before, .drop-after, .drop-before-x, .drop-after-x').forEach((x) => x.classList.remove('drop-before', 'drop-after', 'drop-before-x', 'drop-after-x'));
     const tg = target(e);
-    if (tg) tg.card.classList.add(tg.after ? 'drop-after' : 'drop-before');
+    if (tg) tg.card.classList.add((tg.after ? 'drop-after' : 'drop-before') + (tg.inRow ? '-x' : ''));
   });
   list.addEventListener('drop', (e) => {
     if (!dragId) return;
@@ -963,6 +1048,8 @@ function characterCard(c, s) {
   card.dataset.id = c.id;
   card.innerHTML = `
     <span class="drag-grip" aria-hidden="true">⋮⋮</span>
+    <button class="bc-fold" type="button"></button>
+    <span class="bc-open-name"></span>
     <div class="cc-row">
       <label class="cc-field"><span>${t('First name')}</span><input data-f="first" spellcheck="false" /></label>
       <label class="cc-field"><span>${t('Last name')}</span><input data-f="last" spellcheck="false" /></label>
@@ -1017,6 +1104,15 @@ function characterCard(c, s) {
   const del = card.querySelector('.cc-del');
   del.textContent = t('Delete');
   del.onclick = () => deleteCharacter(c);
+  const foldBtn = card.querySelector('.bc-fold');
+  foldBtn.textContent = '▾';
+  foldBtn.title = t('Fold');
+  foldBtn.setAttribute('aria-label', t('Fold'));
+  foldBtn.onclick = () => toggleCard(c.id, false);
+  // the card's name in its head, as on the closed card
+  const headName = card.querySelector('.bc-open-name');
+  const showName = () => { headName.textContent = charName(c); };
+  showName();
   const portrait = portraitCircle(c);
   if (portrait) card.insertBefore(portrait, card.querySelector('.cc-row'));
   const gallery = gallerySection(c);
@@ -1031,7 +1127,10 @@ function characterCard(c, s) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.value = shown(); input.blur(); }
     });
     if (input.tagName === 'TEXTAREA') input.addEventListener('input', () => growField(input));
-    input.addEventListener('change', () => commitCharacterField(c, f, input, shown));
+    input.addEventListener('change', async () => {
+      await commitCharacterField(c, f, input, shown);
+      if (f === 'first' || f === 'last') showName();
+    });
   });
   showDetails(bibleMore.has(c.id));
   requestAnimationFrame(() => card.querySelectorAll('textarea').forEach(growField));
@@ -1055,6 +1154,7 @@ function castChanged() {
 function addCharacter(fields) {
   const c = { id: castId(), first: '', last: '', nicknames: [], note: '', ...(fields || {}) };
   castList().push(c);
+  if (currentTab === 'notes') bibleOpen.add(c.id); // made here: open, to name it
   castChanged();
   if (currentTab === 'notes') renderCharacters(c.id);
   return c;

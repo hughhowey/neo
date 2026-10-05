@@ -2246,3 +2246,105 @@ body.light #nav-pane.script .nav-item.sp-scene .n-num { color: #8f8a80; }
 
 /* the synopsis over the outline's cards, gone with them */
 #editor-view:not(.board-on) .ol-synopsis.over-board, #aux-paper:has(#outline-board[hidden]) .ol-synopsis.over-board { display: none; }
+
+/* --- The story's cards, set like the Outline's (bible.js) ---
+   The same index cards as NEO's outline board: cream stock, a red rule
+   under the head, a soft mat under each rubric, light even at night. */
+#characters-list {
+  --mat: color-mix(in srgb, var(--accent) 10%, transparent);
+  --card: #f4f1e8; --card-head: #fbfaf7; --card-ink: #1c1c1c; --card-soft: #6f6a5e; --card-mark: #7a6538;
+  --card-rule: #e3b4ae; --card-line: #d9cfbb;
+}
+body.night #characters-list { --card: #e2ddd1; --card-head: #ebe7dd; }
+/* a rubric's title, the way a part stands on the board */
+#characters-list .bible-h {
+  border: none; margin: 0 0 10px; padding: 10px 6px 0; gap: 12px;
+  font: 11px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; letter-spacing: 2.5px;
+  text-transform: uppercase; color: var(--accent);
+}
+#characters-list .bible-h::after { content: ''; order: 1; flex: 1; height: 1px; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+#characters-list .bible-h .rubric-add { order: 2; color: var(--accent); }
+/* the mat, and the cards on it */
+#characters-list .bible-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px;
+  background: var(--mat); border-radius: 10px; padding: 10px;
+}
+.bc-tile {
+  position: relative; height: 128px; box-sizing: border-box; border-radius: 3px; cursor: pointer; outline: none;
+  background: var(--card); color: var(--card-ink); padding: 7px 11px; display: flex; flex-direction: column; gap: 3px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 5px 12px rgba(0,0,0,0.3); overflow: hidden;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+body.light .bc-tile { box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.12); }
+.bc-tile:hover { transform: translateY(-1px); }
+.bc-tile:focus-visible { box-shadow: 0 0 0 2px var(--accent), 0 5px 12px rgba(0,0,0,0.3); }
+.bc-tile.bc-char { background: var(--card-head); }
+.bc-head { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--card-rule); padding-bottom: 4px; min-height: 26px; }
+.bc-portrait { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.bc-portrait:not([src]) { display: none; }
+.bc-name { flex: 1; min-width: 0; font-family: var(--body-font); font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-tile .drag-grip { position: static; color: #b8ae98; opacity: 0; transition: opacity 0.15s; cursor: grab; }
+.bc-tile:hover .drag-grip, .bc-tile:focus-visible .drag-grip { opacity: 1; }
+.bc-text { flex: 1; min-height: 0; overflow: hidden; }
+.bc-sub { font-size: 0.82em; color: var(--card-mark); letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-note { font-family: var(--body-font); line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.bc-note.empty { color: #9a9486; font-style: italic; }
+.bc-foot { font-size: 0.82em; color: var(--card-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-foot:empty { display: none; }
+#characters-list .bible-cards .drop-before-x { box-shadow: -4px 0 0 var(--accent), 0 5px 12px rgba(0,0,0,0.3); }
+#characters-list .bible-cards .drop-after-x { box-shadow: 4px 0 0 var(--accent), 0 5px 12px rgba(0,0,0,0.3); }
+.bc-tile.img-over { outline: 2px dashed var(--accent); outline-offset: 3px; }
+/* an open card: the whole width of the mat, written on in place */
+#characters-list .cast-card, #characters-list .world-card {
+  grid-column: 1 / -1; margin: 0; border: none; border-radius: 3px;
+  background: var(--card-head); color: var(--card-ink);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 5px 12px rgba(0,0,0,0.3);
+}
+body.light #characters-list .cast-card, body.light #characters-list .world-card { box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.12); }
+#characters-list .cast-card { padding-top: 38px; }
+#characters-list .cast-card::before {
+  content: ''; position: absolute; left: 14px; right: 14px; top: 30px; height: 1px; background: var(--card-rule);
+}
+#characters-list .world-card .wc-head { border-bottom: 1px solid var(--card-rule); padding-bottom: 6px; }
+.bc-fold {
+  position: absolute; top: 6px; left: 10px; background: none; border: none; padding: 2px 4px; cursor: pointer;
+  font-size: 13px; color: var(--card-soft);
+}
+.bc-fold:hover, .bc-fold:focus-visible { color: var(--card-ink); }
+#characters-list .cast-card > .drag-grip { top: 8px; left: auto; right: 12px; }
+#characters-list .cc-field span, #characters-list .cc-meta, #characters-list .cc-more, #characters-list .wc-fold,
+#characters-list .wc-type, #characters-list .cc-stats { color: var(--card-soft); }
+#characters-list .cc-field input, #characters-list .cc-field textarea, #characters-list .wc-name {
+  color: var(--card-ink); border-bottom-color: var(--card-line);
+}
+#characters-list .cc-field input::placeholder, #characters-list .cc-field textarea::placeholder, #characters-list .wc-name::placeholder { color: #a59e8d; }
+#characters-list .cc-field input:focus, #characters-list .cc-field textarea:focus, #characters-list .wc-name:focus { border-bottom-color: var(--accent); }
+#characters-list .wc-type { border-color: var(--card-line); background: transparent; }
+#characters-list .cc-del { border-color: #cfc6b2; color: var(--card-soft); background: transparent; }
+#characters-list .cc-del:hover { border-color: var(--red); color: var(--red); }
+#characters-list .cc-more { text-decoration-color: var(--card-line); }
+#characters-list .cc-more:hover { color: var(--card-ink); }
+#characters-list .bible-portrait, #characters-list .bg-thumb { border-color: var(--card-line); background: #ece7db; }
+#characters-list .bible-portrait.empty { background: none; }
+#characters-list .bible-portrait.empty svg { stroke: #b8ae98; }
+#characters-list .bg-add { border-color: var(--card-line); color: var(--card-soft); }
+#characters-list .cast-card.flash, #characters-list .world-card.flash, #characters-list .bc-tile.flash { box-shadow: 0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 50%, transparent); }
+/* the story's older fields, on a card of their own */
+#characters-list .story-card { background: var(--card-head); color: var(--card-ink); border-radius: 3px; padding: 10px 14px; box-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 5px 12px rgba(0,0,0,0.3); }
+
+/* the card in the side pane: a loose card's look */
+.cast-peek {
+  background: #f4f1e8; color: #1c1c1c; border: none; border-radius: 3px; transform: rotate(-0.4deg);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 5px 12px rgba(0,0,0,0.3);
+}
+.cast-peek .cp-head { border-bottom: 1px solid #e3b4ae; padding-bottom: 6px; }
+.cast-peek .cp-name { color: #1c1c1c; }
+.cast-peek .cp-sub, .cast-peek .cp-label { color: #6f6a5e; }
+.cast-peek .cp-note { color: #4a463e; }
+.cast-peek .cp-actions button { color: #6f6a5e; }
+.cast-peek .cp-actions button:hover { color: #1c1c1c; }
+body.light .cast-peek { background: #f4f1e8; border: none; box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.12); }
+.bc-open-name {
+  position: absolute; top: 5px; left: 34px; right: 40px; font-family: var(--body-font); font-weight: 700; font-size: 14.5px;
+  color: var(--card-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
