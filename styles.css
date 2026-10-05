@@ -1227,6 +1227,9 @@ body.focus-mode .walk-note { opacity: 0.6; }
   background: rgba(0, 0, 0, 0.25); border-radius: 4px; white-space: pre-wrap;
   user-select: text; cursor: text;
 }
+.history-card-full::selection {
+  background: rgba(201, 168, 106, 0.45); color: #fff;
+}
 .history-card-actions {
   display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; align-items: center;
 }

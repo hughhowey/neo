@@ -6533,7 +6533,7 @@ function wireHistoryCard(card, group, snap) {
   const closeBtn = card.querySelector('.history-card-close');
 
   card.addEventListener('click', async (e) => {
-    if (e.target.closest('.history-card-actions')) return;
+    if (e.target.closest('.history-card-actions') || e.target.closest('.history-card-full')) return;
 
     if (card.classList.contains('expanded')) {
       collapseCard(card, fullEl, actionsEl);
@@ -6579,8 +6579,9 @@ function wireHistoryCard(card, group, snap) {
       try {
         const sel = window.getSelection();
         let textToCopy = '';
-        if (sel && !sel.isCollapsed && fullEl && fullEl.contains(sel.anchorNode)) {
-          textToCopy = sel.toString();
+        const hasSelection = sel && !sel.isCollapsed && fullEl && (fullEl.contains(sel.anchorNode) || fullEl.contains(sel.focusNode));
+        if (hasSelection) {
+          textToCopy = sel.toString().trim();
         } else if (fullEl && fullEl.textContent && fullEl.textContent !== t('Loading preview…')) {
           textToCopy = fullEl.textContent;
         } else {
@@ -6591,7 +6592,7 @@ function wireHistoryCard(card, group, snap) {
         }
         if (textToCopy) {
           await navigator.clipboard.writeText(textToCopy);
-          toast(t('Copied to clipboard'));
+          toast(hasSelection ? t('Copied selection to clipboard') : t('Copied snapshot to clipboard'));
         }
       } catch (err) {
         toast(t('Could not copy to clipboard'));
