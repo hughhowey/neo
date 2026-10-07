@@ -4327,12 +4327,24 @@ function autoCapKey(e, body) {
   }
   // English: "i" standing alone becomes "I" once the next key shows it is
   // a word (a space, punctuation, an apostrophe), and the key goes on as usual
-  if (/^en\b/.test(lang) && /^[\s,;:!?'’")”\]—–-]$/.test(e.key) && /(?:^|[^\p{L}\p{M}\d'’.(-])i$/u.test(before)) {
+  if (/^en\b/.test(lang) && /^[\s,;:!?'’")”\]—–-]$/.test(e.key) && /(?:^|[^\p{L}\p{M}\d'’.(-])i$/u.test(before) && !writesLowercaseI(body)) {
     const at = before.length - 1;
     selectChars(block, at, at + 1);
     document.execCommand('insertText', false, 'I');
     capJustSet = { block, at, was: 'i', to: 'I', key: e.key };
   }
+}
+// …unless the book writes "i" in lowercase more often than "I", mid-sentence:
+// then it's in a language where "i" is a word (Norwegian, Swedish, Danish,
+// Catalan), with no dictionary here, written while NEO speaks English (#324).
+// In a new book, ⌘Z on the first one is enough, and a manuscript brought in
+// already has its own; a stray "i" in an English book is outnumbered.
+function writesLowercaseI(body) {
+  const here = body.closest('.chapter')?.dataset.id;
+  const rest = book ? book.chapterOrder.filter((id) => id !== here).map((id) => chapterHTML[id] || '') : [];
+  const text = [body.textContent, ...rest].join(' ');
+  const n = (re) => (text.match(re) || []).length;
+  return n(/[\p{Ll},]\si(?=[\s,;:!?])/gu) > n(/[\p{Ll},]\sI(?=[\s,;:!?])/gu);
 }
 // ⌘Z (Ctrl+Z) right after: the lowercase comes back as typed
 document.addEventListener('keydown', (e) => {

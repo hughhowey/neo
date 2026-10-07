@@ -73,6 +73,8 @@ While writing, NEO sets the quotation marks of the language being written: the s
 
 A book that has settled on other guillemets keeps them: in a German novel set in »…«, or Swiss writing in «…», type the first mark by hand and NEO carries on in that style (`bookQuotes` in `app.js`).
 
+In English, "i" on its own becomes "I" as it's typed. A book that writes "i" in lowercase more often than "I", as Norwegian, Swedish, Danish and Catalan do, keeps it as typed, even with NEO in English and no dictionary for its language: in a new book, ⌘Z on the first capital is enough (`writesLowercaseI` in `app.js`).
+
 Imports recognize chapter headings in all these languages (`CHAPTER_WORDS` in `main.js`), and cover titles treat each language's small words like "of" and "the" (`CONNECTORS` in `covers.js`).
 
 ## Fonts in other alphabets
