@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('neo', {
   paintCover: (bookId, text, options) => ipcRenderer.invoke('cover:paint', bookId, text, options),
   setSecret: (name, value) => ipcRenderer.invoke('secret:set', name, value),
   hasSecret: (name) => ipcRenderer.invoke('secret:has', name),
+  // File → Sync…: a CouchDB server of the writer's own, or none (sync.js)
+  syncStatus: () => ipcRenderer.invoke('sync:status'),
+  syncConnect: (cfg) => ipcRenderer.invoke('sync:connect', cfg),
+  syncOff: () => ipcRenderer.invoke('sync:off'),
   importFiles: (paths) => ipcRenderer.invoke('import:files', paths),
   pathForFile: (file) => webUtils.getPathForFile(file),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),

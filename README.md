@@ -83,6 +83,10 @@ Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks ar
 
 Continuous autosave, daily zip backups kept for two weeks, everything stored as plain files. Set up your NEO library folder on your iCloud if you want for extra safety. You can also email copies of your WIP to yourself with a keystroke: ⌘E.
 
+**Sync (optional)**
+
+If you run your own [CouchDB](https://couchdb.apache.org) server, **File → Sync…** keeps your library the same on all your computers. NEO asks once, after the welcome, and remembers your answer; "Don't sync" is a fine answer. Your books stay plain files on every computer, and the server keeps a copy of each file. When a chapter was changed on two computers at once, both versions are kept: the other one becomes the next chapter. Anything removed on one computer goes to the other's trash, never straight into the void.
+
 ## Your files
 
 Everything lives in `~/Documents/NEO Library` — one folder per book, chapters as readable HTML, metadata as JSON. Open them in your favorite text editor.

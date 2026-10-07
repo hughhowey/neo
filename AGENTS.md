@@ -25,6 +25,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `styles.css` | All styling. Tokens are CSS variables at the top |
 | `covers.js` | Shelf covers in the window: seeded canvas art plus real title type. `window.NeoCovers` |
 | `art.js` | Painted covers in the main process. OpenAI only. Title and author are never sent to the image model |
+| `sync.js` | File → Sync…: the library mirrored to a CouchDB server the writer runs. Main process only, no dependencies |
 | `i18n.js` | `t()` / `tk()`, shared by main and the window. English source text is the key |
 | `spell-worker.js` | Hunspell WASM, forked with `utilityProcess`. Messages: `load`, `check`, `suggest`, `add` |
 | `spell-ro.js` | Romanian diacritics, used by the worker. Does not alter the manuscript |
@@ -66,8 +67,8 @@ A book whose `book.json` says `"format": "screenplay"` is a script. Right-click 
 
 ```
 index.html + app.js  →  preload.js (window.neo)  →  main.js  →  NEO Library
-                                                      ↓
-                                               spell-worker.js
+                                                      ↓   ↘
+                                          spell-worker.js   sync.js  →  CouchDB (optional)
 ```
 
 The window is created with `contextIsolation: true` and `nodeIntegration: false`. New renderer capabilities are added in three places: an `ipcMain.handle` in `main.js`, a method on `window.neo` in `preload.js`, and the call site in `app.js`.
@@ -116,6 +117,19 @@ The window holds the open book in memory (`chapterHTML`, `book`, `stickies`, `da
 
 Do not replace this with last-write-wins. The comments in `persistChapter` and `refreshFromDisk` explain cases that look redundant and are not.
 
+`library:write` merges too: when `library.json` changed on disk since the window last read or wrote it, the window's write is merged into the file (`mergeLibrary` in `sync.js`) instead of putting back the shelves it last saw.
+
+## CouchDB sync
+
+File → Sync… keeps the library the same on the writer's computers through a CouchDB server they run. `sync.js` talks to CouchDB's HTTP API directly (Electron's `net.fetch`); there is no PouchDB and no local database. The library folder stays the only copy that matters here: sync is one more device writing into it, and `refreshFromDisk` takes in what arrives (main sends `{ type: 'syncPulled' }` to make that immediate).
+
+- One CouchDB document per synced file, its `_id` the file's path in the library: `library.json`, `book-x/book.json`, `book-x/chapters/ch-1.html`. Text is in `text`, pictures in the attachment `file`. `validPath` decides what travels (never Backups, Exports, the log, the catalog, `.tmp`/`.bak`, dotfiles) and rejects any id from the server that could leave the library.
+- Asked once per computer, after the welcome (`askSyncOnce`). The answer is `sync.mode` in `userData/settings.json` (`'couchdb'` or `'off'`); the password is the `couchdb` secret in `secrets.json`. Neither is ever in the library.
+- What each file held at its last sync (revision, fingerprint, and for JSON the text, the base of the next merge) lives in `userData/sync/<hash>.json`, per library folder and database. Losing it is safe: the next sync is a first one, which only adds and merges.
+- Both sides changed: a chapter's other version becomes the next chapter, titled as from the other device (unless one side's words are a subset of the other's, which then stands); other HTML keeps both one after the other; JSON merges three ways (`mergeJSON`), and book.json text that loses goes to Darlings. Removed on one side, changed on the other: it stays. Removed and unchanged: the system trash, a trashed book as one folder.
+- A file that hasn't changed is never written. Pull applies a page of changes in one synchronous block, so IPC saves never land mid-merge. `library.json` is applied last, after the books it lists.
+- `scripts/sync.test.js` runs two library folders against a CouchDB stand-in inside the test. Pocket has no sync UI; `askSyncOnce` returns when `window.neo.syncStatus` is missing.
+
 ## Interface language
 
 Wrap writer-visible strings in `t('English text', { placeholder })`. Use `tk()` for strings translated later, at the point of display. In `index.html`, use `data-i18n`, `data-i18n-title`, `data-i18n-placeholder`, or `data-i18n-ph`.
@@ -127,7 +141,7 @@ node scripts/i18n.js template
 node scripts/i18n.js check fr
 ```
 
-`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, and `index.html`. A new string in another file will not enter the template until that list includes it.
+`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, `sync.js`, and `index.html`. A new string in another file will not enter the template until that list includes it.
 
 Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 

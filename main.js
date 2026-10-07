@@ -6,11 +6,15 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem, utilityProcess, scr
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { Buffer } = require('buffer');
+const NeoSync = require('./sync.js');
 
 // Every disk request from the page passes through here: a write the system
 // refuses (see reportBlockedWrite) is explained to the writer, then the error
-// goes back to the page as before.
+// goes back to the page as before. A write into the library tells sync
+// (File → Sync…), which sends it on once the saving settles.
+const LIBRARY_WRITES = /^(library:write|book:(create|writeMeta|delete)|chapter:(write|delete)|aux:write|json:write|cover:(set|remove|paint))$/;
 {
   const handle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = (channel, fn) => handle(channel, (...args) => {
@@ -20,6 +24,7 @@ const { Buffer } = require('buffer');
     // whatever bug report follows)
     try { out = fn(...args); } catch (err) { reportBlockedWrite(err); logError('ipc ' + channel, err); throw err; }
     if (out && typeof out.then === 'function') out.catch((err) => { reportBlockedWrite(err); logError('ipc ' + channel, err); });
+    if (sync && LIBRARY_WRITES.test(channel)) sync.nudge();
     return out;
   });
 }
@@ -517,10 +522,18 @@ function rebuildBookMeta(bookId) {
 // IPC — the renderer's whole view of the disk
 // ---------------------------------------------------------------------------
 
+// What the window last read or wrote of library.json. When the file has
+// changed since (another computer's shelf arriving through sync, iCloud or
+// Syncthing), the window's next write is merged into it instead of putting
+// back the shelves the window last saw: each side's changes stay.
+let libraryKnown = null;
+// (a copy of its own: whoever handed it over may change theirs afterwards)
+const knownCopy = (lib) => JSON.parse(JSON.stringify(lib));
+
 ipcMain.handle('library:read', () => {
   ensureLibrary();
   const lib = readJSON(LIBRARY_FILE, null);
-  if (lib) return lib;
+  if (lib) { libraryKnown = knownCopy(lib); return lib; }
   // library.json lost with no copy to fall back on: every book in the
   // folder goes onto one shelf, so nothing disappears
   const ids = [];
@@ -538,7 +551,12 @@ ipcMain.handle('library:read', () => {
 
 ipcMain.handle('library:write', (_e, data) => {
   ensureLibrary();
-  writeJSON(LIBRARY_FILE, data);
+  const disk = parseJSONFile(LIBRARY_FILE);
+  const merged = libraryKnown && disk !== undefined && !NeoSync.sameJSON(disk, libraryKnown)
+    ? NeoSync.mergeLibrary(libraryKnown, data, disk, 'local')
+    : data;
+  libraryKnown = knownCopy(data);
+  writeJSON(LIBRARY_FILE, merged);
   writeCatalog();
   return true;
 });
@@ -814,7 +832,8 @@ function readSecret(name) {
   }
 }
 
-ipcMain.handle('secret:set', (_e, name, value) => {
+// an empty value forgets the secret
+function writeSecret(name, value) {
   const { safeStorage } = require('electron');
   const all = readJSON(SECRETS_FILE(), {});
   if (!value) {
@@ -826,7 +845,9 @@ ipcMain.handle('secret:set', (_e, name, value) => {
   }
   writeJSON(SECRETS_FILE(), all);
   return true;
-});
+}
+
+ipcMain.handle('secret:set', (_e, name, value) => writeSecret(name, value));
 
 ipcMain.handle('secret:has', (_e, name) => !!readSecret(name));
 
@@ -1553,6 +1574,106 @@ async function dailyBackup() {
 let backupRunning = false;
 
 // ---------------------------------------------------------------------------
+// Sync (File → Sync…): the library kept the same on the writer's other
+// computers through a CouchDB server they run themselves (sync.js). Asked
+// once, after the welcome, and never again: the answer lives in
+// settings.json and the password beside the cover-art key in secrets.json,
+// never in the library. What arrives is written like any other device's
+// save, and the window's refreshFromDisk takes it in.
+// ---------------------------------------------------------------------------
+let sync = null;
+
+function syncSettings() {
+  const s = readSettings().sync;
+  return s && typeof s === 'object' ? s : {};
+}
+
+// Chromium's own network: it knows the computer's certificates (a home
+// server's own certificate, once the system trusts it) and its proxy
+function syncFetch() {
+  const { net } = require('electron');
+  return net && net.fetch ? (url, init) => net.fetch(url, init) : fetch;
+}
+
+function startSync() {
+  if (sync) { const old = sync; sync = null; old.stop().catch((err) => logError('sync', err)); }
+  const s = syncSettings();
+  if (s.mode !== 'couchdb' || !s.url || !s.db) return;
+  // what this library has sent to this database, kept per library folder
+  const key = crypto.createHash('sha256').update(LIBRARY_DIR + '\n' + s.url + '\n' + s.db).digest('hex').slice(0, 16);
+  sync = NeoSync.createSync({
+    config: { url: s.url, db: s.db, user: s.user || '', password: readSecret('couchdb') || '', deviceId: s.deviceId, device: os.hostname() },
+    libraryDir: () => LIBRARY_DIR,
+    stateFile: path.join(app.getPath('userData'), 'sync', key + '.json'),
+    fetch: syncFetch(),
+    writeFileDurable,
+    trash: (file) => require('electron').shell.trashItem(file),
+    logError,
+    onPulled: () => {
+      writeCatalog();
+      sendToWindow({ type: 'syncPulled' });
+    }
+  });
+  sync.start();
+}
+
+ipcMain.handle('sync:status', () => {
+  const s = syncSettings();
+  return {
+    mode: s.mode || null, // null: not asked yet
+    url: s.url || '',
+    db: s.db || '',
+    user: s.user || '',
+    hasPassword: !!readSecret('couchdb'),
+    ...(sync ? sync.status() : { state: 'off', lastSync: null, error: null })
+  };
+});
+
+// File → Sync… → Connect: the server is tried first, and only a server that
+// answers is kept (a blank password keeps the saved one)
+ipcMain.handle('sync:connect', async (_e, input) => {
+  input = input && typeof input === 'object' ? input : {};
+  const cfg = NeoSync.normalizeConfig({ ...input, password: input.password || readSecret('couchdb') || '' });
+  if (cfg.error) return { ok: false, code: cfg.error };
+  const res = await NeoSync.connect(cfg, syncFetch());
+  if (!res.ok) return res;
+  const settings = readSettings();
+  const was = settings.sync && typeof settings.sync === 'object' ? settings.sync : {};
+  settings.sync = { mode: 'couchdb', url: cfg.url, db: cfg.db, user: cfg.user, deviceId: was.deviceId || crypto.randomUUID() };
+  writeSettings(settings);
+  writeSecret('couchdb', cfg.password);
+  startSync();
+  return { ok: true, url: cfg.url, db: cfg.db };
+});
+
+// "Don't sync" (asked once) or Turn Off Sync: what this computer saved goes
+// up first, if the server answers in time; the books stay as they are here
+ipcMain.handle('sync:off', async () => {
+  const settings = readSettings();
+  settings.sync = { ...(settings.sync && typeof settings.sync === 'object' ? settings.sync : {}), mode: 'off' };
+  writeSettings(settings);
+  writeSecret('couchdb', '');
+  if (sync) {
+    const s = sync;
+    sync = null;
+    await s.flush(3000).catch(() => {});
+    await s.stop();
+  }
+  return true;
+});
+
+// Quitting: what this computer saved goes to the server first, if it answers
+// within a few seconds, so a laptop closed mid-chapter doesn't strand it
+let syncFlushedForQuit = false;
+app.on('will-quit', (e) => {
+  if (!sync || syncFlushedForQuit) return;
+  syncFlushedForQuit = true;
+  e.preventDefault();
+  const s = sync;
+  s.flush(4000).catch(() => {}).then(() => s.stop()).finally(() => app.quit());
+});
+
+// ---------------------------------------------------------------------------
 // Window
 // The window's own color, seen for a moment before the page draws and at the
 // edges while it resizes: the room's color, dark or (View → Page → Light) light
@@ -1628,6 +1749,8 @@ function createWindow() {
   win.on('resize', rememberSoon);
   win.on('move', rememberSoon);
   win.on('close', remember);
+  // back at the computer: a look at the server, as refreshFromDisk looks at the disk
+  win.on('focus', () => { if (sync) sync.nudge(0); });
 
   // Right-click on text: Cut, Copy, Paste, Select All — and nothing else.
   // Handing macOS the frame (where the selection sits) is what invites it to
@@ -1971,6 +2094,7 @@ function buildMenu() {
         },
         { label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
         { label: t('Library Folder…'), click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
+        { label: t('Sync…'), click: () => sendToWindow({ type: 'sync' }) },
         { type: 'separator' },
         ...(isMac ? [{ role: 'close', label: t('Close Window') }] : [{ role: 'quit', label: t('Quit') }])
       ]
@@ -2604,6 +2728,11 @@ app.whenReady().then(() => {
     // that failed); an existing day's zip makes this a no-op
     setInterval(() => { dailyBackup().catch(() => {}); }, 60 * 60 * 1000).unref?.();
     try { checkForUpdates(); } catch (err) { logError('updater', err); }
+    try { startSync(); } catch (err) { logError('sync', err); }
+    try {
+      // a laptop just opened: the network needs a moment
+      require('electron').powerMonitor.on('resume', () => { if (sync) sync.nudge(15000); });
+    } catch (err) { logError('sync', err); }
   } catch (err) {
     // catastrophic: tell the human instead of dying in silence
     logError('startup', err);
