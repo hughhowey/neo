@@ -541,6 +541,8 @@ async function loadLibrary() {
   if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
   if (!library.firstRunDone) {
     showFirstRun();
+  } else {
+    askSyncOnce(); // asked after the welcome, once per computer
   }
   renderShelves();
 }
@@ -630,6 +632,7 @@ function showFirstRun() {
     applyFonts();
     fr.hidden = true;
     renderShelves();
+    askSyncOnce();
   };
 }
 
@@ -11769,6 +11772,134 @@ function openCoverArt() {
   key.focus();
 }
 
+/* ================================================================== */
+/*  SYNC (File → Sync…)                                                */
+/*  The library kept the same on the writer's other computers through */
+/*  a CouchDB server they run themselves (sync.js, in the main        */
+/*  process). Asked once per computer, after the welcome; the answer  */
+/*  is kept outside the library and never asked again. What arrives   */
+/*  is written to disk like a Syncthing save, and refreshFromDisk      */
+/*  takes it in (the main process says when, with 'syncPulled').       */
+/* ================================================================== */
+
+// what went wrong, by sync.js's codes; translated when shown
+const SYNC_TROUBLE = {
+  url: tk('That doesn’t look like a server address. It starts with https:// (or http://).'),
+  dbname: tk('A database name is lowercase letters, digits and _$()+-/, starting with a letter.'),
+  unreachable: tk('NEO couldn’t reach the server ({detail}).'),
+  notcouch: tk('Something answered at that address, but it isn’t CouchDB.'),
+  auth: tk('The server didn’t accept that name and password.'),
+  forbidden: tk('That account may not use this database.'),
+  nodb: tk('The database isn’t there, and this account may not make it.'),
+  library: tk('Your library folder can’t be reached just now.'),
+  http: tk('The server said no ({detail}).')
+};
+const syncTrouble = (e) => t(SYNC_TROUBLE[e && e.code] || SYNC_TROUBLE.http, { detail: (e && e.detail) || '' });
+
+// once per computer: sync, or not (NEO Pocket shares its folder through the
+// phone's own sync, and has no File menu to change it from)
+async function askSyncOnce() {
+  if (!window.neo.syncStatus) return;
+  try {
+    const st = await window.neo.syncStatus();
+    if (!st.mode && !document.querySelector('.modal-backdrop:not([hidden])')) await openSync(true);
+  } catch (err) {
+    window.neo.logError('sync question: ' + ((err && err.message) || err));
+  }
+}
+
+async function openSync(first = false) {
+  const st = await window.neo.syncStatus();
+  const on = st.mode === 'couchdb';
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  // asked once, so it's answered, not dismissed: a click outside doesn't close it
+  if (first) bd.dataset.stay = '1';
+  bd.innerHTML = `
+    <div class="modal" style="width:500px">
+      <h2 style="font-size:17px">${t('Sync between computers')}</h2>
+      <p>${t('NEO can keep this library the same on all your computers through a CouchDB server you run yourself. Your books stay plain files on each computer; the server keeps a copy of each file.')}</p>
+      <div class="sy-choices"${first ? '' : ' hidden'}>
+        <button class="fr-choice sy-yes" style="width:100%;margin-bottom:8px"><strong>${t('Sync with my CouchDB server')}</strong><span>${t('Fill in its address once. From then on NEO syncs quietly in the background.')}</span></button>
+        <button class="fr-choice sy-no" style="width:100%;margin-bottom:8px"><strong>${t('Don’t sync')}</strong><span>${t('This library stays on this computer. File → Sync… changes that any time.')}</span></button>
+      </div>
+      <div class="sy-form"${first ? ' hidden' : ''}>
+        <label>${t('Server address')} <input id="sy-url" type="text" autocomplete="off" spellcheck="false" placeholder="https://couch.example.com:5984"/></label>
+        <label>${t('Database')} <input id="sy-db" type="text" autocomplete="off" spellcheck="false" placeholder="neo-library"/></label>
+        <label>${t('User name')} <input id="sy-user" type="text" autocomplete="off" spellcheck="false"/></label>
+        <label>${t('Password')} <input id="sy-pass" type="password" autocomplete="off" spellcheck="false"/></label>
+        <p class="soft" id="sy-note" style="margin:-6px 0 12px;font-size:12px" aria-live="polite"></p>
+        <div style="display:flex;align-items:center;margin-top:14px">
+          <button class="sy-off btn-quiet"${on ? '' : ' hidden'}>${t('Turn Off Sync')}</button>
+          <span style="flex:1"></span>
+          <button class="m-cancel btn-quiet" style="margin-right:10px">${first ? t('Back') : t('Cancel')}</button>
+          <button class="m-ok btn-gold">${t('Connect')}</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  const choices = bd.querySelector('.sy-choices');
+  const form = bd.querySelector('.sy-form');
+  const field = (id) => bd.querySelector('#sy-' + id);
+  const note = field('note');
+  const say = (text, trouble = false) => { note.textContent = text; note.style.color = trouble ? '#d97b6c' : ''; };
+  // set as values, never as markup: they came from a settings file
+  field('url').value = st.url || '';
+  field('db').value = st.db || '';
+  field('user').value = st.user || '';
+  if (st.hasPassword) field('pass').placeholder = t('saved — leave blank to keep it');
+  if (on) {
+    const when = st.lastSync && new Date(st.lastSync).toLocaleString(NeoI18n.getLocale(), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    if (st.state === 'error') say(t('Sync is waiting: {why}', { why: syncTrouble(st.error) }), true);
+    else if (st.state === 'syncing') say(t('Syncing…'));
+    else say(when ? t('In step with the server as of {time}.', { time: when }) : t('Sync is on.'));
+  } else if (!first) {
+    say(t('Sync is off. Fill in your server to turn it on.'));
+  }
+  const close = () => bd.remove();
+  const showForm = () => { choices.hidden = true; form.hidden = false; field('url').focus(); };
+  const showChoices = () => { form.hidden = true; choices.hidden = false; say(''); bd.querySelector('.sy-yes').focus(); };
+  bd.querySelector('.sy-yes').onclick = showForm;
+  bd.querySelector('.sy-no').onclick = async () => {
+    await window.neo.syncOff();
+    close();
+    toast(t('No sync. File → Sync… turns it on any time.'));
+  };
+  bd.querySelector('.sy-off').onclick = async () => {
+    await window.neo.syncOff();
+    close();
+    toast(t('Sync is off. The books on this computer stay as they are.'));
+  };
+  bd.querySelector('.m-cancel').onclick = () => (first ? showChoices() : close());
+  const ok = bd.querySelector('.m-ok');
+  const connect = async () => {
+    if (ok.disabled) return;
+    ok.disabled = true;
+    say(t('Connecting…'));
+    let res = null;
+    try {
+      res = await window.neo.syncConnect({ url: field('url').value, db: field('db').value, user: field('user').value, password: field('pass').value });
+    } catch (err) {
+      res = { ok: false, code: 'http', detail: String((err && err.message) || err) };
+    }
+    ok.disabled = false;
+    if (!res || !res.ok) { say(syncTrouble(res), true); return; }
+    close();
+    toast(t('Sync is on. This library keeps in step with “{db}” on your server.', { db: res.db }), 6000);
+  };
+  ok.onclick = connect;
+  form.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing && e.target.tagName === 'INPUT') { e.preventDefault(); connect(); }
+  });
+  bd.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    if (!first) close();
+    else if (!form.hidden) showChoices();
+  });
+  if (first) bd.querySelector('.sy-yes').focus(); else field('url').focus();
+}
+
 // An hour of the day as the writer's language says it: 1 am / 13 h / 13 Uhr,
 // or 13:00 where the language's hour is a bare number
 function hourLabel(h) {
@@ -13675,7 +13806,7 @@ window.neo.onMenu(async (msg) => {
   if ($('#keyboard-shortcuts') && msg.type !== 'help') return;
   // a window the menu opens (⌘, for Goals, say) never stacks on one that's
   // already open: pressing it again used to pile up overlays
-  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate'];
+  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate', 'sync'];
   if (WINDOWS.includes(msg.type) && document.querySelector('.modal-backdrop:not([hidden])')) {
     if (msg.type === 'checkUpdate' && updateDialog) updateDialog.focus();
     return;
@@ -13716,6 +13847,10 @@ window.neo.onMenu(async (msg) => {
     if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
   }
   if (msg.type === 'coverArt') openCoverArt();
+  if (msg.type === 'sync') openSync(false);
+  // sync just wrote what another computer sent: the same look at the disk
+  // as on focus, now rather than in half a minute
+  if (msg.type === 'syncPulled') refreshFromDisk();
   // a script's lines sit where they print: no alignment, poetry or flush
   if (msg.type === 'align' && !(book && isScript())) {
     applyAlign(msg.value);
