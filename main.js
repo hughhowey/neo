@@ -54,6 +54,21 @@ function writeSettings(obj) {
   writeFileDurable(settingsPath(), JSON.stringify(obj, null, 2));
 }
 
+const DEVICE_SCALES = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2];
+function savedDeviceScale() {
+  const scale = Number(readSettings().deviceScale);
+  return DEVICE_SCALES.includes(scale) ? scale : 1;
+}
+const deviceScaleState = savedDeviceScale();
+app.commandLine.appendSwitch('force-device-scale-factor', String(deviceScaleState));
+
+function setDeviceScale(scale) {
+  if (!DEVICE_SCALES.includes(scale) || scale === deviceScaleState) return;
+  writeSettings({ ...readSettings(), deviceScale: scale });
+  app.relaunch();
+  app.exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Interface language: one JSON file per language in locales/ (see i18n.js).
 // The choice is app-level, like the library folder, so it lives in
@@ -2588,6 +2603,15 @@ function buildMenu() {
             type: 'radio',
             checked: uiZoomState === z,
             click: () => sendToWindow({ type: 'uiZoom', value: z })
+          }))
+        },
+        {
+          label: t('Scale'),
+          submenu: DEVICE_SCALES.map((scale) => ({
+            label: scale.toFixed(1),
+            type: 'radio',
+            checked: deviceScaleState === scale,
+            click: () => setDeviceScale(scale)
           }))
         },
         { type: 'separator' },
