@@ -26,6 +26,15 @@ contextBridge.exposeInMainWorld('neo', {
   readJSON: (bookId, name, fallback) => ipcRenderer.invoke('json:read', bookId, name, fallback),
   writeJSON: (bookId, name, data) => ipcRenderer.invoke('json:write', bookId, name, data),
 
+  historySnapshot: (bookId, chId, html) => ipcRenderer.invoke('history:snapshot', bookId, chId, html),
+  historyList: (bookId, chId) => ipcRenderer.invoke('history:list', bookId, chId),
+  historyListAll: (bookId) => ipcRenderer.invoke('history:listAll', bookId),
+  historyRead: (bookId, chId, ts) => ipcRenderer.invoke('history:read', bookId, chId, ts),
+  historyArchive: (bookId, chId, label) => ipcRenderer.invoke('history:archive', bookId, chId, label),
+  historyArchiveMeta: (bookId, chId) => ipcRenderer.invoke('history:archiveMeta', bookId, chId),
+  historyPrune: (bookId, chId) => ipcRenderer.invoke('history:prune', bookId, chId),
+  historyUnarchive: (bookId, chId) => ipcRenderer.invoke('history:unarchive', bookId, chId),
+
   exportSave: (payload) => ipcRenderer.invoke('export:save', payload),
   emailDraft: (payload) => ipcRenderer.invoke('email:draft', payload),
   logError: (msg) => ipcRenderer.invoke('log:error', msg),

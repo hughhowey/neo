@@ -60,8 +60,8 @@
         <div id="fr-bodyfonts" class="fr-fontrow"></div>
         <p style="margin-bottom:6px" data-i18n>Drop cap</p>
         <div id="fr-dropcaps" class="fr-fontrow"></div>
-        <p id="fr-error" role="alert" hidden></p>
         <div style="text-align:right;margin-top:20px">
+          <p id="fr-error" role="alert" hidden></p>
           <button id="fr-done" class="btn-gold" data-i18n>Start writing</button>
         </div>
       </div>
@@ -86,7 +86,10 @@
     <div id="side-hotzone"></div>
     <aside id="side-pane" data-i18n-label="Notes &amp; Comments">
       <div id="side-head">
-        <span data-i18n>Notes &amp; Comments</span>
+        <div class="side-tabs" role="tablist">
+          <button class="side-tab active" role="tab" data-side-tab="notes" aria-selected="true" data-i18n>Notes &amp; Comments</button>
+          <button class="side-tab" role="tab" data-side-tab="history" aria-selected="false" data-i18n>Chapter Version History</button>
+        </div>
         <button id="side-pin" data-i18n-title title="Keep this pane open" data-i18n-label="Keep this pane open" aria-pressed="false">&#9737;</button>
       </div>
       <div id="sticky-list"></div>

@@ -754,6 +754,234 @@ ipcMain.handle('json:write', (_e, bookId, name, data) => {
   return true;
 });
 
+// ---------------------------------------------------------------------------
+// Chapter Version History
+// ---------------------------------------------------------------------------
+
+const HISTORY_MAX_SNAPSHOTS = 50;
+
+function formatHistoryTimestamp(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
+
+function archivedHistoryDir(bookId, chapterId) {
+  return path.join(bookDir(bookId), 'history', 'archived', libName(chapterId));
+}
+
+function historyDir(bookId, chapterId) {
+  const active = path.join(bookDir(bookId), 'history', libName(chapterId));
+  if (fs.existsSync(active)) return active;
+  const archived = archivedHistoryDir(bookId, chapterId);
+  if (fs.existsSync(archived)) return archived;
+  return active;
+}
+
+function historyFile(bookId, chapterId, ts) {
+  const fname = ts.endsWith('.html') ? ts : (ts + '.html');
+  const dir = historyDir(bookId, chapterId);
+  return path.join(dir, libName(fname.slice(0, -5)) + '.html');
+}
+
+function snippetFromHTML(html) {
+  if (!html) return '';
+  const text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                   .replace(/<[^>]+>/g, ' ')
+                   .replace(/&nbsp;/g, ' ')
+                   .replace(/&amp;/g, '&')
+                   .replace(/&lt;/g, '<')
+                   .replace(/&gt;/g, '>')
+                   .replace(/&quot;/g, '"')
+                   .replace(/&#39;/g, "'")
+                   .replace(/\s+/g, ' ')
+                   .trim();
+  return text.slice(0, 120);
+}
+
+function readHistoryDir(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const entries = [];
+  try {
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith('.html')) continue;
+      const filePath = path.join(dir, file);
+      let snippet = '';
+      try {
+        const html = fs.readFileSync(filePath, 'utf8');
+        snippet = snippetFromHTML(html);
+      } catch { /* ignore read failure */ }
+      const ts = file.slice(0, -5);
+      entries.push({ file, filePath, ts, snippet });
+    }
+    entries.sort((a, b) => b.ts.localeCompare(a.ts)); // newest first
+  } catch (err) {
+    logError('readHistoryDir', err);
+  }
+  return entries;
+}
+
+function pruneHistory(bookId, chapterId) {
+  const dir = path.join(bookDir(bookId), 'history', libName(chapterId));
+  if (!fs.existsSync(dir)) return true;
+  try {
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.html')).sort((a, b) => a.localeCompare(b));
+    while (files.length > HISTORY_MAX_SNAPSHOTS) {
+      const oldest = files.shift();
+      try { fs.unlinkSync(path.join(dir, oldest)); } catch { /* ignore */ }
+    }
+  } catch (err) {
+    logError('pruneHistory', err);
+  }
+  return true;
+}
+
+ipcMain.handle('history:snapshot', (_e, bookId, chapterId, html) => {
+  const dir = path.join(bookDir(bookId), 'history', libName(chapterId));
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  let ts = formatHistoryTimestamp();
+  let file = path.join(dir, ts + '.html');
+  if (fs.existsSync(file)) {
+    ts += '-' + Math.random().toString(36).slice(2, 6);
+    file = path.join(dir, ts + '.html');
+  }
+  writeFileDurable(file, html || '');
+  pruneHistory(bookId, chapterId);
+  return ts;
+});
+
+ipcMain.handle('history:list', (_e, bookId, chapterId) => {
+  const dir = historyDir(bookId, chapterId);
+  return readHistoryDir(dir);
+});
+
+ipcMain.handle('history:listAll', (_e, bookId) => {
+  const out = [];
+  const base = path.join(bookDir(bookId), 'history');
+  if (!fs.existsSync(base)) return out;
+
+  try {
+    for (const d of fs.readdirSync(base)) {
+      if (d === 'archived') {
+        const archBase = path.join(base, 'archived');
+        if (!fs.existsSync(archBase)) continue;
+        for (const chId of fs.readdirSync(archBase)) {
+          const chDir = path.join(archBase, chId);
+          if (!fs.statSync(chDir).isDirectory()) continue;
+          let meta = null;
+          try {
+            const metaFile = path.join(chDir, 'archive.json');
+            if (fs.existsSync(metaFile)) meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+          } catch {}
+          const label = (meta && meta.label) || '';
+          const snaps = readHistoryDir(chDir);
+          for (const s of snaps) {
+            out.push({ ...s, chapterId: chId, archived: true, label });
+          }
+        }
+      } else {
+        const chDir = path.join(base, d);
+        if (!fs.statSync(chDir).isDirectory()) continue;
+        const snaps = readHistoryDir(chDir);
+        for (const s of snaps) {
+          out.push({ ...s, chapterId: d, archived: false, label: '' });
+        }
+      }
+    }
+  } catch (err) {
+    logError('history:listAll', err);
+  }
+  return out;
+});
+
+ipcMain.handle('history:read', (_e, bookId, chapterId, ts) => {
+  const cleanTs = libName(ts.replace(/\.html$/, ''));
+  const act = path.join(bookDir(bookId), 'history', libName(chapterId), cleanTs + '.html');
+  if (fs.existsSync(act)) {
+    try { return fs.readFileSync(act, 'utf8'); } catch {}
+  }
+  const arch = path.join(archivedHistoryDir(bookId, chapterId), cleanTs + '.html');
+  if (fs.existsSync(arch)) {
+    try { return fs.readFileSync(arch, 'utf8'); } catch {}
+  }
+  return null;
+});
+
+ipcMain.handle('history:archive', (_e, bookId, chapterId, label) => {
+  const act = path.join(bookDir(bookId), 'history', libName(chapterId));
+  const arch = archivedHistoryDir(bookId, chapterId);
+  if (!fs.existsSync(act)) return true;
+  fs.mkdirSync(arch, { recursive: true });
+  try {
+    for (const f of fs.readdirSync(act)) {
+      if (!f.endsWith('.html')) continue;
+      const src = path.join(act, f);
+      const dst = path.join(arch, f);
+      try {
+        fs.copyFileSync(src, dst);
+        fs.unlinkSync(src);
+      } catch (err) {
+        logError('history:archive file copy', err);
+      }
+    }
+    writeJSON(path.join(arch, 'archive.json'), { label: label || '', deleted: new Date().toISOString() });
+    try { fs.rmdirSync(act); } catch {}
+  } catch (err) {
+    logError('history:archive', err);
+  }
+  return true;
+});
+
+ipcMain.handle('history:archiveMeta', (_e, bookId, chapterId) => {
+  const metaFile = path.join(archivedHistoryDir(bookId, chapterId), 'archive.json');
+  return readJSON(metaFile, null);
+});
+
+ipcMain.handle('history:prune', (_e, bookId, chapterId) => {
+  return pruneHistory(bookId, chapterId);
+});
+
+ipcMain.handle('history:unarchive', async (_e, bookId, chapterId) => {
+  const arch = archivedHistoryDir(bookId, chapterId);
+  const act = path.join(bookDir(bookId), 'history', libName(chapterId));
+  if (!fs.existsSync(arch)) return 0;
+  fs.mkdirSync(act, { recursive: true });
+  let moved = 0;
+  let files = [];
+  try {
+    files = fs.readdirSync(arch);
+  } catch (err) {
+    logError('history:unarchive readdir', err);
+    return 0;
+  }
+  for (const f of files) {
+    if (f === 'archive.json') continue;
+    const src = path.join(arch, f);
+    const dst = path.join(act, f);
+    let copied = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        fs.copyFileSync(src, dst);
+        copied = true;
+        break;
+      } catch (err) {
+        await new Promise((r) => setTimeout(r, 60));
+      }
+    }
+    if (copied) {
+      moved++;
+      try { fs.unlinkSync(src); } catch {}
+    }
+  }
+  try {
+    const metaPath = path.join(arch, 'archive.json');
+    if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+  } catch {}
+  try {
+    fs.rmdirSync(arch);
+  } catch {}
+  return moved;
+});
+
 ipcMain.handle('book:delete', async (_e, bookId, title) => {
   const win = BrowserWindow.getFocusedWindow();
   const { response } = await dialog.showMessageBox(win, {
