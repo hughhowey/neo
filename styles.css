@@ -1063,7 +1063,9 @@ body.light #editor-view.board-on #outline-board-hint { color: #6a665e; }
 
 /* loose cards: the right-hand pane while the Outline is up */
 .side-title-loose, #loose-list { display: none; }
-#editor-view.outline-tab .side-title-notes, #editor-view.outline-tab #sticky-list { display: none; }
+#editor-view.outline-tab .side-title-notes,
+#editor-view.outline-tab .side-tabs,
+#editor-view.outline-tab #sticky-list { display: none; }
 #editor-view.outline-tab .side-title-loose { display: inline; }
 #editor-view.outline-tab #loose-list { display: flex; }
 #loose-list { flex-direction: column; gap: 12px; padding: 0 14px; --cz: 1; }

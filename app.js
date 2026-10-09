@@ -10484,13 +10484,21 @@ function goToScene(cell) {
 function looseList() {
   let list = $('#loose-list');
   if (list) return list;
-  const head = $('#side-head > span');
-  if (head) {
-    head.classList.add('side-title-notes');
-    const alt = document.createElement('span');
+  let alt = $('.side-title-loose');
+  if (!alt) {
+    alt = document.createElement('span');
     alt.className = 'side-title-loose';
     alt.textContent = t('Loose cards');
-    head.after(alt);
+    const tabs = $('#side-head .side-tabs');
+    if (tabs) {
+      tabs.after(alt);
+    } else {
+      const head = $('#side-head > span');
+      if (head) {
+        head.classList.add('side-title-notes');
+        head.after(alt);
+      }
+    }
   }
   list = document.createElement('div');
   list.id = 'loose-list';
@@ -10749,7 +10757,11 @@ function heldSceneBack(card, before) {
 function sidePaneForTab(name) {
   const outline = name === 'outline' && !!book;
   $('#editor-view').classList.toggle('outline-tab', outline);
-  if (outline) renderLooseCards();
+  if (outline) {
+    renderLooseCards();
+  } else if (currentSideTab === 'history') {
+    renderHistoryTimeline();
+  }
 }
 
 // ---- the note walks ahead ----
