@@ -1,0 +1,25 @@
+Swedish spelling dictionary
+
+NEO distributes the unmodified dictionary and affix data from dictionary-sv
+4.0.0 under the GNU Lesser General Public License version 3. NEO's MIT
+license does not replace the dictionary's license.
+
+Copyright © 2003-19 Göran Andersson <goran@init.se>.
+The upstream notice is in upstream-license.txt. The full license is in
+LGPL-3.0.txt, with the GPL version 3 text it incorporates in GPL-3.0.txt.
+
+Source availability
+
+index.aff and index.dic are the dictionary's source files, shipped verbatim
+with this notice in app.asar.unpacked/node_modules/dictionary-sv/ on desktop
+and dict/sv/ in Pocket. On macOS the desktop directory is inside
+NEO.app/Contents/Resources; on Windows and Linux it is inside resources.
+An AppImage can be extracted with --appimage-extract. These files remain
+separate from NEO's code and may be replaced with a modified dictionary.
+
+Exact source package:
+https://registry.npmjs.org/dictionary-sv/-/dictionary-sv-4.0.0.tgz
+Package project:
+https://github.com/wooorm/dictionaries/tree/main/dictionaries/sv
+Original dictionary (Den stora svenska ordlistan):
+https://extensions.libreoffice.org/extensions/swedish-spelling-dictionary-den-stora-svenska-ordlistan

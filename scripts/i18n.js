@@ -9,14 +9,16 @@
 //                                      only holds what differs from fr.json
 //
 // Strings are found in t('…'), tk('…') and NeoI18n.t('…') calls in the
-// JavaScript, and in the data-i18n* attributes of index.html.
+// JavaScript, and in the data-i18n* attributes of index.html. NEO Pocket's
+// own page and bridge count too: they show the same locales/ files.
 
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const JS_FILES = ['app.js', 'main.js', 'covers.js'];
+const JS_FILES = ['app.js', 'main.js', 'covers.js', 'pocket/www/pocket-bridge.js', 'pocket/www/index.html'];
+const HTML_FILES = ['index.html', 'pocket/www/index.html'];
 const LOCALES = path.join(ROOT, 'locales');
 
 function unescapeJs(s) {
@@ -43,15 +45,17 @@ function collect() {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
     for (const m of src.matchAll(call)) add(unescapeJs(m[1]), f);
   }
-  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  for (const tag of html.matchAll(/<(\w+)([^>]*)>([^<]*)/g)) {
-    const [, , attrs, text] = tag;
-    const attr = (name) => (attrs.match(new RegExp('\\s' + name + '="([^"]*)"')) || [])[1];
-    if (/\sdata-i18n(\s|>|$)/.test(attrs + ' ')) add(decodeHtml(text), 'index.html');
-    if (/\sdata-i18n-title\b/.test(attrs) && attr('title')) add(decodeHtml(attr('title')), 'index.html');
-    if (/\sdata-i18n-placeholder\b/.test(attrs) && attr('placeholder')) add(decodeHtml(attr('placeholder')), 'index.html');
-    if (/\sdata-i18n-ph\b/.test(attrs) && attr('data-ph')) add(decodeHtml(attr('data-ph')), 'index.html');
-    if (attr('data-i18n-label')) add(decodeHtml(attr('data-i18n-label')), 'index.html');
+  for (const f of HTML_FILES) {
+    const html = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    for (const tag of html.matchAll(/<(\w+)([^>]*)>([^<]*)/g)) {
+      const [, , attrs, text] = tag;
+      const attr = (name) => (attrs.match(new RegExp('\\s' + name + '="([^"]*)"')) || [])[1];
+      if (/\sdata-i18n(\s|>|$)/.test(attrs + ' ')) add(decodeHtml(text), f);
+      if (/\sdata-i18n-title\b/.test(attrs) && attr('title')) add(decodeHtml(attr('title')), f);
+      if (/\sdata-i18n-placeholder\b/.test(attrs) && attr('placeholder')) add(decodeHtml(attr('placeholder')), f);
+      if (/\sdata-i18n-ph\b/.test(attrs) && attr('data-ph')) add(decodeHtml(attr('data-ph')), f);
+      if (attr('data-i18n-label')) add(decodeHtml(attr('data-i18n-label')), f);
+    }
   }
   return keys;
 }

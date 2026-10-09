@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["print/**"],
   "plugins": ["import", "node", "promise"],
   "categories": {
     "correctness": "off"

@@ -134,6 +134,21 @@ button { font: inherit; cursor: pointer; }
 @font-face { font-family: 'NEO Josefin'; src: url('fonts/josefin-sans-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
 @font-face { font-family: 'NEO Josefin'; src: url('fonts/josefin-sans-latin-600-normal.woff2') format('woff2'); font-weight: 600; }
 @font-face { font-family: 'NEO Baskerville'; src: url('fonts/libre-baskerville-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+/* Hungarian ő and ű (and the rest of Latin Extended-A) for the cover and
+   drop-cap faces, from Fontsource's "latin-ext" subset. The Latin files
+   above keep drawing everything else. */
+@font-face { font-family: 'NEO Anton'; src: url('fonts/anton-latin-ext-400-normal.woff2') format('woff2'); font-weight: 400; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Bebas'; src: url('fonts/bebas-neue-latin-ext-400-normal.woff2') format('woff2'); font-weight: 400; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Oswald'; src: url('fonts/oswald-latin-ext-700-normal.woff2') format('woff2'); font-weight: 700; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Abril'; src: url('fonts/abril-fatface-latin-ext-400-normal.woff2') format('woff2'); font-weight: 400; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-ext-900-normal.woff2') format('woff2'); font-weight: 900; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-ext-900-italic.woff2') format('woff2'); font-weight: 900; font-style: italic; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-ext-700-normal.woff2') format('woff2'); font-weight: 700; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Playfair'; src: url('fonts/playfair-display-latin-ext-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Cinzel'; src: url('fonts/cinzel-latin-ext-900-normal.woff2') format('woff2'); font-weight: 900; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Josefin'; src: url('fonts/josefin-sans-latin-ext-700-normal.woff2') format('woff2'); font-weight: 700; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Josefin'; src: url('fonts/josefin-sans-latin-ext-600-normal.woff2') format('woff2'); font-weight: 600; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'NEO Baskerville'; src: url('fonts/libre-baskerville-latin-ext-700-normal.woff2') format('woff2'); font-weight: 700; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 
 /* Body faces for Linux. macOS and Windows use system fonts; these are the
    names the Format menu and the first-run picker show on Linux. */
@@ -447,7 +462,11 @@ button { font: inherit; cursor: pointer; }
 .ps-paper .ps-body i, .ps-paper .ps-body em { font-style: normal; }
 .ps-paper.kind-copyright { justify-content: flex-end; }
 .ps-paper.kind-copyright .ps-body { font-size: 10.5px; }
-.ps-paper.kind-copyright .ps-body p + p { margin-top: 0.9em; }
+/* p:not(:first-child), never p + p: these pages hold only paragraphs, so the
+   two pick the same ones, but a p + p rule anywhere in the sheet, beside the
+   ::highlight and ::selection rules, makes Chromium restyle every paragraph
+   of every chapter when one is added (7 ms in a 2,000-paragraph chapter) */
+.ps-paper.kind-copyright .ps-body p:not(:first-child) { margin-top: 0.9em; }
 .ps-paper.kind-copyright .ps-body i, .ps-paper.kind-copyright .ps-body em,
 .ps-paper.kind-acknowledgments .ps-body i, .ps-paper.kind-acknowledgments .ps-body em,
 .ps-paper.kind-about .ps-body i, .ps-paper.kind-about .ps-body em { font-style: italic; }
@@ -460,7 +479,7 @@ button { font: inherit; cursor: pointer; }
 .ps-paper.kind-part .ps-body.empty p:first-child { min-height: 1.3em; }
 .ps-paper.kind-acknowledgments, .ps-paper.kind-about { padding-top: 100px; }
 .ps-paper.kind-acknowledgments .ps-label, .ps-paper.kind-about .ps-label { margin-bottom: 34px; }
-.ps-paper.kind-acknowledgments .ps-body p + p, .ps-paper.kind-about .ps-body p + p { text-indent: 1.5em; }
+.ps-paper.kind-acknowledgments .ps-body p:not(:first-child), .ps-paper.kind-about .ps-body p:not(:first-child) { text-indent: 1.5em; }
 /* the cover opens to the title page */
 .ps-paper.kind-title { justify-content: center; align-items: stretch; gap: 14px; padding-bottom: 150px; text-align: center; }
 .ps-paper .tp-field { outline: none; min-height: 1.2em; line-height: 1.3; }
@@ -494,6 +513,32 @@ body.night .ps-paper .ps-body.empty::before, body.night .ps-paper .tp-field:empt
   color: #eee; font-size: 14px;
 }
 .modal input:focus { outline: none; border-color: var(--accent); }
+
+/* File → Export → Paperback for KDP… */
+.print-modal { max-height: calc(100vh - 48px); overflow-y: auto; }
+.print-modal .pm-review-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.print-modal .pm-review-row .pm-edit { font-size: 12px; padding: 2px 6px; opacity: 0; transition: opacity 0.15s; }
+.print-modal .pm-review-row:hover .pm-edit, .print-modal .pm-edit:focus-visible { opacity: 1; }
+.print-modal #pm-review-text { margin: 4px 0 10px; }
+.print-modal label.pm-also { display: block; margin-top: 6px; }
+.print-modal .pm-hint { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.print-modal h3 { font-weight: 400; font-size: 14px; color: var(--accent); margin: 8px 0 12px; }
+.print-modal .pm-row { display: flex; gap: 14px; }
+.print-modal .pm-row > label { flex: 1; min-width: 0; }
+.print-modal .pm-trims { gap: 8px; margin-bottom: 16px; }
+.print-modal .pm-trims .fr-choice { flex: 1; padding: 10px 6px; text-align: center; }
+.print-modal .pm-trims .fr-choice strong { margin-bottom: 3px; font-size: 13px; }
+.print-modal .pm-trims .fr-choice span { font-size: 11px; }
+.print-modal .fr-choice.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.print-modal .fr-choice:focus:not(:focus-visible) { outline: none; }
+.print-modal select, .print-modal textarea {
+  display: block; width: 100%; margin-top: 6px; padding: 8px 10px;
+  background: var(--bg); border: 1px solid #3a3a3a; border-radius: 6px; color: #eee; font: inherit; font-size: 14px;
+}
+.print-modal textarea { resize: vertical; }
+.print-modal label.pm-check { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.print-modal label.pm-check input { display: inline-block; width: auto; margin: 0; }
+body.light .print-modal select, body.light .print-modal textarea { background: #fff; border-color: #cfcac0; color: #1c1a17; }
 
 /* the two button voices every dialog speaks in */
 .btn-gold {
@@ -778,7 +823,7 @@ body.bright .spell-menu button { color: #eee; }
 .chapter.kind-copyright .chapter-body {
   margin-top: auto; font-size: calc(var(--editor-size, 17px) * 0.66 * var(--page-zoom, 1)); line-height: 1.6;
 }
-.chapter.kind-copyright .chapter-body p + p { margin-top: 0.9em; }
+.chapter.kind-copyright .chapter-body p:not(:first-child) { margin-top: 0.9em; }
 .chapter.kind-dedication .chapter-body, .chapter.kind-epigraph .chapter-body {
   margin: auto 0; padding-bottom: 14vh; text-align: center; font-style: italic;
 }
@@ -790,7 +835,7 @@ body.bright .spell-menu button { color: #eee; }
 .chapter.kind-part .chapter-body p { margin: 0 2em; }
 .chapter.kind-part .chapter-body p:first-child { font-style: normal; font-size: 1.55em; line-height: 1.3; margin: 0 0 0.9em; }
 .chapter.kind-part .chapter-body.blank::before { font-size: 1.55em; line-height: 1.3; }
-.chapter.kind-acknowledgments .chapter-body p + p, .chapter.kind-about .chapter-body p + p { text-indent: 2em; }
+.chapter.kind-acknowledgments .chapter-body p:not(:first-child), .chapter.kind-about .chapter-body p:not(:first-child) { text-indent: 2em; }
 /* the contents: the book's own shape, each line a way there */
 .toc-list {
   list-style: none; margin: 0 1.5em; padding: 0;
@@ -910,7 +955,7 @@ body.light .ob-card { box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.1
 .ob-chapter { background: var(--card-head); }
 .ob-head { display: flex; align-items: baseline; gap: 7px; min-height: 0; }
 .ob-chapter .ob-head { align-items: flex-end; border-bottom: 1px solid #e3b4ae; padding-bottom: 2px; }
-.ob-mark { font-family: var(--dropcap-font); font-size: 2.6em; line-height: 1; color: var(--card-mark); }
+.ob-mark { font-family: var(--dropcap-font); font-size: 1.7em; line-height: 1; color: var(--card-mark); }
 .ob-mark.ob-word { font-family: inherit; font-size: 0.82em; letter-spacing: 2px; text-transform: uppercase; padding-bottom: 4px; }
 .ob-words { margin-left: auto; font-size: 0.82em; color: var(--card-soft); padding-bottom: 3px; white-space: nowrap; }
 .ob-letter { font-size: 0.82em; font-weight: 600; color: var(--card-mark); }
@@ -920,11 +965,51 @@ body.light .ob-card { box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.1
   flex: 1; min-height: 0; font-family: var(--body-font); line-height: 1.4; overflow: hidden;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; outline: none;
 }
-.ob-chapter .ob-text { padding-top: 3px; }
-.ob-text.excerpt { color: #4a463e; }
+.ob-chapter .ob-text { padding-top: 1px; -webkit-line-clamp: 4; }
+/* the page's own words, quoted: grayed, so they don't read as a note */
+.ob-text.excerpt { color: #8f897b; }
 .ob-text.empty { color: #9a9486; font-style: italic; }
 .ob-card.unwritten .ob-text:not(.empty) { color: #807a6c; font-style: italic; }
 .ob-foot { font-size: 0.82em; color: var(--card-soft); }
+
+/* a script's board: each scene its own card, no chapters to gather them */
+#outline-board.script-board { row-gap: calc(16px * var(--cz)); }
+#outline-board.script-board .ob-cell { background: none; padding: 0 calc(7px * var(--cz)); margin: 0; border-radius: 0; }
+#outline-board.script-board .ob-card { height: calc(146px * var(--cz)); }
+.ob-slug {
+  font-family: var(--sp-font, 'Courier Prime', 'Courier New', monospace); font-weight: bold; text-transform: uppercase;
+  font-size: 0.95em; line-height: 1.3; border-bottom: 1px solid #e3b4ae; padding-bottom: 3px; outline: none;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.ob-slug:empty::before { content: attr(data-ph); color: #b0a998; }
+.ob-cell.open .ob-slug { display: block; overflow: visible; cursor: text; }
+.ob-scene .ob-foot { letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#outline-board.tiles.script-board .ob-card { height: 64px; }
+#outline-board.tiles .ob-scene .ob-text { display: none; }
+
+/* the + on the seam after a card, and the card that ends the board */
+.ob-plus {
+  position: absolute; right: -11px; top: 50%; transform: translateY(-50%); z-index: 3;
+  width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); background: var(--bg);
+  color: var(--accent); font: 15px/19px -apple-system, BlinkMacSystemFont, sans-serif; text-align: center;
+  opacity: 0; transition: opacity 0.12s; cursor: pointer;
+}
+.ob-cell:hover .ob-plus, .ob-cell:focus-visible .ob-plus { opacity: 1; }
+.ob-cell.open .ob-plus, .ob-cell[data-new] .ob-plus, body.ob-dragging .ob-plus { display: none; }
+.ob-plus:hover { background: var(--accent); color: var(--bg); }
+.ob-add {
+  margin: calc(8px * var(--cz)) 5px; min-height: calc(112px * var(--cz)); border-radius: 6px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); background: none;
+  color: var(--muted); font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; cursor: pointer;
+}
+.ob-add:hover, .ob-add:focus-visible { color: var(--accent); border-color: var(--accent); }
+#outline-board.tiles .ob-add { min-height: 58px; }
+#outline-board.script-board .ob-add { margin: 0 calc(7px * var(--cz)); min-height: calc(146px * var(--cz)); }
+.ob-from {
+  font-family: var(--body-font); font-size: 0.85em; line-height: 1.4; color: #6f6a5e;
+  border-left: 2px solid #e3b4ae; padding-left: 8px; margin: 2px 0 4px;
+}
 
 /* tiles: zoomed out, a whole novel on one screen */
 #outline-board.tiles .ob-card { height: 58px; font-size: 11px; padding: 5px 8px; }
@@ -945,7 +1030,8 @@ body.light .ob-card { box-shadow: 0 0 0 1px #d9d3c4, 0 3px 8px rgba(60,50,30,0.1
 .ob-cell.open-left .ob-card { left: auto; right: 0; }
 .ob-cell.open .ob-text { -webkit-line-clamp: unset; display: block; overflow: visible; min-height: 4.2em; color: var(--card-ink); font-style: normal; cursor: text; }
 .ob-text[contenteditable="true"]:empty::before { content: attr(data-ph); color: #9a9486; font-style: italic; }
-.ob-tools { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--card-soft); padding-top: 6px; }
+.ob-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11px; color: var(--card-soft); padding-top: 6px; }
+.ob-tools button { white-space: nowrap; }
 .ob-tools button {
   background: none; border: 1px solid #cfc8b8; border-radius: 12px; padding: 3px 10px;
   font: inherit; color: #5b5648; cursor: pointer;
@@ -965,6 +1051,15 @@ body.ob-dragging, body.ob-dragging * { cursor: grabbing !important; user-select:
   background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 #outline-board-hint { margin-top: 34px; }
+#editor-view.board-on #outline-board-hint { color: #7d7a72; }
+body.bright #editor-view.board-on #outline-board-hint { color: #aca699; }
+body.light #editor-view.board-on #outline-board-hint { color: #6a665e; }
+
+.ob-cell.ob-join .ob-card { box-shadow: 0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 50%, transparent); }
+#ob-join-tip {
+  position: fixed; z-index: 899; pointer-events: none; font: 12px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: var(--accent); background: var(--bg); padding: 2px 8px; border-radius: 10px;
+}
 
 /* loose cards: the right-hand pane while the Outline is up */
 .side-title-loose, #loose-list { display: none; }
@@ -1345,6 +1440,10 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
   padding: 6px 14px; color: #191919; font-size: 12px;
 }
 #stats-chart { background: #1d1d1d; border-radius: 8px; padding: 10px; margin-top: 8px; }
+/* on a phone the modal is narrower than the chart's 520px: it scales down instead of spilling out */
+@media (max-width: 600px) {
+  #stats-chart { box-sizing: border-box; max-width: 100%; height: auto; display: block; }
+}
 
 /* --- Keyboard shortcut reference --- */
 .shortcuts-modal {
@@ -1418,15 +1517,16 @@ body.bright #add-shelf-btn, body.bright #import-btn { color: #b4b4b4; border-col
   box-shadow: 0 3px 14px rgba(0,0,0,0.4);
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+/* 11px to grab, the thumb drawn 7px inside it (the border is see-through) */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; min-height: 44px; }
 ::-webkit-scrollbar-track { background: transparent; }
 /* the thumb only paints while the pane is actively scrolling */
-.show-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); }
-.show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+.show-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.16); }
+.show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.28); }
 /* bright mode is still a dark theme — thumbs stay light, just more present */
-body.bright .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.26); }
-body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+body.bright .show-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.26); }
+body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.4); }
 
 /* pinned notes pane: the page column shifts left to clear the pane */
 #editor-view.side-pinned #paper-scroll { left: calc(50% - 125px); }
@@ -1533,6 +1633,11 @@ body.bright .pop-menu button:disabled { color: #8a8a8a; }
 #editor-view.side-pinned #paper-scroll { left: calc(50% - 125px * var(--ui-zoom)); }
 #editor-view.nav-pinned #paper-scroll { left: calc(50% + 124px * var(--ui-zoom)); }
 #editor-view.nav-pinned.side-pinned #paper-scroll { left: calc(50% - 1px * var(--ui-zoom)); }
+/* …except the Outline's cards, which fill the room between whichever panes
+   are pinned (these come after the page rules above, so they win, #312) */
+#editor-view.board-on.side-pinned #paper-scroll { left: 0; right: calc(250px * var(--ui-zoom)); }
+#editor-view.board-on.nav-pinned #paper-scroll { left: calc(248px * var(--ui-zoom)); }
+#editor-view.board-on.nav-pinned.side-pinned #paper-scroll { left: calc(248px * var(--ui-zoom)); right: calc(250px * var(--ui-zoom)); }
 .modal { max-height: calc(85vh / var(--ui-zoom)); max-width: calc(100vw / var(--ui-zoom) - 32px); }
 .font-list { max-height: calc(50vh / var(--ui-zoom)); }
 .shortcuts-modal {
@@ -1708,8 +1813,8 @@ body.light .shortcut-row small, body.light .shortcut-or { color: #6f6a60; }
 body.light .shortcut-row kbd { color: #2b2926; background: #f4f2ee; border-color: #cfcac0; }
 body.light .shortcuts-footer span { color: #5a564e; }
 body.light .shortcuts-content::-webkit-scrollbar-thumb { background: #c4bfb5; }
-body.light .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); }
-body.light .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
+body.light .show-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.18); }
+body.light .show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.3); }
 
 body.light .nav-gap::before { border-top-color: #d3cec4; }
 body.light .nav-gap .ng-plus { border-color: #cfcac0; color: #8f8a80; }
@@ -1741,8 +1846,8 @@ body.light.bright .stats-legend { color: #5f5b53; }
 body.light.bright .ghost-page { border-color: rgba(0,0,0,0.4); color: rgba(0,0,0,0.62); }
 body.light.bright .nav-gap .ng-plus { color: #5f5b53; border-color: #8f897e; }
 body.light.bright .pop-menu button:disabled { color: #77726a; }
-body.light.bright .show-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.3); }
-body.light.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.45); }
+body.light.bright .show-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.3); }
+body.light.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.45); }
 
 
 /* ===== Greek typography =====
@@ -1862,9 +1967,13 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 .chapter + .chapter .sp-geom > p.sp-dialogue:first-child, .chapter + .chapter .sp-geom > p.sp-paren:first-child { margin-top: 0; }
 .sp-geom > p.sp-heading, .sp-geom > p.sp-character, .sp-geom > p.sp-transition, .sp-geom > p.sp-shot { text-transform: uppercase; }
 /* scene headings stand out as you write, and print the same way */
-.sp-geom > p.sp-heading, .sp-narrow > p.sp-heading { font-weight: bold; }
-/* two blank lines above a scene heading (SP_BEFORE in app.js) */
-.sp-geom > p.sp-heading:not(:first-child) { margin-top: 2em; }
+.sp-geom > p.sp-heading, .sp-narrow > p.sp-heading,
+.sp-geom > p.sp-shot, .sp-narrow > p.sp-shot { font-weight: bold; }
+/* …and underlined too, for the studios that want it (Format menu) */
+#paper.sp-uline .sp-geom > p.sp-heading, #paper.sp-uline .sp-narrow > p.sp-heading { text-decoration: underline; }
+/* two blank lines above a scene heading, and a shot, which is a heading
+   without INT./EXT. (SP_BEFORE in app.js) */
+.sp-geom > p.sp-heading:not(:first-child), .sp-geom > p.sp-shot:not(:first-child) { margin-top: 2em; }
 .sp-geom > p.sp-character { margin-left: 13.2em; width: 23.1em; --ind: 13.2em; }
 .sp-geom > p.sp-paren { margin-left: 9.6em; width: 15.3em; --ind: 9.6em; }
 .sp-geom > p.sp-dialogue { margin-left: 6em; width: 21.3em; --ind: 6em; }
@@ -1929,7 +2038,7 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 .sp-narrow > p { margin: 1.3em 0 0; text-indent: 0 !important; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
 .sp-narrow > p:first-child { margin-top: 0; }
 .sp-narrow > p.sp-dialogue, .sp-narrow > p.sp-paren { margin-top: 0; }
-.sp-narrow > p.sp-heading:not(:first-child) { margin-top: 2.6em; }
+.sp-narrow > p.sp-heading:not(:first-child), .sp-narrow > p.sp-shot:not(:first-child) { margin-top: 2.6em; }
 .sp-narrow > p.sp-heading, .sp-narrow > p.sp-character, .sp-narrow > p.sp-transition, .sp-narrow > p.sp-shot { text-transform: uppercase; }
 .sp-narrow > p.sp-character { margin-left: 6.5em; --ind: 6.5em; }
 .sp-narrow > p.sp-paren { margin-left: 4.5em; margin-right: 3em; --ind: 4.5em; }
@@ -1965,3 +2074,26 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 #nav-pane.script .nav-item.sp-scene .n-row { justify-content: flex-start; gap: 8px; }
 #nav-pane.script .nav-item.sp-scene .n-words { margin-left: auto; }
 body.light #nav-pane.script .nav-item.sp-scene .n-num { color: #8f8a80; }
+
+/* a script's title, set bold, underlined or italic as a whole (⌘B ⌘U ⌘I) */
+#paper.script #tp-title.tp-b { font-weight: bold; }
+#paper.script #tp-title.tp-u { text-decoration: underline; }
+#paper.script #tp-title.tp-i { font-style: italic; }
+/* a loose card that holds writing set aside from the manuscript: how many words */
+.ob-held { margin-top: 6px; font-size: 11px; letter-spacing: 0.04em; color: var(--muted); }
+
+/* cards picked together (⌘-click, Shift-click, or a sweep across the board) */
+.ob-cell.ob-sel .ob-card { box-shadow: 0 0 0 2px var(--accent), 0 2px 10px rgba(0, 0, 0, 0.25); }
+.ob-lasso { position: fixed; z-index: 50; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 3px; pointer-events: none; }
+.ob-lassoing, .ob-lassoing * { user-select: none !important; -webkit-user-select: none !important; }
+
+/* a scene's card note on its empty first line, until the scene is written (#339) */
+.sp-geom > p[data-scene-note]:not([data-ghost])::after, .sp-narrow > p[data-scene-note]:not([data-ghost])::after {
+  content: attr(data-scene-note); position: absolute; left: 0; top: 0; right: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* one line: it takes no room on the page */
+  font-style: italic; color: color-mix(in srgb, var(--ink) 36%, var(--paper)); pointer-events: none;
+}
+.sp-geom > p[data-scene-note], .sp-narrow > p[data-scene-note] { position: relative; }
+
+/* the shelf's own size (#336), kept on this device */
+#shelves { zoom: var(--shelf-zoom, 1); }

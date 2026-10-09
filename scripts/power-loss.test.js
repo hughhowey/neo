@@ -11,6 +11,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const { describe, test } = require('node:test');
+const { spawn } = require('node:child_process');
 
 const root = path.join(__dirname, '..');
 const localRequire = createRequire(path.join(root, 'main.js'));
@@ -18,6 +19,7 @@ const source = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 function loadMain() {
   const handlers = new Map();
+  const warnings = [];
   const electron = {
     app: {
       commandLine: { appendSwitch() {} },
@@ -30,7 +32,7 @@ function loadMain() {
     ipcMain: { on() {}, handle: (name, fn) => handlers.set(name, fn) },
     BrowserWindow: { getFocusedWindow: () => null, getAllWindows: () => [] },
     Menu: { buildFromTemplate: (items) => items, setApplicationMenu() {} },
-    dialog: {},
+    dialog: { showMessageBox: (opts) => { warnings.push(opts.message); return Promise.resolve({}); } },
     utilityProcess: { fork: () => ({ on() {}, postMessage() {} }) },
     screen: {}
   };
@@ -43,6 +45,7 @@ function loadMain() {
   });
   vm.runInContext(source, context, { filename: path.join(root, 'main.js') });
   return {
+    warnings,
     call: (name, ...args) => handlers.get(name)(null, ...args),
     pointAt(dir) {
       context.libraryRoot = dir;
@@ -129,5 +132,88 @@ describe('power loss', { concurrency: 1 }, () => {
   test('a missing JSON sidecar still reads as its fallback', () => {
     const { book } = libraryWithBook();
     assert.deepEqual([...main.call('json:read', book.id, 'nothing-here', ['x'])], ['x']);
+  });
+
+  test('library.json deleted outright: its .bak brings the shelves back, not an empty seed', () => {
+    const { dir, book } = libraryWithBook();
+    fs.rmSync(path.join(dir, 'library.json'));
+    const lib = main.call('library:read');
+    assert.ok(lib.shelves[0].bookIds.includes(book.id));
+  });
+
+  test('library.json and its .bak both gone: the book folders still fill a shelf', () => {
+    const { dir, book } = libraryWithBook();
+    fs.rmSync(path.join(dir, 'library.json'));
+    fs.rmSync(path.join(dir, 'library.json.bak'));
+    const lib = main.call('library:read');
+    assert.ok(lib.shelves[0].bookIds.includes(book.id));
+  });
+
+  test('a sidecar left only as its .tmp is recovered, not read as empty', () => {
+    const { book, bookDir } = libraryWithBook();
+    fs.writeFileSync(path.join(bookDir, 'keepers.json.tmp'), JSON.stringify([{ id: 'd1', text: 'recover me' }]));
+    const got = main.call('json:read', book.id, 'keepers', []);
+    assert.equal(got[0].text, 'recover me');
+  });
+
+  test('a save never goes over words another device wrote since; an older copy is simply replaced', () => {
+    const { book, bookDir } = libraryWithBook();
+    const file = path.join(bookDir, 'chapters', 'ch-aaa.html');
+    fs.writeFileSync(file, '<p>Written on the iPad.</p>');
+    const r = main.call('chapter:write', book.id, 'ch-aaa', '<p>First chapter, edited here.</p>', '<p>First chapter.</p>');
+    assert.equal(r.conflict, '<p>Written on the iPad.</p>');
+    assert.equal(fs.readFileSync(file, 'utf8'), '<p>Written on the iPad.</p>');
+    fs.writeFileSync(file, '<p>First</p>');
+    assert.equal(main.call('chapter:write', book.id, 'ch-aaa', '<p>First chapter, edited here.</p>', '<p>First chapter.</p>'), true);
+    assert.equal(fs.readFileSync(file, 'utf8'), '<p>First chapter, edited here.</p>');
+  });
+
+  test('a write the disk takes in pieces still lands whole; one that stalls never replaces the chapter', () => {
+    const { book } = libraryWithBook();
+    const real = fs.writeSync;
+    const text = '<p>Ünïcode words, ' + 'many '.repeat(400) + 'and the end.</p>';
+    try {
+      fs.writeSync = (fd, buf, off, len) => real(fd, buf, off, Math.min(len, 7));
+      main.call('chapter:write', book.id, 'ch-aaa', text);
+      assert.equal(main.call('chapter:read', book.id, 'ch-aaa'), text);
+      fs.writeSync = (fd, buf, off, len) => (off > 0 ? 0 : real(fd, buf, off, Math.min(len, 7)));
+      assert.throws(() => main.call('chapter:write', book.id, 'ch-aaa', '<p>cut short</p>'));
+    } finally {
+      fs.writeSync = real;
+    }
+    assert.equal(main.call('chapter:read', book.id, 'ch-aaa'), text);
+  });
+});
+
+// Another program holding a file open for a moment, as antivirus, the search
+// indexer or a backup tool does. Resolves once the file is open; the program
+// lets go after ms.
+function holdOpen(file, ms) {
+  const holder = `const fs = require('fs'); const fd = fs.openSync(process.argv[1], 'r'); console.log('open'); setTimeout(() => fs.closeSync(fd), ${ms});`;
+  const child = spawn(process.execPath, ['-e', holder, file]);
+  const exited = new Promise((resolve) => child.on('exit', resolve));
+  return new Promise((resolve) => child.stdout.once('data', () => resolve({ exited })));
+}
+
+describe('another program has the file open (Windows)', { concurrency: 1, skip: process.platform !== 'win32' }, () => {
+  // in this order: the warning shows once a session, so the moment's hold
+  // must not have used it up
+  test('held for a moment: the save waits and lands, and the writer is told nothing', async () => {
+    const { book, bookDir } = libraryWithBook();
+    const held = await holdOpen(path.join(bookDir, 'chapters', 'ch-aaa.html'), 100);
+    main.call('chapter:write', book.id, 'ch-aaa', '<p>Saved past the hold.</p>');
+    await held.exited;
+    assert.equal(main.call('chapter:read', book.id, 'ch-aaa'), '<p>Saved past the hold.</p>');
+    assert.deepEqual(fs.readdirSync(path.join(bookDir, 'chapters')).sort(), ['ch-aaa.html', 'ch-bbb.html']);
+    assert.deepEqual(main.warnings, []);
+  });
+
+  test('held and not let go: the save still fails, is explained, and the chapter is untouched', async () => {
+    const { book, bookDir } = libraryWithBook();
+    const held = await holdOpen(path.join(bookDir, 'chapters', 'ch-aaa.html'), 3000);
+    assert.throws(() => main.call('chapter:write', book.id, 'ch-aaa', '<p>Never lands.</p>'), { code: 'EPERM' });
+    await held.exited;
+    assert.equal(main.call('chapter:read', book.id, 'ch-aaa'), '<p>First chapter.</p>');
+    assert.equal(main.warnings.length, 1);
   });
 });

@@ -12,6 +12,7 @@ const SAMPLES = {
   'fr': { pkg: 'dictionary-fr', good: 'français', typo: 'franssais' },
   'pt-BR': { pkg: 'dictionary-pt', good: 'fazê-lo', typo: 'coracao' },
   'ro': { pkg: 'dictionary-ro', good: 'trebui', typo: 'frgament' },
+  'hu': { pkg: 'dictionary-hu', good: 'házaimban', typo: 'gyonyoru' },
   'ru': { pkg: 'dictionary-ru', good: 'привет', typo: 'привт' }
 };
 

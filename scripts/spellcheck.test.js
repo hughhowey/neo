@@ -22,6 +22,42 @@ test('Hunspell reads the pinned Romanian dictionary as published', async () => {
   for (const [word, ok] of Object.entries(res.result)) assert.equal(ok, true, word);
 });
 
+test('Hunspell reads the pinned Hungarian dictionary and suggests accents', async () => {
+  const dir = path.join(root, 'node_modules/dictionary-hu');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version, '1.9.0');
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'hu', dir })).ok, true);
+  const good = await send({ type: 'check', words: ['ház', 'házaimban', 'gyönyörű', 'Budapesten', 'íróasztal', 'szerkesztőknek'] });
+  for (const [word, ok] of Object.entries(good.result)) assert.equal(ok, true, word);
+  const bad = await send({ type: 'check', words: ['gyonyoru', 'haz'] });
+  for (const [word, ok] of Object.entries(bad.result)) assert.equal(ok, false, word);
+  assert.ok((await send({ type: 'suggest', word: 'gyonyoru' })).result.includes('gyönyörű'));
+});
+
+test('the Hungarian dictionary takes every accusative (könyvet, szívet, évet)', async () => {
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'hu', dir: path.join(root, 'node_modules/dictionary-hu') })).ok, true);
+  const res = await send({ type: 'check', words: ['könyvet', 'szívet', 'évet', 'kertet', 'almát'] });
+  for (const [word, ok] of Object.entries(res.result)) assert.equal(ok, true, word);
+});
+
+test('Swedish: accents, inflections, compounds, suggestions and dictionary changes', async () => {
+  const send = spellWorker();
+  const dir = path.join(root, 'node_modules/dictionary-sv');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version, '4.0.0');
+  assert.equal((await send({ type: 'load', language: 'sv', dir })).ok, true);
+  const good = await send({ type: 'check', words: ['författare', 'böcker', 'huset', 'smörgåsar', 'räksmörgås', 'sjuksköterska', 'överraskning'] });
+  for (const [word, ok] of Object.entries(good.result)) assert.equal(ok, true, word);
+  const bad = await send({ type: 'check', words: ['förfatatre', 'sjuksköterskka', 'smörgåss'] });
+  for (const [word, ok] of Object.entries(bad.result)) assert.equal(ok, false, word);
+  assert.ok((await send({ type: 'suggest', word: 'förfatatre' })).result.includes('författare'));
+  assert.equal((await send({ type: 'load', language: 'en-US', dir: path.join(root, 'node_modules/dictionary-en-us') })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['hello'] })).result.hello, true);
+  assert.equal((await send({ type: 'load', language: 'sv', dir })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['hello', 'författare'] })).result.hello, false);
+  assert.equal((await send({ type: 'check', words: ['författare'] })).result.författare, true);
+});
+
 function spellWorker() {
   let handle, reply;
   const context = vm.createContext({
@@ -121,7 +157,7 @@ test('learning a Romanian word removes cached Unicode-variant underlines across 
     },
     Node: { TEXT_NODE: 3 }, NodeFilter: { SHOW_TEXT: 4 }, Range: TextRange,
     Highlight: Set, CSS: { highlights },
-    $: () => editors['aux-editor'], t: (text) => text, toast() {},
+    $: () => editors['aux-editor'], t: (text) => text, tk: (text) => text, toast() {},
     currentTab: 'manuscript', currentChapterId: 'ch-test', library: {},
     captureMenu: (_x, _y, _word, _suggestions, callbacks) => { actions = callbacks; },
     window: { neo: {
@@ -225,7 +261,7 @@ test('spellcheck follows the interface until a dictionary is picked; nothing is 
   }
 
   // a dictionary picked in Edit → Spellcheck Language wins, whatever the interface
-  for (const code of ['en-US', 'en-GB', 'fr', 'ro']) {
+  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv']) {
     const explicit = mainContext(temp, 'ro-RO', {}, { spellLanguage: code });
     assert.equal(explicit.loads[0].language, code);
     assert.equal(explicit.read().spellLanguage, code);
@@ -274,7 +310,7 @@ test('hyphenated words: the whole word first, then only the wrong pieces', async
       createTreeWalker: () => { let n = node; return { nextNode: () => { const x = n; n = null; return x; } }; }
     },
     NodeFilter: { SHOW_TEXT: 4 }, Range: TextRange, Highlight: Set, CSS: { highlights },
-    $: () => null, t: (text) => text, toast() {},
+    $: () => null, t: (text) => text, tk: (text) => text, toast() {},
     window: { neo: { spellCheckWords: async (words) => (await send({ type: 'check', words })).result } }
   });
   const app = source('app.js');
@@ -307,7 +343,7 @@ test('a hyphenated word underlined whole opens the menu; a stammer is no misspel
       execCommand: (_cmd, _ui, text) => { node.data = node.data.slice(0, selected.start) + text + node.data.slice(selected.end); }
     },
     Node: { TEXT_NODE: 3 }, NodeFilter: { SHOW_TEXT: 4 }, Range: TextRange, Highlight: Set, CSS: { highlights },
-    $: () => null, t: (text) => text, toast() {},
+    $: () => null, t: (text) => text, tk: (text) => text, toast() {},
     captureMenu: (_x, _y, word, suggestions, actions) => { menu = { word, suggestions, actions }; },
     window: {
       getSelection: () => ({ removeAllRanges() {}, addRange: (r) => { selected = r; } }),

@@ -115,6 +115,7 @@ public class LibraryHomePlugin: CAPPlugin, CAPBridgedPlugin {
 class NeoBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(LibraryHomePlugin())
+        bridge?.registerPluginInstance(NeoPdfPlugin())
     }
 
     // With a hardware keyboard attached, iPadOS floats a little bar above the

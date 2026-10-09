@@ -1,0 +1,7 @@
+{
+  "name": "dictionary-hu",
+  "version": "1.9.0",
+  "description": "Hungarian Hunspell dictionary (Magyar Ispell 1.9, with morphological data), as shipped by LibreOffice",
+  "license": "(MPL-2.0 OR LGPL-3.0-or-later)",
+  "files": ["index.aff", "index.dic", "README_hu_HU.txt", "NOTICE.txt", "MPL-2.0.txt"]
+}

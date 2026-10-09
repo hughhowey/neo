@@ -59,6 +59,9 @@ const dictDir = path.join(www, 'dict');
 fs.rmSync(dictDir, { recursive: true, force: true });
 for (const [code, pkg] of Object.entries(langs)) {
   for (const f of ['index.aff', 'index.dic']) copy(path.join(mods, pkg, f), path.join(dictDir, code, f));
+  if (code === 'sv') {
+    for (const f of fs.readdirSync(path.join(root, 'licenses', pkg))) copy(path.join(root, 'licenses', pkg, f), path.join(dictDir, code, f));
+  }
 }
 fs.writeFileSync(path.join(dictDir, 'languages.json'), JSON.stringify(labels) + '\n');
 

@@ -297,6 +297,8 @@ const NeoCovers = (() => {
   // a word's lookup form: lowercase letters, accents stripped (é → e, ё → е)
   const connKey = (w) => w.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}]/gu, '');
   const CONNECTORS = new Set(['the', 'of', 'a', 'an', 'and', 'in', 'on', 'to', 'for', 'at', 'by', 'from', 'or', 'with', 'is', 'are', 'my', 'your', 'our', 'his', 'her', 'its',
+    // hu — Hungarian articles and small words
+    'az', 'egy', 'es', 'meg', 'vagy', 'de',
     // el — Greek connector words
     'ο', 'η', 'το', 'οι', 'τα',
     'του', 'της', 'των',
@@ -437,7 +439,9 @@ const NeoCovers = (() => {
     const r = rng(hash('type:' + seed));
     const template = pick(r, TEMPLATES);
     const entry = art || paintAbstract(seed);
-    const title = meta.title || 'Untitled';
+    // a book still named the English default shows it in the interface
+    // language (breakLines sets that), as app.js's isUntitled() reads it
+    const title = meta.title && meta.title !== 'Untitled' ? meta.title : '';
     const laid = layout(title, template);
     const reg = regions(template, laid.height);
     const ink = inkFor(entry.canvas, reg.title);

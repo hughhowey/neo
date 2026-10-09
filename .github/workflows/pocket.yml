@@ -38,7 +38,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: pocket-build
+  group: pocket-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

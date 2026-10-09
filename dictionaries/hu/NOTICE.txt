@@ -1,0 +1,24 @@
+Hungarian spelling dictionary
+
+NEO distributes the dictionary and affix data of Magyar Ispell 1.9
+(December 2025), with morphological data, as published by the
+LibreOffice project, under its Mozilla Public License 2.0 option.
+The alternative, the GNU Lesser General Public License 3 or later,
+is not removed. NEO's MIT license does not replace the dictionary's.
+
+Copyright 2002-2025 László Németh and Ferenc Godó.
+The upstream notice is README_hu_HU.txt; the selected license is MPL-2.0.txt.
+
+Source availability
+
+index.aff and index.dic are LibreOffice's hu_HU/hu_HU.aff and
+hu_HU/hu_HU.dic, unchanged but for their names. They ship with every
+packaged app, beside this notice, in
+  app.asar.unpacked/node_modules/dictionary-hu/
+
+Upstream: https://github.com/LibreOffice/dictionaries/tree/master/hu_HU
+(as of 2026-10-06)
+Dictionary project: http://magyarispell.sf.net
+
+NEO's own spellcheck (WebAssembly Hunspell) never asked for these files
+in another form: Hunspell reads them as distributed.

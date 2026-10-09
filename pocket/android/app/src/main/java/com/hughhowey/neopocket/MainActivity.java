@@ -29,6 +29,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NeoBarsPlugin.class);
+        registerPlugin(NeoPdfPlugin.class);
         super.onCreate(savedInstanceState);
         if (!hasFilesAccess()) {
             askedForFilesAccess = true;

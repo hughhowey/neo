@@ -120,5 +120,30 @@ test('straight quotes pair up in turn, beside curly ones or alone', () => {
   assert.equal(quoteOpenIn("He didn't know—", { open: '‘', close: '’' }), false);
 });
 
+test('Swedish quotes pair identical marks, including speech cut off by a dash', () => {
+  const context = vm.createContext({ library: { spellLanguage: 'sv' }, book: null });
+  vm.runInContext(app.slice(app.indexOf('const QUOTE_STYLES'), app.indexOf('// A hyphen standing on its own')), context);
+  for (const code of ['sv', 'sv-SE']) {
+    context.library.spellLanguage = code;
+    const style = vm.runInContext('quoteStyle()', context);
+    assert.deepEqual(plain(style), { open: '”', close: '”' });
+    assert.equal(vm.runInContext('singleQuotes(null)', context), null);
+    assert.equal(quoteOpenIn('”Jag skulle just—', style), true);
+    assert.equal(quoteOpenIn('”Vänta—” sa hon. ”Och sedan—', style), true);
+    assert.equal(quoteOpenIn('”Vänta—” sa hon—', style), false);
+    assert.equal(quoteOpenIn('Hon stannade—', style), false);
+    assert.equal(quoteOpenIn('"Jag skulle just—', style, '"'), true);
+    assert.equal(quoteOpenIn('"Vänta—" sa hon—', style, '"'), false);
+    assert.equal(quoteOpenIn('”Hej”, sa hon. "Jag skulle just—', style, '"'), true);
+  }
+  context.body = { closest: () => ({ textContent: '»Vänta—» sa hon.' }) };
+  assert.deepEqual(plain(vm.runInContext('bookQuotes(body)', context)), { open: '»', close: '»' });
+  assert.equal(quoteOpenIn('»Jag skulle just—', { open: '»', close: '»' }), true);
+  assert.equal(quoteOpenIn('»Vänta—» sa hon—', { open: '»', close: '»' }), false);
+  context.library.spellLanguage = 'de';
+  assert.deepEqual(plain(vm.runInContext('bookQuotes(body)', context)), { open: '»', close: '«' });
+  assert.deepEqual(plain(vm.runInContext('singleQuotes(body)', context)), { open: '›', close: '‹' });
+});
+
 // objects made in the vm context compare by value outside it
 function plain(v) { return JSON.parse(JSON.stringify(v)); }

@@ -123,8 +123,20 @@ test('Fountain in: a pasted script comes back as its elements', () => {
   assert.deepEqual(plain(sp.spFromFountain(src)), [
     L('heading', 'EXT. MARINA - NIGHT'), L('action', 'Fog. A bell rings.'), L('character', 'KIM'), L('paren', '(quietly)'),
     L('dialogue', 'Three nights.'), L('character', 'VERNON'), L('dialogue', 'Four.'), L('transition', 'CUT TO:'),
-    L('heading', 'FLASHBACK'), L('action', 'LOUD NOISE'), L('character', 'McCLANE'), L('dialogue', 'Yippee.')
+    L('heading', 'FLASHBACK'), L('action', 'LOUD NOISE'), { ...L('character', 'McCLANE'), newPage: true }, L('dialogue', 'Yippee.')
   ]);
+});
+
+test('page breaks: === in Fountain, StartsNewPage in Final Draft, and a new page in the layout', () => {
+  const lines = sp.spFromFountain(['INT. A - DAY', '', 'One.', '', '===', '', 'INT. B - DAY', '', 'Two.'].join('\n'));
+  assert.equal(lines[2].newPage, true);
+  const out = sp.spToFountain(lines);
+  assert.match(out, /One\.\n\n===\n\nINT\. B - DAY/);
+  const fdx = sp.spToFdx(lines.map((l) => ({ ...l, runs: [{ text: l.text }] })));
+  assert.match(fdx, /<Paragraph Type="Scene Heading" StartsNewPage="Yes">\n\s*<Text>INT\. B - DAY/);
+  assert.equal(sp.spFromFdx(fdx).lines[2].newPage, true);
+  const pg = sp.spPaginate([{ type: 'heading', lines: 1 }, { type: 'action', lines: 1 }, { type: 'heading', lines: 1, newPage: true }, { type: 'action', lines: 1 }]);
+  assert.deepEqual(pg.at.map((a) => a.page), [1, 1, 2, 2]);
 });
 
 test('Fountain in: a block\'s lines run on into one paragraph; a PDF\'s page furniture stays out', () => {
@@ -145,7 +157,7 @@ test('Fountain in: a block\'s lines run on into one paragraph; a PDF\'s page fur
 
 test('Fountain\'s title page and emphasis', () => {
   const src = 'Title:\n    _**NO WIND**_\nCredit: Written by\nAuthor: Hugh Howey\nDraft date: First Draft\nContact:\n    Kristin Nelson\n    Nelson Literary Agency\n\nEXT. A - DAY';
-  assert.deepEqual(plain(sp.spFountainTitle(src)), { title: 'NO WIND', credit: 'Written by', author: 'Hugh Howey', draft: 'First Draft', contact: 'Kristin Nelson\nNelson Literary Agency' });
+  assert.deepEqual(plain(sp.spFountainTitle(src)), { title: 'NO WIND', titleStyle: { b: true, u: true }, credit: 'Written by', author: 'Hugh Howey', draft: 'First Draft', contact: 'Kristin Nelson\nNelson Literary Agency' });
   assert.deepEqual(plain(sp.spFountainTitle('EXT. A - DAY')), {});
   const r = (t) => plain(sp.spRunsFromFountain(t)).map((x) => (x.b ? 'B' : '') + (x.i ? 'I' : '') + (x.u ? 'U' : '') + ':' + x.text);
   assert.deepEqual(r('He *really* means it.'), [':He ', 'I:really', ': means it.']);
@@ -216,4 +228,20 @@ test('Final Draft out, then in again: the same script', () => {
     'dialogue:Now.', 'transition:CUT TO:', 'shot:CLOSE ON THE BELL'
   ]);
   assert.deepEqual(back.title, { ...tp, title: 'NO WIND' });
+});
+
+test('a bold, underlined title travels through Fountain and Final Draft and comes back', () => {
+  const tp = { title: 'No Wind', titleStyle: { b: true, u: true }, credit: 'Written by', author: 'Hugh Howey' };
+  const lines = [{ type: 'heading', text: 'EXT. DOCK - DAY', runs: [{ text: 'EXT. DOCK - DAY' }] }];
+  const ftn = sp.spToFountain(lines, tp);
+  assert.match(ftn, /^Title: _\*\*No Wind\*\*_$/m);
+  assert.deepEqual(plain(sp.spFountainTitle(ftn)).titleStyle, { b: true, u: true });
+  assert.equal(sp.spFountainTitle(ftn).title, 'No Wind');
+  const xml = sp.spToFdx(lines, tp);
+  assert.match(xml, /<Text Style="Bold\+Underline">NO WIND<\/Text>/);
+  assert.deepEqual(plain(sp.spFromFdx(xml).title.titleStyle), { b: true, u: true });
+  // a plain title stays plain, and a mark in the title stays a mark
+  assert.match(sp.spToFountain(lines, { title: 'A*B' }), /^Title: A\*B$/m);
+  assert.match(sp.spToFountain(lines, { title: 'A*B', titleStyle: { i: true } }), /^Title: \*A\\\*B\*$/m);
+  assert.equal(sp.spFountainTitle(sp.spToFountain(lines, { title: 'Plain' })).titleStyle, undefined);
 });
