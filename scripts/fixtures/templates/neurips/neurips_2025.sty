@@ -1,0 +1,41 @@
+% A stand-in for NeurIPS's neurips_2025.sty, written for NEO's tests: only
+% what neurips_2025.tex uses. The real one comes from the venue.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_2025}[2025/01/01 NEO test stand-in]
+\newif\if@neuripsfinal\@neuripsfinalfalse
+\newif\if@preprint\@preprintfalse
+\newif\if@natbib\@natbibtrue
+\DeclareOption{final}{\@neuripsfinaltrue}
+\DeclareOption{preprint}{\@preprinttrue}
+\DeclareOption{main}{}
+\DeclareOption{dandb}{}
+\DeclareOption{nonatbib}{\@natbibfalse}
+\ProcessOptions\relax
+% natbib, unless told otherwise
+\if@natbib
+  \RequirePackage{natbib}
+\fi
+\RequirePackage[verbose=true,letterpaper,textwidth=5.5in,textheight=9in]{geometry}
+\newif\if@anonymous\@anonymoustrue
+\if@neuripsfinal\@anonymousfalse\fi
+\if@preprint\@anonymousfalse\fi
+% \And and \AND are set where the title is made, as in the real style
+% (amsmath, loaded later, has an \And of its own)
+\renewcommand{\maketitle}{%
+  \def\And{\end{tabular}\hfil\linebreak[0]\hfil\begin{tabular}[t]{c}\ignorespaces}%
+  \def\AND{\end{tabular}\hfil\linebreak[4]\hfil\begin{tabular}[t]{c}\ignorespaces}%
+  \par\begin{center}
+    {\Large\bfseries\@title\par}\vskip 1em
+    \if@anonymous
+      \begin{tabular}[t]{c}Anonymous Author(s)\\Affiliation\\Address\\\texttt{email}\end{tabular}
+    \else
+      \begin{tabular}[t]{c}\@author\end{tabular}
+    \fi\par\vskip 1em
+    {\small\if@neuripsfinal
+      39th Conference on Neural Information Processing Systems (NeurIPS 2025).
+    \else\if@preprint
+      Preprint. Under review.
+    \else
+      Submitted to 39th Conference on Neural Information Processing Systems (NeurIPS 2025). Do not distribute.
+    \fi\fi}
+  \end{center}\vskip 1em}

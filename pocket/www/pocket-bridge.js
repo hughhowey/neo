@@ -39,6 +39,10 @@
 
   // library-relative path -> the Filesystem plugin's idea of where that is
   const p = (...parts) => parts.join('/');
+  // i18n.js loads first; app.js picks the language before anyone calls this
+  const t = (text, vars) => window.NeoI18n.t(text, vars);
+  // a paper's own files, as main.js's PAPER_FILE: figures and style.csl
+  const PAPER_FILE = /^(?:figure-[a-z0-9]{4,40}\.(?:png|jpe?g|gif|webp|svg)|style\.csl)$/;
   function at(rel) {
     if (HOME) return { path: rel ? HOME + '/' + rel.split('/').map(encodeURIComponent).join('/') : HOME };
     return { path: rel ? ROOT + '/' + rel : ROOT, directory: DIR };
@@ -368,6 +372,36 @@
     writeAux: async (bookId, name, html) => { await writeText(p(bookId, name + '.html'), html); return true; },
     readJSON: (bookId, name, fallback) => readJSONFile(p(bookId, name + '.json'), fallback),
     writeJSON: async (bookId, name, data) => { await writeJSONFile(p(bookId, name + '.json'), data); return true; },
+
+    /* ---------- a paper's figures and style; DOIs looked up ---------- */
+    paperRead: async (bookId, name) => {
+      if (!PAPER_FILE.test(name)) throw new Error('Not a paper file: ' + name);
+      try { await ready; return (await FS().readFile(at(p(bookId, name)))).data; } catch { return null; }
+    },
+    paperWrite: async (bookId, name, base64) => {
+      if (!PAPER_FILE.test(name)) throw new Error('Not a paper file: ' + name);
+      await ready;
+      await FS().writeFile({ ...at(p(bookId, name)), data: base64, recursive: true });
+      return true;
+    },
+    // Crossref answers a web view directly; arXiv's DOIs are DataCite's.
+    // The words are main.js's (paper:lookup), so they share its translations
+    paperLookup: async (doi) => {
+      const datacite = /^10\.48550\//.test(doi);
+      const service = datacite ? 'DataCite' : 'Crossref';
+      const url = datacite
+        ? 'https://api.datacite.org/application/vnd.citationstyles.csl+json/' + encodeURIComponent(doi)
+        : 'https://api.crossref.org/works/' + encodeURIComponent(doi) + '/transform/application/vnd.citationstyles.csl+json';
+      let res;
+      try {
+        res = await fetch(url);
+      } catch (err) {
+        throw new Error(t('No connection to {service} ({error})', { service, error: (err && err.message) || String(err) }));
+      }
+      if (res.status === 404) throw new Error(t('{service} has no record of {doi}', { service, doi }));
+      if (!res.ok) throw new Error(t('{service} answered {status}', { service, status: String(res.status) }));
+      return res.json();
+    },
 
     /* ---------- API keys & painting: desktop only ---------- */
     hasSecret: async () => false,

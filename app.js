@@ -471,7 +471,8 @@ function popMenu(x, y, items, { title = '', from = null } = {}) {
     }
     document.body.appendChild(menu);
     // opened from the keyboard (no pointer), it hangs from the thing it's for
-    if ((!x && !y) && from) {
+    const keyboard = !x && !y && !!from;
+    if (keyboard) {
       const r = from.getBoundingClientRect();
       x = r.left + 12;
       y = r.bottom;
@@ -494,7 +495,8 @@ function popMenu(x, y, items, { title = '', from = null } = {}) {
       // the Chapters pane it kept open closes if the pointer has left it
       const nav = $('#nav-pane');
       if (nav && nav.dataset.pinned !== '1' && !nav.matches(':hover')) nav.classList.remove('open');
-      if (value === null && back && back.isConnected && back.focus) back.focus({ preventScroll: true });
+      // back where the keys were: after a choice too, when the keys opened it
+      if ((value === null || keyboard) && back && back.isConnected && back.focus) back.focus({ preventScroll: true });
       resolve(value);
     };
     const cancel = () => done(null);
@@ -571,6 +573,9 @@ function countWords(text) {
 // page is copied node for node: writing it out as HTML and reading it back
 // costs twice as much and gives the same tree.
 const UNCOUNTED = '.darling-anchor, .ph-mark, .ghost';
+// a paper's words are its prose: not its figures, tables, maths or citations
+const UNCOUNTED_PAPER = UNCOUNTED + ', figure, .eq, .math, .cite, .xref';
+const uncounted = () => (isPaper() ? UNCOUNTED_PAPER : UNCOUNTED);
 function cleanChapterEl(id) {
   const el = document.querySelector(`.chapter[data-id="${id}"] .chapter-body`);
   let holder;
@@ -579,7 +584,7 @@ function cleanChapterEl(id) {
     holder = document.createElement('div');
     holder.innerHTML = chapterHTML[id] || '';
   }
-  holder.querySelectorAll(UNCOUNTED).forEach((n) => n.remove());
+  holder.querySelectorAll(uncounted()).forEach((n) => n.remove());
   return holder;
 }
 // Text a line to each paragraph. innerText does that only for what is laid
@@ -638,13 +643,13 @@ function paragraphWords(body) {
     }
     if (c.nodeType !== Node.ELEMENT_NODE) continue;
     // only blocks end in a line break; a loose inline element could join words
-    if (c.tagName !== 'P' && c.tagName !== 'DIV' && c.tagName !== 'BR' && !c.matches(UNCOUNTED)) return null;
+    if (c.tagName !== 'P' && c.tagName !== 'DIV' && c.tagName !== 'BR' && !c.matches(uncounted())) return null;
     const e = paraEntry(c);
     if (e.n === undefined) {
-      if (c.matches(UNCOUNTED)) { e.n = 0; e.seg = false; }
+      if (c.matches(uncounted())) { e.n = 0; e.seg = false; }
       else {
         const copy = c.cloneNode(true);
-        copy.querySelectorAll(UNCOUNTED).forEach((n) => n.remove());
+        copy.querySelectorAll(uncounted()).forEach((n) => n.remove());
         const text = plainText(copy);
         e.n = countWords(text);
         e.seg = segmented(text);
@@ -1112,10 +1117,12 @@ async function renderShelves() {
         e.preventDefault();
         const pick = await popMenu(e.clientX, e.clientY, [
           { label: t('New Book'), value: 'book' },
-          { label: t('New Script'), value: 'script' }
+          { label: t('New Script'), value: 'script' },
+          { label: t('New Paper'), value: 'paper' }
         ], { from: blank });
         if (pick === 'book') createBookOnShelf(shelf);
         else if (pick === 'script') createScriptOnShelf(shelf);
+        else if (pick === 'paper') createPaperOnShelf(shelf);
       });
     }
 
@@ -1857,6 +1864,7 @@ function bookTile(meta, opts = {}) {
     <div class="b-progress" hidden><div></div></div>`;
   el.querySelector('.b-author').textContent = meta.author || '';
   if (isScript(meta)) scriptTile(el, meta);
+  else if (isPaper(meta)) paperTile(el, meta);
   else {
     dressTile(el, meta);
     el.querySelector('.b-painting').hidden = !(meta.coverArt && meta.coverArt.status === 'pending');
@@ -2501,6 +2509,7 @@ async function openBook(bookId) {
   darlings = sideDarlings;
   sidecarBase[bookId + '/stickies'] = JSON.stringify(stickies);
   sidecarBase[bookId + '/darlings'] = JSON.stringify(darlings);
+  if (isPaper()) await paperOpen(); // its references, its style, its maths
 
   $('#bookshelf-view').hidden = true;
   $('#editor-view').hidden = false;
@@ -2514,6 +2523,7 @@ async function openBook(bookId) {
   $$('.tab[data-tab="notes"]')[0].textContent = tabName('notes');
   $$('.tab[data-tab="outline"]')[0].textContent = tabName('outline');
   spEditorMode(); // a script, or a book
+  paperEditorMode(); // …or a paper
 
   renderChapters();
   renderStickies();
@@ -2525,7 +2535,7 @@ async function openBook(bookId) {
   const isNew = book.chapterOrder.length === 0;
   // a new script opens on its title page (it has no outline to open to)
   const newScript = isScript() && isUntitled(book.title) && !bookWordCount();
-  if (isNew && library.writingStyle === 'plotter' && !isScript()) {
+  if (isNew && library.writingStyle === 'plotter' && isPlainBook()) {
     switchTab('outline');
   } else {
     switchTab('manuscript');
@@ -2549,7 +2559,7 @@ async function openBook(bookId) {
   }
 
   // the Enter hint shows once per library, ever
-  if (!library.hintShown && !isScript()) {
+  if (!library.hintShown && isPlainBook()) {
     library.hintShown = true;
     writeLibrary(library);
     setTimeout(() => toast(t('Enter twice = section break · three times = new chapter · {key} shows everything else', { key: KHELP }), 7000), 800);
@@ -2644,6 +2654,7 @@ function renderChapters() {
     if (!story) body.classList.add('no-cap');
     // a script's lines are set as they print (styles.css, SCREENPLAYS)
     if (isScript()) body.classList.add('script-body', $('#paper').classList.contains('narrow') ? 'sp-narrow' : 'sp-geom', 'no-cap');
+    if (isPaper()) body.classList.add('paper-body', 'no-cap');
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
     markDialogueOpening(body);
     if (PAGE_PROMPTS[kind]) {
@@ -2687,6 +2698,7 @@ function renderChapters() {
     spRepaginate();
     if (document.fonts) document.fonts.load('1em "Courier Prime"').then(() => spSchedule(0)).catch(() => {});
   }
+  if (isPaper()) paperRendered(); // numbers, maths, pictures, citations
   renderNav();
 }
 
@@ -2832,6 +2844,8 @@ function wireChapterBody(body, chId) {
   body.addEventListener('paste', (e) => {
     // a script's lines keep their elements; a script pasted as text is read
     if (isScript() && spPaste(e, body, chId)) return;
+    // a paper's figures, tables, maths and citations (paper/paper.js)
+    if (isPaper() && paperPaste(e, body, chId)) return;
     e.preventDefault();
     insertClip(e.clipboardData);
   });
@@ -2916,6 +2930,8 @@ function wireChapterBody(body, chId) {
       if (destructive) healSelectionSeams(body);
     }
     if (styleKeepScroll(e)) return;
+    // a paper: its own Enter (no *** and no chapter splits), # headings, $maths$ and @
+    if (isPaper() && paperKey(e, body, chId)) return;
     // a script: its own Enter, Tab and ⌘1–7; no breaks, poetry or chapters
     if (isScript()) {
       if (scriptKey(e, body)) return;
@@ -3520,9 +3536,12 @@ function guardMarkerDelete(e, body, chId) {
 
 // The engine wraps text in style-carrying spans during merges and splits
 // ("<span style='text-indent...'>"). They corrupt later edits — unwrap them,
-// keeping only NEO's own marks.
+// keeping only NEO's own marks: placeholders, and a paper's citations,
+// cross-references, maths, symbols and figure panels' captions.
+const KEPT_SPANS = ['ph-mark', 'cite', 'xref', 'math', 'sym', 'subcap'];
+const JUNK_SPAN = 'span' + KEPT_SPANS.map((c) => `:not(.${c})`).join('');
 function stripJunkSpans(el) {
-  for (const s of [...el.querySelectorAll('span:not(.ph-mark)')]) {
+  for (const s of [...el.querySelectorAll(JUNK_SPAN)]) {
     while (s.firstChild) s.before(s.firstChild);
     s.remove();
   }
@@ -3593,7 +3612,7 @@ function handleEnter(e, body, chId) {
   if (!isStory(chId) && !block.classList.contains('poetry')) {
     e.preventDefault();
     enterRun = 0;
-    if (block.querySelector('span:not(.ph-mark)')) {
+    if (block.querySelector(JUNK_SPAN)) {
       const caret = captureCaret();
       stripJunkSpans(block);
       restoreCaret(caret);
@@ -3685,7 +3704,7 @@ function handleEnter(e, body, chId) {
     // normal Enter — native split so ⌘Z keeps working; junk spans (which
     // make the engine clone whole paragraphs) are stripped first if present
     e.preventDefault();
-    if (block.querySelector('span:not(.ph-mark)')) {
+    if (block.querySelector(JUNK_SPAN)) {
       // Unwrapping moves text nodes, so preserve the caret's text position.
       const caret = captureCaret();
       stripJunkSpans(block);
@@ -3799,7 +3818,7 @@ function handlePoetry(e, body, chId) {
 
   if (block.classList.contains('poetry')) {
     // the engine's own split keeps the class on the new line, and ⌘Z sees it
-    if (block.querySelector('span:not(.ph-mark)')) stripJunkSpans(block);
+    if (block.querySelector(JUNK_SPAN)) stripJunkSpans(block);
     document.execCommand('insertParagraph');
     const cur = caretBlock(body);
     if (cur) {
@@ -3854,7 +3873,7 @@ function handleFlush(e, body, chId) {
   if (!block) return false;
   e.preventDefault();
   if (block.classList.contains('scene-break')) return true;
-  if (block.querySelector('span:not(.ph-mark)')) stripJunkSpans(block);
+  if (block.querySelector(JUNK_SPAN)) stripJunkSpans(block);
   if (block.classList.contains('flush')) {
     // the engine's own split keeps the class on the new line, and ⌘Z sees it
     document.execCommand('insertParagraph');
@@ -4008,8 +4027,10 @@ function captureBody(body) {
   // (a page marks the lines that say who said it, and a chapter the speech
   // after a scene break, for the screen only)
   // (and a script's page breaks, (CONT'D) and suggestions)
-  return dropJunkSpans(body.innerHTML).replace(/<(b|i|em|strong|u|s|strike|sub|sup)\s+style="[^"]*"/g, '<$1').replace(/<p\b[^>]*>/g, (tag) => tag.replace(/ data-(?:attr|speech|first|walk)=""/g, '')
+  const html = dropJunkSpans(body.innerHTML).replace(/<(b|i|em|strong|u|s|strike|sub|sup)\s+style="[^"]*"/g, '<$1').replace(/<p\b[^>]*>/g, (tag) => tag.replace(/ data-(?:attr|speech|first|walk)=""/g, '')
     .replace(/ data-(?:pg|fill|contd|ghost|ghost-empty|sp-paste|scene-note)(?:="[^"]*")?/g, ''));
+  // (and a paper's numbers and pictures)
+  return isPaper() ? paperStrip(html) : html;
 }
 
 // The engine's style spans (stripJunkSpans), left out of what's saved. A
@@ -4017,14 +4038,15 @@ function captureBody(body) {
 // them (the indent and white-space of the paragraph they came from); taken
 // off the page there and then, they'd break ⌘Z, which puts back what the
 // engine itself took away. So the page keeps them until the chapter is next
-// opened, and the file never has them. NEO's own spans (placeholder flags)
-// stay.
+// opened, and the file never has them. NEO's own spans (KEPT_SPANS:
+// placeholder flags, a paper's citations, maths and the rest) stay.
+const KEPT_SPAN_TAG = new RegExp(`\\sclass="(?:[^"]*\\s)?(?:${KEPT_SPANS.join('|')})[\\s"]`);
 function dropJunkSpans(html) {
   if (html.indexOf('<span') < 0) return html;
   const junk = [];
   return html.replace(/<span\b[^>]*>|<\/span>/g, (tag) => {
     if (tag[1] === '/') return junk.pop() ? '' : tag;
-    const drop = !/\sclass="[^"]*\bph-mark\b/.test(tag);
+    const drop = !KEPT_SPAN_TAG.test(tag);
     junk.push(drop);
     return drop ? '' : tag;
   });
@@ -4743,6 +4765,7 @@ window.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   const el = e.target;
   if (e.defaultPrevented || !el || !el.isContentEditable || el.closest('.chapter-body')) return;
+  if (el.closest('.math, .eq') || (isPaper() && mathCaretIn())) return; // a paper's TeX is typed as it is
   smartKeys(e, el);
 }, true);
 
@@ -5782,6 +5805,10 @@ function spToFdx(lines, title = {}) {
 // ---- end of screenplay rules ----
 
 const isScript = (meta = book) => !!meta && meta.format === 'screenplay';
+// a paper: book.json says "format": "paper" (paper/paper.js)
+const isPaper = (meta = book) => !!meta && meta.format === 'paper';
+// a book of chapters: neither a script nor a paper
+const isPlainBook = (meta = book) => !!meta && !isScript(meta) && !isPaper(meta);
 const SP_CLASSES = SP_TYPES.filter((x) => x !== 'action').map((x) => 'sp-' + x);
 const SP_NAMES = {
   heading: tk('Scene Heading'), action: tk('Action'), character: tk('Character'), paren: tk('Parenthetical'),
@@ -7147,6 +7174,7 @@ function renderNav() {
   }
   navRefreshPending = false;
   if (isScript()) { renderScriptNav(); return; }
+  if (isPaper()) { renderPaperNav(); return; }
   const list = $('#nav-list');
   // a keyboard user on a chapter row keeps their place through the rebuild
   const focusedRow = document.activeElement && document.activeElement.classList.contains('n-row') &&
@@ -7772,6 +7800,9 @@ let tabPlaces = {};
 
 let auxLoad = 0; // which Notes read is the current one
 function switchTab(name) {
+  // a paper has its References where a book has its Outline
+  if (name === 'outline' && isPaper()) name = 'references';
+  if (name === 'references' && !isPaper()) name = 'outline';
   closeCardEditor();
   auxLoad++;
   $('#editor-view').classList.remove('board-on');
@@ -7800,6 +7831,7 @@ function switchTab(name) {
 
   // stash whatever aux content was open
   flushAux();
+  paperHideReferences();
 
   // an open Find follows the tab (Notes arrives from disk, so it looks later)
   const findHere = () => { if (!$('#searchbar').hidden) runSearch(); };
@@ -7820,7 +7852,11 @@ function switchTab(name) {
   // the outline's cards, their List/Cards switch and their hint belong to the Outline alone
   for (const id of ['#outline-board', '#outline-views', '#outline-board-hint']) { const el = $(id); if (el) el.hidden = true; }
 
-  if (name === 'darlings') {
+  if (name === 'references') {
+    paperShowReferences(); // a paper's references (paper/library.js)
+    returnTo();
+    findHere();
+  } else if (name === 'darlings') {
     $('#aux-title').textContent = t('Darlings');
     dList.hidden = false;
     renderDarlings();
@@ -10650,7 +10686,7 @@ function updateCounters() {
   if (!book) return;
   // a script is one long chapter: its words are counted when the typing
   // pauses, not at every key
-  if (isScript() && !updateCounters.now) {
+  if ((isScript() || isPaper()) && !updateCounters.now) {
     clearTimeout(updateCounters.t);
     updateCounters.t = setTimeout(() => {
       updateCounters.now = true;
@@ -11232,6 +11268,7 @@ async function refreshFromDisk() {
         show($('#tp-author'), book.author || t('Anonymous'));
         $$('.tab[data-tab="notes"]')[0].textContent = tabName('notes');
         $$('.tab[data-tab="outline"]')[0].textContent = tabName('outline');
+        if (isPaper()) paperEditorMode(); // its authors, abstract and keywords, as the other device left them
         renderStickies();
         if (currentTab === 'outline') renderOutline();
       }
@@ -11261,6 +11298,8 @@ async function refreshFromDisk() {
         book.lastPosition = { ...there, scroll: $('#paper-scroll').scrollTop };
       }
     }
+    // a paper's references, and the reference library it links to
+    if (isPaper()) await paperRefresh();
   } catch (err) {
     console.error(err);
   } finally {
@@ -11293,6 +11332,7 @@ async function backToShelf() {
   $('#bookshelf-view').hidden = false;
   applyBright();
   spEditorMode(); // a script's pane, page and title page go
+  paperEditorMode(); // and a paper's
   spReportState();
   renderShelves();
 }
@@ -11837,6 +11877,7 @@ function searchRoots() {
   if (currentTab === 'manuscript') return book.chapterOrder.map((chId) => document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`));
   if (currentTab === 'outline') return boardShowing() ? $$('#outline-board .ob-text, #loose-list .ob-text') : $$('#outline-list .ol-text');
   if (currentTab === 'darlings') return $$('#darlings-list .darling > :first-child');
+  if (currentTab === 'references') return $$('#references-view .rl-main');
   return [$('#aux-editor')];
 }
 
@@ -13160,6 +13201,36 @@ function shortcutSections() {
     ] };
     return sections;
   }
+  // a paper: its own Writing keys, and the Outline's give way to its Insert menu
+  if (book && isPaper()) {
+    const sections = bookShortcutSections().filter((s) => s.title !== tk('Outline'));
+    sections[0] = { title: tk('Writing a paper'), rows: [
+      [['#', '##', '###'], tk('At the start of a line, then a space: a section, subsection or subsubsection heading'), tk('Or ⌥⌘1, ⌥⌘2, ⌥⌘3; ⌥⌘0 makes it body text again.')],
+      ['@', tk('Cite a reference, or refer to a section, figure, table or equation'), tk('Type a name, a year or a word of the title. @fig, @tab, @eq and @sec narrow it. Paste a DOI or arXiv ID after the @ to add the reference.')],
+      [K('⌘⇧K', 'Ctrl+Shift+K'), tk('Insert a citation')],
+      [['$…$'], tk('Maths in the line, in TeX'), tk('Undo right after keeps the dollar signs. Arrow into the maths, or click it, to change it.')],
+      [['$$'], tk('On a line of its own, then Enter: a numbered equation')],
+      [['\\mu'], tk('Then a space: μ, or any of LaTeX’s symbols by its name'), tk('The paper’s own symbols too: \\Vm and a space. Define them on the References tab, or select maths and press ⇧F10. /symbols makes a table of them.')],
+      [['-', '1.'], tk('At the start of a line, then a space: a bulleted or numbered list'), tk('Tab nests an item; ⇧Tab, or Backspace at its start, brings it out. Enter on an empty item ends the list.')],
+      [K('⌘⇧M', 'Ctrl+Shift+M'), tk('Insert an equation')],
+      ['/', tk('On a line of its own: a figure, table, equation, citation, cross-reference or heading'), tk('A word narrows it: /fig, /tab, /eq. LaTeX’s names work too: /includegraphics, /section, /ref.')],
+      [tk('Drop or paste a picture'), tk('A numbered figure, with its caption under it')],
+      [tk('Paste from a spreadsheet'), tk('A numbered table'), tk('Tab moves between cells (and adds a row at the end); right-click for rows and columns.')],
+      [['←', '→', '↑', '↓'], tk('Into maths, an equation, a figure’s caption or a table’s cells, and out again'), tk('Esc goes back to the writing.')],
+      [K('⇧F10', 'Shift+F10'), tk('The menu for where the caret is'), tk('A table’s rows and columns, a figure’s layout, a citation’s pages, a cross-reference.')],
+      [K('⌥↑ ⌥↓', 'Alt+↑ Alt+↓'), tk('In the pane: move a section up or down')],
+      [KPH, tk('Insert a placeholder note')],
+      [KDA, tk('Move selected text to Darlings')]
+    ] };
+    // editing is its own mode: asked for, never while writing
+    sections.splice(1, 0, { title: tk('Editing a paper'), rows: [
+      [K('⌘⇧;', 'Ctrl+Shift+;'), tk('The editing pass: filler, the passive, comparisons with no basis, long sentences, acronyms, one spelling throughout, units, ranges, figures in order'), tk('Right-click a marked stretch, or ⇧F10 in it, for why and the fix.')],
+      [K('⌘\'', 'Ctrl+\''), tk('The next thing the pass marked'), tk('With ⇧, the one before.')],
+      [tk('View → First and Last Sentences'), tk('Each paragraph’s context and conclusion, the rest dimmed')],
+      [tk('File → Anonymous for Review'), tk('Previews and exports without the authors, for double-blind review')]
+    ] });
+    return sections;
+  }
   return bookShortcutSections();
 }
 function bookShortcutSections() {
@@ -13196,6 +13267,7 @@ function bookShortcutSections() {
     ] },
     { title: tk('App & files'), rows: [
       [KHELP, tk('Keyboard shortcuts')],
+      [K('⌘⇧P', 'Ctrl+Shift+P'), tk('Command palette: any command, chapter or section, by name')],
       [K('⌘,', 'Ctrl+,'), tk('Goals and writing sprints')],
       [K('⌘⇧I', 'Ctrl+Shift+I'), tk('Import manuscripts')],
       [K('⌘E', 'Ctrl+E'), tk('Email a draft to yourself')]
@@ -14863,6 +14935,8 @@ async function doExport(format, chId = null) {
   if (format === 'paperback') { await printPaperback(); return; }
   // a script leaves as a PDF set the way scripts print, or as Fountain
   if (isScript()) { await spExport(['pdf', 'fdx'].includes(format) ? format : 'fountain'); return; }
+  // a paper leaves as PDF, Word, LaTeX, Markdown for Pandoc, or a web page
+  if (isPaper()) { await paperExport(format); return; }
   flushAllSaves();
   const one = chId ? chapterExportData(chId) : null;
   if (chId && !one) return;
@@ -14950,14 +15024,14 @@ async function doEmailDraft() {
       : t('PDF snapshot attached.'));
   toast(t('Preparing your draft…'));
   const script = isScript();
-  const snapshot = script ? null : bookExportData();
+  const snapshot = script || isPaper() ? null : bookExportData();
   const res = await window.neo.emailDraft({
     to: library.emailAddress,
     subject,
     body,
     // the email snapshot is a provenance record (a script's, as it prints)
-    html: script ? await spPdfHtml() : buildHtml(snapshot, { stamp: true, fonts: await exportFontFaces(snapshot) }),
-    print: script ? 'screenplay' : undefined,
+    html: script ? await spPdfHtml() : isPaper() ? await paperPrintHtml() : buildHtml(snapshot, { stamp: true, fonts: await exportFontFaces(snapshot) }),
+    print: script ? 'screenplay' : isPaper() ? 'paper' : undefined,
     defaultName: safeName(book.title),
     method: library.emailMethod
   });
@@ -15129,11 +15203,13 @@ window.neo.onMenu(async (msg) => {
     return;
   }
   if (msg.type === 'help') showHelp();
+  if (msg.type === 'palette') openPalette();
   if (msg.type === 'about') showAbout();
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'update') updateMessage(msg);
   if (msg.type === 'export') doExport(msg.format);
   if (msg.type === 'scriptElement' && book && isScript()) spSetElement(msg.value);
+  if (msg.type === 'paper') await paperMenu(msg);
   if (msg.type === 'scriptStyle') spToggleStyle(msg.value);
   if (msg.type === 'scriptPageBreak') spTogglePageBreak();
   if (msg.type === 'markdownEmphasis') {
@@ -15464,6 +15540,145 @@ $('#nav-list').addEventListener('keydown', (e) => {
   const i = rows.indexOf(e.target) + (e.key === 'ArrowDown' ? 1 : -1);
   if (rows[i]) rows[i].focus();
 });
+
+/* ================================================================== */
+/*  COMMAND PALETTE                                                    */
+/* ================================================================== */
+
+/* View → Command Palette… (⌘⇧P): every command the menus offer right now,
+   found by typing a few letters of it, with its menu and its shortcut, and
+   (in a paper) what / inserts; then, once something's typed, the chapters
+   or sections to go to. Its commands are read from the menu itself
+   (commands:list in main.js), so nothing here can drift from the menus;
+   labels arrive in the writer's language, the menu's or paperPaletteCommands'.
+   Invoked, never shown on its own; Esc goes back to where the writer was. */
+const paletteUsed = []; // ids, the most recent first: this session's habits
+let paletteEl = null;
+const accelText = (a) => (!a ? '' : a.split(/\+|-(?=\w)/).map((k) => ({
+  CmdOrCtrl: IS_MAC ? '⌘' : 'Ctrl', CommandOrControl: IS_MAC ? '⌘' : 'Ctrl', Cmd: '⌘', Command: '⌘', Ctrl: IS_MAC ? '⌃' : 'Ctrl', Control: IS_MAC ? '⌃' : 'Ctrl',
+  Alt: IS_MAC ? '⌥' : 'Alt', Option: '⌥', Shift: IS_MAC ? '⇧' : 'Shift', Plus: '+', Minus: '−', Up: '↑', Down: '↓', Left: '←', Right: '→', Enter: '↵', Return: '↵'
+}[k] || k)).join(IS_MAC ? '' : '+'));
+// how well a command answers what's typed: every word of it in the command
+// (its start or a word's start counting most, then anywhere, then its
+// letters in order), and the ones used lately first among equals
+function paletteScore(c, q) {
+  if (!q) return 1;
+  const label = c.label.toLowerCase();
+  const hay = (c.path.join(' ') + ' ' + c.label).toLowerCase();
+  let score = 0;
+  for (const w of q.toLowerCase().split(/\s+/).filter(Boolean)) {
+    if (label.startsWith(w)) score += 4;
+    else if (new RegExp('(^|[\\s(/-])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(label)) score += 3;
+    else if (label.includes(w)) score += 2;
+    else if (hay.includes(w)) score += 1;
+    else {
+      let at = 0;
+      for (const ch of w) { at = label.indexOf(ch, at) + 1; if (!at) return 0; }
+      score += 0.5;
+    }
+  }
+  return score;
+}
+async function openPalette() {
+  if (paletteEl) { paletteEl.querySelector('input').focus(); return; }
+  // where the writer was, to go back to (and run the command there)
+  const back = document.activeElement;
+  const sel = window.getSelection();
+  const range = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  const restore = () => {
+    if (back && back.isConnected && back.focus) back.focus({ preventScroll: true });
+    if (range && range.startContainer.isConnected) { sel.removeAllRanges(); sel.addRange(range); }
+  };
+  let menuCommands = [];
+  try { menuCommands = window.neo.commands ? await window.neo.commands() : []; } catch { /* the menu, unread */ }
+  const extras = book && isPaper() && typeof paperPaletteCommands === 'function' ? paperPaletteCommands() : [];
+  const commands = [...menuCommands.map((c) => ({ ...c, run: () => window.neo.runCommand(c.id) })), ...extras.filter((x) => !x.goto)];
+  const places = [...extras.filter((x) => x.goto), ...(book && !isPaper() ? (book.chapterOrder || []).map((chId) => ({
+    id: 'goto:' + chId, label: chapterName(chId), path: [t('Go to')], goto: true, run: () => { switchTab('manuscript'); focusChapter(chId); }
+  })) : [])];
+  const bd = document.createElement('div');
+  bd.className = 'palette-backdrop';
+  bd.innerHTML = '<div class="palette" role="dialog" aria-modal="true"><input type="text" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="palette-list"><div class="palette-list" id="palette-list" role="listbox"></div></div>';
+  const input = bd.querySelector('input');
+  const list = bd.querySelector('.palette-list');
+  input.placeholder = t('Type a command, or a chapter or section to go to');
+  input.setAttribute('aria-label', t('Command Palette'));
+  document.body.appendChild(bd);
+  paletteEl = bd;
+  let shown = [];
+  let idx = 0;
+  const draw = () => {
+    const q = input.value.trim();
+    const pool = q ? [...commands, ...places] : commands;
+    shown = pool.map((c) => ({ c, s: paletteScore(c, q) })).filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s || (paletteUsed.indexOf(a.c.id) + 1 || 1e9) - (paletteUsed.indexOf(b.c.id) + 1 || 1e9))
+      .slice(0, 60).map((x) => x.c);
+    // with nothing typed: what was used lately, then the menus in their order
+    if (!q) shown.sort((a, b) => (paletteUsed.indexOf(a.id) + 1 || 1e9) - (paletteUsed.indexOf(b.id) + 1 || 1e9));
+    idx = Math.min(idx, Math.max(0, shown.length - 1));
+    list.innerHTML = '';
+    shown.forEach((c, i) => {
+      const row = document.createElement('div');
+      row.className = 'palette-row' + (i === idx ? ' active' : '');
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', String(i === idx));
+      row.id = 'palette-' + i;
+      const where = document.createElement('span');
+      where.className = 'palette-where';
+      where.textContent = c.path.join(' › ');
+      const what = document.createElement('span');
+      what.className = 'palette-what';
+      what.textContent = (c.checked === true ? '✓ ' : '') + c.label;
+      const keys = document.createElement('span');
+      keys.className = 'palette-keys';
+      keys.textContent = accelText(c.accel);
+      row.append(where, what, keys);
+      row.addEventListener('mousedown', (e) => e.preventDefault());
+      row.addEventListener('click', () => { idx = i; choose(); });
+      list.appendChild(row);
+    });
+    if (!shown.length) {
+      const none = document.createElement('div');
+      none.className = 'palette-none';
+      none.textContent = t('Nothing matches “{q}”', { q });
+      list.appendChild(none);
+    }
+    input.setAttribute('aria-activedescendant', shown.length ? 'palette-' + idx : '');
+    const active = list.children[idx];
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  };
+  const close = () => {
+    if (!paletteEl) return;
+    bd.remove();
+    paletteEl = null;
+    restore();
+  };
+  const choose = async () => {
+    const c = shown[idx];
+    if (!c) return;
+    const at = paletteUsed.indexOf(c.id);
+    if (at >= 0) paletteUsed.splice(at, 1);
+    paletteUsed.unshift(c.id);
+    close();
+    try { await c.run(); } catch (err) { window.neo.logError('palette: ' + (err && err.stack || err)); }
+  };
+  input.addEventListener('input', () => { idx = 0; draw(); });
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'Enter') { e.preventDefault(); choose(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || (e.ctrlKey && (e.key === 'n' || e.key === 'p'))) {
+      e.preventDefault();
+      if (!shown.length) return;
+      idx = (idx + (e.key === 'ArrowDown' || e.key === 'n' ? 1 : shown.length - 1)) % shown.length;
+      draw();
+    }
+  });
+  bd.addEventListener('mousedown', (e) => { if (e.target === bd) { e.preventDefault(); close(); } });
+  window.addEventListener('blur', close, { once: true });
+  draw();
+  input.focus();
+}
 
 /* ================================================================== */
 

@@ -1,0 +1,13 @@
+Citation Style Language styles and locales
+
+The citation styles in paper/csl (APA, Chicago author-date, Harvard (Cite
+Them Right), MLA, IEEE, Vancouver (Elsevier), Nature, AMA, Science, PNAS,
+Cell, PLOS, eLife, ACM, Springer LNCS, Elsevier Harvard, American Physical
+Society) and the en-US and en-GB locale files are from the Citation Style Language project:
+  https://github.com/citation-style-language/styles
+  https://github.com/citation-style-language/locales
+
+The styles are licensed under the Creative Commons Attribution-ShareAlike
+3.0 Unported license (https://creativecommons.org/licenses/by-sa/3.0/); each
+file names its authors and contributors in its <info> block. The locale
+files are licensed under CC BY-SA 3.0 as well. NEO ships them unmodified.

@@ -1,0 +1,53 @@
+% A stand-in for ICML's icml2025.sty, written for NEO's tests: only what
+% example_paper.tex uses. The real one comes from the venue.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{icml2025}[2025/01/01 NEO test stand-in]
+\RequirePackage{natbib}
+\RequirePackage{forloop}
+\def\Notice@String{Preliminary work. Under review by the International Conference on Machine Learning (ICML). Do not distribute.}
+\DeclareOption{accepted}{%
+  \def\Notice@String{Proceedings of the 42nd International Conference on Machine Learning, Vancouver, Canada. PMLR 267, 2025.}
+  \gdef\isaccepted{1}}
+\DeclareOption{nohyperref}{\gdef\nohyperref{1}}
+\ProcessOptions\relax
+\paperwidth=8.5in
+\paperheight=11in
+\RequirePackage[textwidth=6.75in,textheight=9in,columnsep=0.25in]{geometry}
+\flushbottom \twocolumn
+
+\def\icmltitlerunning#1{\gdef\@icmltitlerunning{#1}}
+\long\def\icmltitle#1{\ifx\undefined\@icmltitlerunning\gdef\@icmltitlerunning{#1}\fi
+  {\center\baselineskip 18pt\hrule height1pt\vskip .25in{\Large\bf #1}\vskip .22in\hrule height1pt\vskip .3in\par}}
+\newenvironment{icmlauthorlist}{\setlength\topsep{0pt}\setlength\parskip{0pt}\begin{center}}{\end{center}}
+\newcounter{@affiliationcounter}
+\newcommand{\@pa}[1]{%
+  \ifcsname the@affil#1\endcsname\else
+    \ifcsname @icmlsymbol#1\endcsname\else
+      \stepcounter{@affiliationcounter}\newcounter{@affil#1}\setcounter{@affil#1}{\value{@affiliationcounter}}\fi\fi
+  \ifcsname @icmlsymbol#1\endcsname\textsuperscript{\csname @icmlsymbol#1\endcsname\,}%
+  \else\textsuperscript{\arabic{@affil#1}\,}\fi}
+\newcommand{\icmlauthor}[2]{%
+  \ifdefined\isaccepted
+    \mbox{\bf #1}\,\@for\theaffil:=#2\do{\@pa{\theaffil}}\ %
+  \else
+    \ifdefined\@icmlfirsttime\else\gdef\@icmlfirsttime{1}\mbox{\bf Anonymous Authors}\@pa{@anon}\fi
+  \fi}
+\newcommand{\icmlsetsymbol}[2]{\expandafter\gdef\csname @icmlsymbol#1\endcsname{#2}}
+\newcommand{\icmlaffiliation}[2]{%
+  \ifdefined\isaccepted
+    \expandafter\gdef\csname @affilname\csname the@affil#1\endcsname\endcsname{#2}%
+  \else
+    \expandafter\gdef\csname @affilname1\endcsname{Anonymous Institution, Anonymous City, Anonymous Region, Anonymous Country}%
+  \fi}
+\gdef\icmlcorrespondingauthor@text{Anonymous Author \textless{}anon.email@domain.com\textgreater{}}
+\newcommand{\icmlcorrespondingauthor}[2]{%
+  \ifdefined\isaccepted\gdef\icmlcorrespondingauthor@text{#1 \textless{}#2\textgreater{}}\fi}
+\newcommand{\icmlEqualContribution}{\textsuperscript{*}Equal contribution }
+\def\icmlkeywords#1{}
+\newcounter{@affilnum}
+\newcommand{\printAffiliationsAndNotice}[1]{%
+  \stepcounter{@affiliationcounter}%
+  {\let\thefootnote\relax\footnotetext{\ifdefined\isaccepted #1\fi
+    \forloop{@affilnum}{1}{\value{@affilnum} < \value{@affiliationcounter}}{%
+      \textsuperscript{\arabic{@affilnum}}\csname @affilname\the@affilnum\endcsname\ }.
+    Correspondence to: \icmlcorrespondingauthor@text.\ \\ \Notice@String}}}

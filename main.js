@@ -830,6 +830,245 @@ ipcMain.handle('cover:remove', (_e, bookId) => {
   return true;
 });
 
+// ---------------------------------------------------------------------------
+// Papers. A paper's figures and the citation style a writer brought in live
+// in its folder beside the chapters (figure-<id>.png, style.csl); the styles
+// NEO ships live in paper/csl. A DOI is looked up only when the writer asks,
+// and only the DOI leaves the machine.
+const PAPER_FILE = /^(?:figure-[a-z0-9]{4,40}\.(?:png|jpe?g|gif|webp|svg)|style\.csl)$/;
+function paperFile(bookId, name) {
+  name = libName(name);
+  if (!PAPER_FILE.test(name)) throw new Error('Not a paper file: ' + name);
+  return path.join(bookDir(bookId), name);
+}
+ipcMain.handle('paper:read', (_e, bookId, name) => {
+  const file = paperFile(bookId, name);
+  return fs.existsSync(file) ? fs.readFileSync(file).toString('base64') : null;
+});
+ipcMain.handle('paper:write', (_e, bookId, name, base64) => {
+  writeFileDurable(paperFile(bookId, name), Buffer.from(String(base64), 'base64'));
+  return true;
+});
+ipcMain.handle('paper:asset', (_e, name) => {
+  if (!/^[\w-]+\.(?:csl|xml)$/.test(name)) throw new Error('Not a citation style: ' + name);
+  return fs.readFileSync(path.join(__dirname, 'paper', 'csl', name), 'utf8');
+});
+ipcMain.handle('paper:lookup', async (_e, doi) => {
+  doi = String(doi || '').trim();
+  if (!/^10\.\d{4,9}\/\S+$/.test(doi)) throw new Error(t('Not a DOI: {doi}', { doi }));
+  const { net } = require('electron');
+  let res;
+  try {
+    res = await net.fetch('https://doi.org/' + encodeURI(doi).replace(/#/g, '%23'), {
+      headers: { Accept: 'application/vnd.citationstyles.csl+json' }
+    });
+  } catch (err) {
+    throw new Error(t('No connection to {service} ({error})', { service: 'doi.org', error: (err && err.message) || String(err) }));
+  }
+  // the same words as Pocket's lookup, which asks Crossref or DataCite
+  if (res.status === 404) throw new Error(t('{service} has no record of {doi}', { service: 'doi.org', doi }));
+  if (!res.ok) throw new Error(t('{service} answered {status}', { service: 'doi.org', status: String(res.status) }));
+  return res.json();
+});
+// Zotero, on this computer: Better BibTeX's search when it's installed
+// (its items carry their citation keys), else Zotero 7's own local API
+// (Settings → Advanced → "Allow other applications on this computer to
+// communicate with Zotero"). Only ever 127.0.0.1; null when neither answers.
+ipcMain.handle('paper:zotero', async (_e, q) => {
+  q = String(q || '').slice(0, 120).trim();
+  if (q.length < 2) return [];
+  const { net } = require('electron');
+  const ask = async (url, opts = {}) => {
+    const res = await net.fetch(url, { ...opts, signal: AbortSignal.timeout(1500) });
+    if (!res.ok) throw new Error('Zotero answered ' + res.status);
+    return res.json();
+  };
+  try {
+    const out = await ask('http://127.0.0.1:23119/better-bibtex/json-rpc', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'item.search', params: [q], id: 1 })
+    });
+    if (Array.isArray(out.result)) return out.result.slice(0, 8).map((it) => ({ ...it, id: it.citekey || it.citationKey || it['citation-key'] || '' }));
+  } catch { /* no Better BibTeX: Zotero's own API */ }
+  try {
+    const out = await ask('http://127.0.0.1:23119/api/users/0/items/top?format=csljson&limit=8&qmode=titleCreatorYear&q=' + encodeURIComponent(q), {
+      headers: { 'Zotero-API-Version': '3', 'Zotero-Allowed-Request': '1' }
+    });
+    const items = Array.isArray(out) ? out : out.items || [];
+    return items.slice(0, 8).map((it) => ({ ...it, id: it['citation-key'] || it.citationKey || '' }));
+  } catch {
+    return null;
+  }
+});
+
+// A reference file the writer keeps elsewhere (Zotero's Better BibTeX
+// keeps one up to date). Which file, for which paper, is this computer's
+// own business: it's kept in userData, written only when the writer picks
+// the file here, and only a file picked that way is ever read. (book.json
+// syncs; a path in it could name any file on the other machine.)
+const LINKS_FILE = () => path.join(app.getPath('userData'), 'paper-links.json');
+const readLinks = () => readJSON(LINKS_FILE(), {}) || {};
+ipcMain.handle('paper:link', async (_e, bookId) => {
+  bookId = libName(bookId);
+  const win = BrowserWindow.getFocusedWindow();
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [{ name: 'References', extensions: ['bib', 'json', 'ris'] }]
+  });
+  if (canceled || !filePaths[0]) return null;
+  const file = filePaths[0];
+  const links = readLinks();
+  links[bookId] = file;
+  writeFileDurable(LINKS_FILE(), JSON.stringify(links, null, 2));
+  return { path: file, text: fs.readFileSync(file, 'utf8'), mtime: fs.statSync(file).mtimeMs };
+});
+// A venue's LaTeX template (a NeurIPS or ICML zip, or its loose .tex and
+// .sty files), kept beside the paper as template.zip: plain files, the
+// writer's own copy, never bundled with NEO. Read back as its files, the
+// text ones as text, for the LaTeX export to fill.
+const TEMPLATE_TEXT = /\.(?:tex|sty|cls|bst|cfg|clo|def|bbx|cbx|bib|txt|md)$/i;
+const TEMPLATE_LIMIT = 30 * 1024 * 1024;
+// one path inside the template, made safe: forward slashes, no absolute
+// path or .., none of a Mac's zip litter
+function templatePath(name) {
+  const parts = String(name).replace(/\\/g, '/').split('/').filter((p) => p && p !== '.');
+  if (!parts.length || parts.some((p) => p === '..' || p.includes('\0')) || /^[a-z]:$/i.test(parts[0])) return null;
+  if (parts[0] === '__MACOSX' || parts[parts.length - 1] === '.DS_Store' || parts[parts.length - 1].startsWith('._')) return null;
+  return parts.join('/');
+}
+async function templateFiles(zip) {
+  const files = [];
+  let total = 0;
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    const name = templatePath(entry.name);
+    if (!name) continue;
+    const data = await entry.async('nodebuffer');
+    total += data.length;
+    if (total > TEMPLATE_LIMIT || files.length >= 500) throw new Error(t('That template is too large to keep with the paper'));
+    files.push(TEMPLATE_TEXT.test(name) ? { path: name, text: data.toString('utf8') } : { path: name, base64: data.toString('base64') });
+  }
+  // a zip that holds one folder: its contents, as the template
+  const tops = new Set(files.map((f) => f.path.split('/')[0]));
+  if (tops.size === 1 && files.every((f) => f.path.includes('/'))) for (const f of files) f.path = f.path.slice(f.path.indexOf('/') + 1);
+  return files;
+}
+const templateFile = (bookId) => path.join(bookDir(bookId), 'template.zip');
+ipcMain.handle('paper:template-import', async (_e, bookId) => {
+  bookId = libName(bookId);
+  const JSZip = require('jszip');
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow(), {
+    title: t('A LaTeX template'),
+    message: t('The venue’s template: its .zip, or its .tex, .sty, .cls and .bst files'),
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: t('LaTeX template'), extensions: ['zip', 'tex', 'sty', 'cls', 'bst', 'cfg', 'clo', 'def', 'bib'] }]
+  });
+  if (canceled || !filePaths.length) return null;
+  let files;
+  if (filePaths.length === 1 && /\.zip$/i.test(filePaths[0])) {
+    if (fs.statSync(filePaths[0]).size > TEMPLATE_LIMIT) throw new Error(t('That template is too large to keep with the paper'));
+    files = await templateFiles(await JSZip.loadAsync(fs.readFileSync(filePaths[0])));
+  } else {
+    const zip = new JSZip();
+    for (const fp of filePaths.filter((f) => !/\.zip$/i.test(f))) zip.file(path.basename(fp), fs.readFileSync(fp));
+    files = await templateFiles(zip);
+  }
+  // kept as the cleaned files, zipped again: what NEO reads is what's stored
+  const out = new JSZip();
+  for (const f of files) out.file(f.path, f.text !== undefined ? f.text : Buffer.from(f.base64, 'base64'));
+  writeFileDurable(templateFile(bookId), await out.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+  return { files, from: path.basename(filePaths[0]) };
+});
+ipcMain.handle('paper:template', async (_e, bookId) => {
+  const file = templateFile(libName(bookId));
+  if (!fs.existsSync(file)) return null;
+  const JSZip = require('jszip');
+  return { files: await templateFiles(await JSZip.loadAsync(fs.readFileSync(file))) };
+});
+// The command palette (View → Command Palette…, ⌘⇧P): every command the
+// menus offer right now, read from the menu itself so the two never differ,
+// and run by clicking that same item (its tick, its radio, its role)
+function menuCommands() {
+  const out = [];
+  const walk = (items, where) => items.forEach((it, i) => {
+    if (it.type === 'separator' || it.visible === false) return;
+    const label = String(it.label || '').replace(/&&/g, '&');
+    if (it.submenu) { walk(it.submenu.items, [...where, label]); return; }
+    if (!it.enabled || !label) return;
+    out.push({ item: it, id: [...where, label, i].join('\u0000'), label, path: where, accel: it.accelerator || '', checked: it.type === 'checkbox' || it.type === 'radio' ? !!it.checked : null });
+  });
+  const menu = Menu.getApplicationMenu();
+  if (menu) walk(menu.items, []);
+  return out;
+}
+ipcMain.handle('commands:list', () => menuCommands().map(({ item, ...c }) => c));
+ipcMain.handle('commands:run', (e, id) => {
+  const found = menuCommands().find((c) => c.id === id);
+  if (!found) return false;
+  found.item.click(undefined, BrowserWindow.fromWebContents(e.sender), e.sender);
+  return true;
+});
+// to the system trash, as a book is: the writer's file, never deleted outright
+ipcMain.handle('paper:template-remove', async (_e, bookId) => {
+  const file = templateFile(libName(bookId));
+  if (!fs.existsSync(file)) return true;
+  const { shell } = require('electron');
+  await shell.trashItem(file);
+  return true;
+});
+ipcMain.handle('paper:unlink', (_e, bookId) => {
+  const links = readLinks();
+  delete links[libName(bookId)];
+  writeFileDurable(LINKS_FILE(), JSON.stringify(links, null, 2));
+  return true;
+});
+ipcMain.handle('paper:linked', (_e, bookId, since) => {
+  const file = readLinks()[libName(bookId)];
+  if (!file || typeof file !== 'string') return null;
+  try {
+    const mtime = fs.statSync(file).mtimeMs;
+    if (mtime === since) return { path: file, mtime, same: true };
+    return { path: file, mtime, text: fs.readFileSync(file, 'utf8') };
+  } catch {
+    return { path: file, missing: true };
+  }
+});
+
+// A paper as its journal would print it, in a window of its own: one
+// window, reused, its title naming the journal
+let previewWin = null;
+ipcMain.handle('paper:preview', async (_e, html, title, opts = {}) => {
+  const pdf = await renderPDF(String(html), 'paper');
+  const file = path.join(app.getPath('temp'), `neo-preview-${process.pid}-${Date.now()}.pdf`);
+  fs.writeFileSync(file, pdf);
+  if (!previewWin || previewWin.isDestroyed()) {
+    const main = BrowserWindow.getFocusedWindow();
+    const at = main ? main.getBounds() : null;
+    previewWin = new BrowserWindow({
+      width: 860, height: Math.min(1100, at ? at.height : 1000), x: at ? at.x + 40 : undefined, y: at ? at.y + 20 : undefined,
+      backgroundColor: '#3a3a3a', show: false,
+      webPreferences: { plugins: true, sandbox: true, contextIsolation: true, nodeIntegration: false }
+    });
+    previewWin.on('page-title-updated', (e) => e.preventDefault());
+    previewWin.on('closed', () => {
+      previewWin = null;
+      sendToWindow({ type: 'paper', command: 'previewClosed' });
+    });
+  }
+  const old = previewWin.neoFile;
+  previewWin.neoFile = file;
+  previewWin.setTitle(String(title || 'Preview'));
+  // open at the page where the writer is: the section the caret is in
+  const pages = opts.focus ? pdfAnchorPages(pdf) : {};
+  const page = pages[String(opts.focus)];
+  await previewWin.loadURL(require('url').pathToFileURL(file).href + (page ? '#page=' + page : ''));
+  // a quiet redraw while writing doesn't take the writer away from the page
+  if (!opts.quiet) previewWin.show();
+  else if (!previewWin.isVisible()) previewWin.showInactive();
+  if (old) { try { fs.unlinkSync(old); } catch { /* gone */ } }
+  return { page: page || 1 };
+});
+
 ipcMain.handle('cover:read', (_e, bookId, fname) => {
   try {
     if (!/^(cover|art)-\d+\.(png|jpg|webp)$/.test(fname)) return null;
@@ -958,6 +1197,17 @@ ipcMain.handle('fullscreen:escape', (e) => {
 // A script prints on US letter whatever the country (the industry's page),
 // with the margins laid out in the page itself
 const SCREENPLAY_PRINT = { pageSize: 'Letter', margins: { top: 0, bottom: 0, left: 0, right: 0 }, printBackground: false, preferCSSPageSize: true, generateTaggedPDF: true, generateDocumentOutline: false };
+// A paper's page is its journal's: the size and margins come from its
+// @page rule, and the page numbers sit in the bottom margin
+const PAPER_PRINT = {
+  preferCSSPageSize: true,
+  printBackground: true,
+  displayHeaderFooter: true,
+  headerTemplate: '<div></div>',
+  footerTemplate: '<div style="width:100%;text-align:center;font:8px Helvetica,Arial,sans-serif;color:#555"><span class="pageNumber"></span></div>',
+  generateTaggedPDF: true,
+  generateDocumentOutline: true
+};
 // Letter is a habit of the Americas (and the Philippines); most of the world
 // prints A4. The computer's region decides, for the PDF and the Word file
 // alike. (A script is Letter everywhere: SCREENPLAY_PRINT.)
@@ -992,7 +1242,7 @@ async function renderPDF(html, print) {
   const tmp = path.join(app.getPath('temp'), `neo-print-${process.pid}-${Date.now()}.html`);
   fs.writeFileSync(tmp, html, 'utf8');
   const pdfWin = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
-  const options = print === 'screenplay' ? SCREENPLAY_PRINT : {
+  const options = print === 'screenplay' ? SCREENPLAY_PRINT : print === 'paper' ? PAPER_PRINT : {
     pageSize: paperSize(),
     margins: { top: 1, bottom: 1, left: 1, right: 1 },
     printBackground: false,
@@ -1955,6 +2205,13 @@ function createWindow() {
     }
   });
   win.loadFile('index.html');
+  // The window shows NEO's page and nothing else. window.neo (the whole
+  // library, and the disk) comes with whatever page it shows, so no link
+  // (in a chapter from another device, a pasted reference, a file dropped
+  // on it) may take it anywhere, and nothing in it opens a window. Links
+  // meant for the browser go through shell.openExternal.
+  win.webContents.on('will-navigate', (e, url) => { if (url !== win.webContents.getURL()) e.preventDefault(); });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   // The menu bar follows the real full-screen state, whoever changed it.
   // Electron only puts the bar back after a full screen it entered itself,
   // so once a window manager's own full-screen key had been used (Sway, i3),
@@ -2181,6 +2438,22 @@ ipcMain.on('script:state', (_e, st) => {
   scriptState = next;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// A paper's menus: Insert, its citation style, its heading levels
+const NeoCite = require('./paper/cite.js');
+const NeoJournals = require('./paper/journals.js');
+let paperState = { on: false, style: null, custom: '', heading: '', numbered: true, double: false, linked: false, journal: 'preprint', editing: false, skim: false, anonymous: false, template: '' };
+ipcMain.on('paper:state', (_e, st) => {
+  st = st || {};
+  const next = {
+    on: !!st.on, style: typeof st.style === 'string' ? st.style : null, custom: typeof st.custom === 'string' ? st.custom : '',
+    heading: ['h1', 'h2', 'h3'].includes(st.heading) ? st.heading : '', numbered: st.numbered !== false, double: !!st.double, linked: !!st.linked,
+    journal: st.journal === 'template' ? 'template' : NeoJournals.get(st.journal).id, editing: !!st.editing, skim: !!st.skim, anonymous: !!st.anonymous,
+    template: typeof st.template === 'string' ? st.template.slice(0, 80) : ''
+  };
+  if (JSON.stringify(next) === JSON.stringify(paperState)) return;
+  paperState = next;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
 let typewriterState = false;
 ipcMain.on('poetry:state', (_e, on) => {
   on = !!on;
@@ -2263,6 +2536,18 @@ function buildMenu() {
     : isWin
       ? ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia', 'Jost', 'iA Writer Quattro']
       : ['Gelasio', 'TeX Gyre Pagella', 'Libre Baskerville', 'Alegreya', 'Source Serif Pro', 'Jost', 'iA Writer Quattro'];
+  // a book's own items: a script or a paper sets its page its own way
+  const bookOnly = !scriptState.on && !paperState.on;
+  // a paper's journals, ticked at the one it's written for
+  const journalItems = (command) => NeoJournals.JOURNALS.map((j) => ({
+    label: j.name, type: 'radio', checked: paperState.journal === j.id,
+    click: () => sendToWindow({ type: 'paper', command, value: j.id })
+  }));
+  // the general citation styles, or those a journal asks for
+  const styleItems = (journal) => NeoCite.STYLES.filter((st) => !st.journal === !journal).map((st) => ({
+    label: st.title, type: 'radio', checked: paperState.style === st.id,
+    click: () => sendToWindow({ type: 'paper', command: 'style', value: st.id })
+  }));
   const template = [
     // appMenu exists only on macOS — including it on Windows throws,
     // which is exactly what kept NEO from ever opening a window there
@@ -2285,7 +2570,19 @@ function buildMenu() {
       submenu: [
         {
           label: t('Export'),
-          submenu: scriptState.on ? [
+          submenu: paperState.on ? [
+            { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
+            { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
+            { label: t('LaTeX for Overleaf (.zip)'), click: () => sendToWindow({ type: 'export', format: 'latex' }) },
+            { label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
+            { label: t('Markdown for Pandoc, with Files (.zip)'), click: () => sendToWindow({ type: 'export', format: 'pandoc' }) },
+            { label: t('Talk Outline, with Figures (.zip)'), click: () => sendToWindow({ type: 'export', format: 'talk' }) },
+            { label: t('Web Page (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
+            { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) },
+            { label: t('Plain Text (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
+            { type: 'separator' },
+            { label: t('References as BibTeX (.bib)'), click: () => sendToWindow({ type: 'export', format: 'bib' }) }
+          ] : scriptState.on ? [
             { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
             { label: 'Fountain (.fountain)', click: () => sendToWindow({ type: 'export', format: 'fountain' }) },
             { label: 'Final Draft (.fdx)', click: () => sendToWindow({ type: 'export', format: 'fdx' }) }
@@ -2308,6 +2605,15 @@ function buildMenu() {
             }
           ]
         },
+        ...(paperState.on ? [
+          // only ⌥⌘P: AltGr arrives as Ctrl+Alt on Windows and Linux, and
+          // AltGr+P types þ or ö on some layouts
+          { label: t('Preview'), ...(isMac ? { accelerator: 'Cmd+Alt+P' } : {}), click: () => sendToWindow({ type: 'paper', command: 'preview' }) },
+          { label: t('Draft for Feedback…'), click: () => sendToWindow({ type: 'paper', command: 'feedback' }) },
+          { label: t('Preview As'), submenu: journalItems('preview') },
+          // double-blind review: the authors and what names them left out of every way out
+          { label: t('Anonymous for Review'), type: 'checkbox', checked: paperState.anonymous, click: () => sendToWindow({ type: 'paper', command: 'anonymous' }) }
+        ] : []),
         { type: 'separator' },
         {
           label: t('Email Draft to Myself'),
@@ -2334,6 +2640,12 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => sendToWindow({ type: 'import' })
         },
+        ...(paperState.on ? [
+          { label: t('Import References…'), click: () => sendToWindow({ type: 'paper', command: 'importReferences' }) },
+          paperState.linked
+            ? { label: t('Unlink Reference Library'), click: () => sendToWindow({ type: 'paper', command: 'unlinkLibrary' }) }
+            : { label: t('Link Reference Library…'), click: () => sendToWindow({ type: 'paper', command: 'linkLibrary' }) }
+        ] : []),
         { label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
         { label: t('Library Folder…'), click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
         { type: 'separator' },
@@ -2366,6 +2678,12 @@ function buildMenu() {
           registerAccelerator: false,
           click: () => sendToWindow({ type: 'spellcheck' })
         },
+        // a paper's editing pass: the language rules, and what consistency asks
+        ...(paperState.on ? [
+          { label: t('Editing Pass'), type: 'checkbox', checked: paperState.editing, accelerator: 'CmdOrCtrl+Shift+;', click: () => sendToWindow({ type: 'paper', command: 'editing' }) },
+          { label: t('Next Thing to Look At'), accelerator: "CmdOrCtrl+'", enabled: paperState.editing, click: () => sendToWindow({ type: 'paper', command: 'editingNext', value: 1 }) },
+          { label: t('Previous Thing to Look At'), accelerator: "CmdOrCtrl+Shift+'", enabled: paperState.editing, click: () => sendToWindow({ type: 'paper', command: 'editingNext', value: -1 }) }
+        ] : []),
         {
           label: t('Spellcheck Language'),
           submenu: Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
@@ -2405,8 +2723,35 @@ function buildMenu() {
             { label: t('Other Font…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
           ]
         },
+        ...(paperState.on ? [
+          {
+            label: t('Journal'),
+            submenu: [
+              // a venue's own LaTeX template, imported with the paper
+              ...(paperState.template ? [{ label: t('{name} (your template)', { name: paperState.template }), type: 'radio', checked: paperState.journal === 'template', click: () => sendToWindow({ type: 'paper', command: 'journal', value: 'template' }) }, { type: 'separator' }] : []),
+              ...journalItems('journal'),
+              { type: 'separator' },
+              { label: t('From a LaTeX Template…'), click: () => sendToWindow({ type: 'paper', command: 'templateImport' }) },
+              ...(paperState.template ? [{ label: t('Remove the Template'), click: () => sendToWindow({ type: 'paper', command: 'templateRemove' }) }] : [])
+            ]
+          },
+          {
+            label: t('Citation Style'),
+            submenu: [
+              ...styleItems(false),
+              { type: 'separator' },
+              ...styleItems(true),
+              ...(paperState.custom ? [{ type: 'separator' }, { label: paperState.custom, type: 'radio', checked: paperState.style === 'custom', click: () => sendToWindow({ type: 'paper', command: 'style', value: 'custom' }) }] : []),
+              { type: 'separator' },
+              { label: t('Other Style (.csl)…'), click: () => sendToWindow({ type: 'paper', command: 'styleFile' }) }
+            ]
+          },
+          { label: t('Numbered Headings'), type: 'checkbox', checked: paperState.numbered, click: () => sendToWindow({ type: 'paper', command: 'numbered' }) },
+          { label: t('Double Spacing'), type: 'checkbox', checked: paperState.double, click: () => sendToWindow({ type: 'paper', command: 'double' }) },
+          { type: 'separator' }
+        ] : []),
         {
-          visible: !scriptState.on,
+          visible: bookOnly,
           label: t('Drop Cap Style'),
           submenu: [
             { label: t('Literary'), type: 'radio', checked: viewState.dropCap === 'literary', click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
@@ -2438,6 +2783,8 @@ function buildMenu() {
           checked: typewriterState,
           click: () => sendToWindow({ type: 'typewriter' })
         },
+        // a paper's paragraph check: each paragraph's first and last sentence, the rest dimmed
+        ...(paperState.on ? [{ label: t('First and Last Sentences'), type: 'checkbox', checked: paperState.skim, click: () => sendToWindow({ type: 'paper', command: 'skim' }) }] : []),
         { type: 'separator' },
         // tick when the caret sits in one; the keys are the editor's own
         // (they split or continue a paragraph, which a menu item can't), so
@@ -2452,6 +2799,15 @@ function buildMenu() {
           checked: scriptState.element === value,
           click: () => sendToWindow({ type: 'scriptElement', value })
         })) : []),
+        ...(paperState.on ? [
+          [t('Section Heading'), 'h1', '1'], [t('Subsection Heading'), 'h2', '2'], [t('Subsubsection Heading'), 'h3', '3'], [t('Body Text'), '', '0']
+        ].map(([label, value, key]) => ({
+          // the window hears Ctrl+Alt+0–3 itself, and tells it from AltGr
+          // (which arrives as Ctrl+Alt and types }, ² and ³ on many layouts);
+          // a registered accelerator can't, so it's registered on the Mac only
+          label, accelerator: 'CmdOrCtrl+Alt+' + key, registerAccelerator: isMac, type: 'radio', checked: paperState.heading === value,
+          click: () => sendToWindow({ type: 'paper', command: 'heading', value })
+        })) : []),
         // the script's own style, kept with that script
         ...(scriptState.on ? [
           { type: 'separator' },
@@ -2459,14 +2815,14 @@ function buildMenu() {
           { label: t('(CONT\'D) for a Returning Speaker'), type: 'checkbox', checked: scriptState.contd, click: () => sendToWindow({ type: 'scriptStyle', value: 'contd' }) }
         ] : []),
         {
-          visible: !scriptState.on,
+          visible: bookOnly,
           label: t('Flush Paragraph') + '\t' + (isMac ? '⇧Enter' : 'Shift+Enter'),
           type: 'checkbox',
           checked: flushState,
           click: () => sendToWindow({ type: 'flush' })
         },
         {
-          visible: !scriptState.on,
+          visible: bookOnly,
           label: t('Poetry Paragraph') + '\t' + (isMac ? '⇧⌘Enter' : 'Ctrl+Shift+Enter'),
           type: 'checkbox',
           checked: poetryState,
@@ -2492,6 +2848,7 @@ function buildMenu() {
           registerAccelerator: false, // the window answers / and ? itself (isHelpShortcut)
           click: () => sendToWindow({ type: 'help' })
         },
+        { label: t('Command Palette…'), accelerator: 'CmdOrCtrl+Shift+P', click: () => sendToWindow({ type: 'palette' }) },
         { type: 'separator' },
         {
           label: t('Full Screen'),
@@ -2555,6 +2912,17 @@ function buildMenu() {
         }
       ]
     },
+    ...(paperState.on ? [{
+      label: t('Insert'),
+      submenu: [
+        { label: t('Citation…'), accelerator: 'CmdOrCtrl+Shift+K', click: () => sendToWindow({ type: 'paper', command: 'cite' }) },
+        { label: t('Cross-Reference…'), click: () => sendToWindow({ type: 'paper', command: 'xref' }) },
+        { type: 'separator' },
+        { label: t('Equation'), accelerator: 'CmdOrCtrl+Shift+M', click: () => sendToWindow({ type: 'paper', command: 'equation' }) },
+        { label: t('Figure…'), click: () => sendToWindow({ type: 'paper', command: 'figure' }) },
+        { label: t('Table'), click: () => sendToWindow({ type: 'paper', command: 'table' }) }
+      ]
+    }] : []),
     {
       role: 'windowMenu',
       label: t('Window'),

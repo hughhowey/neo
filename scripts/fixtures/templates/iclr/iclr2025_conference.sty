@@ -1,0 +1,25 @@
+% A stand-in for ICLR's iclr2025_conference.sty, written for NEO's tests:
+% only what iclr2025_conference.tex uses. The real one comes from the venue.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{iclr2025_conference}[2025/01/01 NEO test stand-in]
+\RequirePackage{fancyhdr}
+\RequirePackage{natbib}
+% iclrfinal, true once \iclrfinalcopy is given
+\newif\ificlrfinal
+\iclrfinalfalse
+\def\iclrfinalcopy{\iclrfinaltrue}
+\setlength{\paperheight}{11in}
+\setlength{\paperwidth}{8.5in}
+\RequirePackage[textwidth=5.5in,textheight=9in]{geometry}
+% \And and \AND are set where the title is made, as in the real style
+% (amsmath, loaded later, has an \And of its own)
+\renewcommand{\maketitle}{%
+  \def\And{\end{tabular}\hfil\linebreak[0]\hfil\begin{tabular}[t]{l}\ignorespaces}%
+  \def\AND{\end{tabular}\hfil\linebreak[4]\hfil\begin{tabular}[t]{l}\ignorespaces}%
+  \par{\noindent\small\ificlrfinal Published as a conference paper at ICLR 2025\else Under review as a conference paper at ICLR 2025\fi\par}\vskip 1em
+  {\noindent\LARGE\bfseries\@title\par}\vskip 1em
+  \ificlrfinal
+    \noindent\begin{tabular}[t]{l}\@author\end{tabular}
+  \else
+    \noindent\begin{tabular}[t]{l}Anonymous authors\\Paper under double-blind review\end{tabular}
+  \fi\par\vskip 1em}

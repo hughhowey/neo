@@ -29,6 +29,7 @@ on:
       - 'locales/**'
       - 'main.js'
       - 'scripts/pocket-www.js'
+      - 'paper/**'
       - '.github/workflows/pocket.yml'
     tags:
       - 'pocket-v*'

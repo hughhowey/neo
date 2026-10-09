@@ -4,10 +4,10 @@
 // node scripts/pocket-www.js
 //
 // Fills pocket/www with what NEO Pocket shares with desktop NEO: the editor
-// (app.js, covers.js, styles.css, i18n.js, fonts, locales), JSZip, and the
-// spellchecker (Hunspell's browser build plus the same dictionaries desktop
-// NEO bundles). The robot build runs this; so does a local Android or iOS
-// build, before `npx cap sync`.
+// (app.js, covers.js, styles.css, i18n.js, fonts, locales, and paper/ with
+// MathJax and citeproc-js), JSZip, and the spellchecker (Hunspell's browser
+// build plus the same dictionaries desktop NEO bundles). The robot build
+// runs this; so does a local Android or iOS build, before `npx cap sync`.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -29,6 +29,12 @@ for (const f of ['app.js', 'covers.js', 'styles.css', 'i18n.js']) copy(path.join
 copy(path.join(mods, 'jszip', 'dist', 'jszip.min.js'), path.join(www, 'jszip.min.js'));
 copyDir(path.join(root, 'fonts'), path.join(www, 'fonts'));
 copyDir(path.join(root, 'locales'), path.join(www, 'locales'));
+
+// Papers: their scripts and citation styles, with MathJax and citeproc-js
+// beside them (the desktop loads those two from node_modules)
+copyDir(path.join(root, 'paper'), path.join(www, 'paper'));
+copy(path.join(mods, 'mathjax-full', 'es5', 'tex-svg-full.js'), path.join(www, 'paper', 'vendor', 'tex-svg-full.js'));
+copy(path.join(mods, 'citeproc', 'citeproc_commonjs.js'), path.join(www, 'paper', 'vendor', 'citeproc.js'));
 
 // Hunspell. The package finds its browser build through an import map
 // (#hunspell-glue) that a phone's web view doesn't have, so point it at the

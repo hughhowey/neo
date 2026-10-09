@@ -758,6 +758,17 @@ body:not(.no-dropcap) .chapter-body:not(.cap-off):not(.no-cap):not(.opens-dialog
   font-size: 3.4em; float: left; line-height: 0.8;
   padding: 4px 8px 0 0; font-family: var(--dropcap-font);
 }
+/* a paper's editing pass: what to look at, quieter than a misspelling */
+::highlight(neo-edit) {
+  text-decoration: underline dotted #c9a86a;
+  text-decoration-thickness: 2px;
+  text-decoration-skip-ink: none;
+  background-color: rgba(201, 168, 106, 0.14);
+}
+/* a paper's paragraph check: the middle of each paragraph faded back */
+::highlight(neo-skim) { color: color-mix(in srgb, var(--ink, #1c1c1c) 30%, var(--paper, #faf8f3)); }
+#tp-authors.anon { opacity: 0.5; }
+#tp-authors.anon::after { content: attr(data-anon); display: block; margin-top: 4px; font-size: 11px; letter-spacing: 0.02em; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 /* NEO's spellcheck pass: flagged words, painted like search matches */
 ::highlight(neo-spell) {
   text-decoration: underline wavy #cf5c56;
@@ -1234,6 +1245,31 @@ body.focus-mode .walk-note { opacity: 0.6; }
 .pop-menu button:disabled { color: #5d5d5d; cursor: default; }
 .pop-menu button.danger { color: #d97b6c; }
 .pop-menu .pm-sep { height: 1px; background: #3a3a3a; margin: 4px 6px; flex: none; }
+
+/* --- the command palette (⌘⇧P): one field, the commands under it --- */
+.palette-backdrop { position: fixed; inset: 0; z-index: 960; }
+.palette {
+  position: absolute; left: 50%; top: 12vh; transform: translateX(-50%); zoom: var(--ui-zoom, 1);
+  width: min(600px, calc(100vw / var(--ui-zoom, 1) - 32px));
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+  font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; overflow: hidden;
+}
+.palette input {
+  width: 100%; box-sizing: border-box; border: none; border-bottom: 1px solid #3a3a3a; background: none; color: #eee;
+  font: 15px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; padding: 12px 16px; outline: none;
+}
+.palette-list { max-height: min(420px, 60vh); overflow-y: auto; padding: 5px; }
+.palette-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: #ddd; }
+.palette-row.active { background: #353535; }
+.palette-where { flex: none; max-width: 40%; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-where:empty { display: none; }
+.palette-what { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-keys { flex: none; font-size: 11.5px; color: var(--muted); letter-spacing: 0.5px; }
+.palette-none { padding: 10px; color: var(--muted); }
+body.light .palette { background: #fff; border-color: #d9d4ca; box-shadow: 0 12px 40px rgba(0,0,0,0.18); }
+body.light .palette input { color: #2b2926; border-bottom-color: #e6e2da; }
+body.light .palette-row { color: #2b2926; }
+body.light .palette-row.active { background: #f0ede7; }
 
 /* --- Right side pane --- */
 #side-hotzone { position: fixed; right: 0; top: 0; bottom: 40px; z-index: 60; }
@@ -1975,6 +2011,394 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 #nav-pane.script .nav-item.sp-scene .n-row { justify-content: flex-start; gap: 8px; }
 #nav-pane.script .nav-item.sp-scene .n-words { margin-left: auto; }
 body.light #nav-pane.script .nav-item.sp-scene .n-num { color: #8f8a80; }
+
+/* ========================= PAPERS ========================= */
+/* A paper (book.json "format": "paper") is one flowing manuscript under a
+   title page that carries its authors, abstract and keywords, with the
+   reference list set after it. Headings, citations, maths, figures and
+   tables are the paper's own (paper/paper.js); numbers are drawn here from
+   data-num, which app.js never saves. */
+#paper.paper-mode { --paper-soft: color-mix(in srgb, var(--ink) 55%, var(--paper)); --paper-faint: color-mix(in srgb, var(--ink) 30%, var(--paper)); }
+#paper.paper-mode .chapter-head { display: none; }
+/* a second chapter in a paper is another device's copy, kept when both
+   sides changed (see refreshFromDisk): it says so */
+#paper.paper-mode .chapter + .chapter .chapter-head { display: block; margin-bottom: 1.5em; font-size: 12px; }
+#paper.paper-mode .chapter.sheet { min-height: 40vh; }
+
+/* --- the title page: the paper's front matter --- */
+#title-page.paper-title { min-height: 0; justify-content: flex-start; padding-top: 64px; padding-bottom: 56px; }
+#title-page.paper-title #tp-title { font-size: calc(28px * var(--page-zoom, 1)); line-height: 1.25; }
+#title-page.paper-title #tp-author { display: none; }
+#tp-authors {
+  margin-top: 26px; font-family: var(--body-font); font-size: calc(16px * var(--page-zoom, 1));
+  color: var(--ink); cursor: pointer; border-radius: 4px; padding: 2px 8px; align-self: center; outline: none;
+}
+#tp-authors:hover, #tp-authors:focus-visible { background: rgba(201, 168, 106, 0.14); }
+#tp-authors.empty { color: #b9b4a8; font-style: italic; }
+#tp-authors sup { font-size: 0.65em; margin-left: 1px; }
+#tp-affils { margin-top: 8px; font-family: var(--body-font); font-size: calc(13px * var(--page-zoom, 1)); color: var(--paper-soft); line-height: 1.5; }
+#tp-affils .tp-corr-line { margin-top: 2px; }
+#tp-abstract-wrap { margin: 40px auto 0; width: 88%; text-align: left; position: relative; }
+#tp-abstract-wrap .tp-abstract-head {
+  font-family: var(--body-font); font-size: calc(13px * var(--page-zoom, 1)); font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; text-align: center; color: var(--ink); margin-bottom: 10px;
+}
+#tp-abstract {
+  font-family: var(--body-font); font-size: calc(var(--editor-size, 17px) * 0.92 * var(--page-zoom, 1)); line-height: 1.6;
+  outline: none; min-height: 1.6em;
+}
+#tp-abstract p { margin: 0 0 0.5em; white-space: pre-wrap; }
+#tp-abstract:empty::before { content: attr(data-ph); color: #b9b4a8; font-style: italic; }
+/* the six moves: the empty abstract's scaffold, then a faint reminder
+   under it while it's written, then gone (paper.js, abstractGuide). Each
+   is marked in the colour of the section it previews, as in
+   docs/writing-principles.md: introduction, methods, results, conclusions. */
+#paper.paper-mode { --sec-title: #9a5878; --sec-intro: #4f8f9a; --sec-methods: #b8901a; --sec-results: #4a855a; --sec-conclusions: #c97c26; }
+body.night #paper.paper-mode { --sec-title: #c08aa4; --sec-intro: #7fb5bf; --sec-methods: #d9b44a; --sec-results: #7db38a; --sec-conclusions: #e3a35a; }
+.tp-abstract-guide .move-intro { --sec: var(--sec-intro); }
+.tp-abstract-guide .move-methods { --sec: var(--sec-methods); }
+.tp-abstract-guide .move-results { --sec: var(--sec-results); }
+.tp-abstract-guide .move-conclusions { --sec: var(--sec-conclusions); }
+.tp-abstract-guide { display: none; list-style: none; font-family: var(--body-font); color: var(--paper-faint); }
+#tp-abstract-wrap.empty .tp-abstract-guide {
+  display: block; margin-top: 6px; font-size: calc(var(--editor-size, 17px) * 0.82 * var(--page-zoom, 1)); line-height: 1.45; cursor: text;
+}
+#tp-abstract-wrap.empty .tp-abstract-guide li { display: grid; grid-template-columns: 1.1em 9.5em 1fr auto; gap: 0 0.5em; margin-top: 5px; }
+#tp-abstract-wrap.empty .tp-abstract-guide li::before { content: '■'; color: var(--sec); font-size: 0.8em; line-height: 1.8; }
+#tp-abstract-wrap.empty .tp-abstract-guide b { font-weight: 700; color: var(--paper-soft); }
+#tp-abstract-wrap.empty .tp-abstract-guide span { font-style: italic; }
+#tp-abstract-wrap.empty .tp-abstract-guide em {
+  font: 10px/2.2 -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: 0.6px; text-transform: uppercase; color: var(--sec); opacity: 0.85;
+}
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide {
+  display: flex; flex-wrap: wrap; gap: 2px 0; margin-top: 10px;
+  font: 11px/1.5 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide li { cursor: help; }
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide li::before { content: '●'; color: var(--sec); font-size: 8px; margin-right: 4px; vertical-align: 1px; }
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide li:not(:last-child)::after { content: '→'; margin: 0 5px; opacity: 0.6; }
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide b { font-weight: 400; }
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide li.done { color: var(--paper-soft); }
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide li.done::before { content: '✓'; font-size: 10px; vertical-align: 0; }
+.tp-abstract-count.over, #tp-title-count.long { color: var(--sec-conclusions); opacity: 1; }
+#nav-pane.paper .paper-limit { padding: 14px 18px; font-size: 11.5px; color: #7d7d7d; }
+#nav-pane.paper .paper-limit.over { color: #d9954a; }
+#tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide span, #tp-abstract-wrap.writing:not(.empty) .tp-abstract-guide em { display: none; }
+#tp-abstract-wrap.empty #tp-abstract:empty::before { font-style: normal; }
+.tp-abstract-count { position: absolute; right: 0; top: 2px; font: 11px -apple-system, BlinkMacSystemFont, sans-serif; color: var(--paper-faint); opacity: 0; transition: opacity 0.15s; }
+#tp-abstract-wrap:hover .tp-abstract-count, #tp-abstract:focus + .tp-abstract-count { opacity: 1; }
+#tp-keywords {
+  width: 88%; margin: 18px auto 0; text-align: left; outline: none;
+  font-family: var(--body-font); font-size: calc(var(--editor-size, 17px) * 0.85 * var(--page-zoom, 1)); color: var(--ink);
+}
+#tp-keywords::before { content: attr(data-label) ": "; font-weight: 700; font-style: normal; }
+#tp-keywords:empty::before { content: attr(data-label) ": " attr(data-ph); font-weight: 400; font-style: italic; color: #b9b4a8; }
+body.night #tp-authors.empty, body.night #tp-abstract:empty::before, body.night #tp-keywords:empty::before { color: #5f5b52; }
+
+#tp-title-count { position: absolute; left: 0; right: 0; font: 11px -apple-system, BlinkMacSystemFont, sans-serif; color: var(--paper-faint); text-align: center; pointer-events: none; }
+#title-page.paper-title { position: relative; }
+
+/* --- the text --- */
+/* an empty section says what it answers (paper.js, paperHints) */
+.paper-body p[data-hint] { position: relative; }
+.paper-body p[data-hint]:has(> br:only-child)::before, .paper-body p[data-hint]:empty::before {
+  content: attr(data-hint); position: absolute; left: 0; right: 0; top: 0; pointer-events: none;
+  font-style: italic; color: var(--paper-faint); text-indent: 0;
+}
+.paper-body p { text-indent: 1.5em; }
+.paper-body > p:first-child,
+.paper-body p.h1 + p, .paper-body p.h2 + p, .paper-body p.h3 + p,
+.paper-body figure + p, .paper-body p.eq + p { text-indent: 0; }
+body.paper-double .paper-body { line-height: 2.1; }
+.paper-body p.h1, .paper-body p.h2, .paper-body p.h3 { text-indent: 0; font-weight: 700; line-height: 1.35; break-after: avoid; }
+.paper-body p.h1 { font-size: 1.28em; margin: 1.5em 0 0.5em; }
+.paper-body p.h2 { font-size: 1.1em; margin: 1.3em 0 0.4em; }
+.paper-body p.h3 { font-size: 1em; font-style: italic; margin: 1.1em 0 0.3em; }
+.paper-body > p.h1:first-child, .paper-body > p.h2:first-child { margin-top: 0; }
+.paper-body p.h1[data-num]::before, .paper-body p.h2[data-num]::before, .paper-body p.h3[data-num]::before {
+  content: attr(data-num); display: inline-block; min-width: 2.2em; font-style: normal; color: var(--paper-soft);
+}
+body.paper-unnumbered .paper-body p[data-num]::before { content: none; }
+.paper-body p.h1:empty::before, .paper-body p.h2:empty::before, .paper-body p.h3:empty::before { content: attr(data-num) '\00a0'; }
+
+/* citations, cross-references and maths: one piece each, the caret steps over */
+.paper-body .cite, .paper-body .xref {
+  border-radius: 3px; cursor: pointer; white-space: normal; text-indent: 0;
+  transition: background 0.12s;
+}
+.paper-body .cite:hover, .paper-body .xref:hover { background: rgba(201, 168, 106, 0.2); }
+.paper-body .xref { color: color-mix(in srgb, var(--ink) 75%, #7c5d26); }
+.paper-body .cite[data-missing], .paper-body .xref[data-missing] { color: var(--red); text-decoration: underline dotted; }
+.paper-body .math, #tp-abstract .math, .paper-body .sym, #tp-abstract .sym { display: inline; text-indent: 0; }
+.paper-body .sym[data-missing], #tp-abstract .sym[data-missing] { text-decoration: underline dotted var(--red); }
+/* the table of symbols: drawn from symbols.json into its shadow root */
+.paper-body p.symtab { text-indent: 0; margin: 0.8em 0; user-select: none; cursor: pointer; }
+/* list items: paragraphs, nested by data-level, numbered by data-num */
+.paper-body p.li { position: relative; text-indent: 0; padding-left: 1.6em; margin-top: 0.15em; margin-bottom: 0.15em; }
+.paper-body p.li[data-level="2"] { margin-left: 1.6em; }
+.paper-body p.li[data-level="3"] { margin-left: 3.2em; }
+.paper-body p.li::before { position: absolute; left: 0.25em; content: '•'; }
+.paper-body p.li[data-level="2"]::before { content: '◦'; }
+.paper-body p.li[data-level="3"]::before { content: '▪'; }
+.paper-body p.li[data-list="ol"]::before { left: 0; width: 1.25em; text-align: right; content: attr(data-num) '.'; font-variant-numeric: tabular-nums; }
+.paper-body p.li + p:not(.li) { text-indent: 0; }
+.paper-body p.eq { text-indent: 0; margin: 0.6em 0; user-select: none; }
+.paper-body p.eq.editing { user-select: text; }
+.paper-body .flash { animation: paper-flash 1.2s ease; }
+@keyframes paper-flash { 0%, 40% { background: rgba(201, 168, 106, 0.35); } 100% { background: transparent; } }
+
+/* figures and tables: the picture or the grid, with its caption */
+.paper-body figure { margin: 1.4em 0; text-indent: 0; user-select: none; break-inside: avoid; }
+.paper-body figure.fig { text-align: center; }
+.paper-body figure.fig { --fw: 100%; }
+.paper-body figure.fig[data-width="25"] { --fw: 25%; }
+.paper-body figure.fig[data-width="33"] { --fw: 33.3%; }
+.paper-body figure.fig[data-width="50"] { --fw: 50%; }
+.paper-body figure.fig[data-width="67"] { --fw: 66.7%; }
+.paper-body figure.fig img {
+  display: block; margin: 0 auto; width: var(--fw); max-width: 100%; height: auto; cursor: pointer; min-height: 40px; min-width: 60px;
+  border-radius: 2px; outline: 1px solid transparent; transition: outline-color 0.15s;
+}
+.paper-body figure.fig img:hover { outline-color: rgba(201, 168, 106, 0.6); }
+.paper-body figure.fig[data-missing] img, .paper-body figure.fig .panel[data-missing] img { background: repeating-linear-gradient(45deg, transparent 0 8px, rgba(0,0,0,0.05) 8px 16px); height: 120px; }
+/* text wrapped beside a narrow figure */
+.paper-body figure.fig[data-wrap] { width: var(--fw); margin-top: 0.3em; margin-bottom: 0.6em; }
+.paper-body figure.fig[data-wrap="left"] { float: left; margin-right: 1.4em; }
+.paper-body figure.fig[data-wrap="right"] { float: right; margin-left: 1.4em; }
+.paper-body figure.fig[data-wrap] img { width: 100%; }
+.paper-body figure.fig[data-wrap] + p { text-indent: 1.5em; }
+/* panels (a), (b)… side by side under one caption */
+.paper-body figure.fig:has(> .panel) { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 0.6em 3%; counter-reset: panel; }
+.paper-body figure.fig:has(> .panel):not([data-wrap]) { width: var(--fw); margin-left: auto; margin-right: auto; }
+.paper-body figure.fig > .panel { flex: 1 1 0; min-width: 0; counter-increment: panel; text-align: center; }
+.paper-body figure.fig > .panel img { width: 100%; }
+.paper-body figure.fig .subcap { display: block; margin-top: 0.3em; font-size: 0.82em; line-height: 1.4; outline: none; user-select: text; white-space: pre-wrap; }
+.paper-body figure.fig .subcap::before { content: '(' counter(panel, lower-alpha) ') '; font-weight: 700; }
+.paper-body figure.fig > figcaption { flex-basis: 100%; }
+/* a panel more than one column wide, and so many to a row (a row not full
+   centred): the widths paper/export.js's panelRows gives every format */
+.paper-body figure.fig > .panel[data-colspan="2"] { --span: 2; flex-grow: 2; }
+.paper-body figure.fig > .panel[data-colspan="3"] { --span: 3; flex-grow: 3; }
+.paper-body figure.fig[data-cols="1"] { --cols: 1; }
+.paper-body figure.fig[data-cols="2"] { --cols: 2; }
+.paper-body figure.fig[data-cols="3"] { --cols: 3; }
+.paper-body figure.fig[data-cols="4"] { --cols: 4; }
+.paper-body figure.fig[data-cols] > .panel {
+  --k: min(var(--span, 1), var(--cols));
+  flex: 0 0 calc((100% - (var(--cols) - 1) * 3%) * var(--k) / var(--cols) + (var(--k) - 1) * 3% - 0.1%);
+}
+/* placed elsewhere in print: a quiet mark of where, beside it */
+.paper-body figure[data-place], .paper-body figure[data-span] { position: relative; }
+.paper-body figure[data-place]::after, .paper-body figure[data-span]::after {
+  position: absolute; top: 0; right: -1.6em; font-size: 0.75em; color: var(--paper-faint);
+}
+.paper-body figure[data-place="H"]::after { content: '📌'; }
+.paper-body figure[data-place="t"]::after { content: '⤒'; }
+.paper-body figure[data-place="b"]::after { content: '⤓'; }
+.paper-body figure[data-place="p"]::after { content: '▤'; }
+.paper-body figure[data-place="h"]::after { content: '↧'; }
+.paper-body figure[data-span]:not([data-place])::after { content: '⇹'; }
+
+/* the toolbar over a figure or table, while the pointer is on it */
+.fig-tools {
+  position: fixed; z-index: 940; display: flex; gap: 6px; align-items: center; padding: 4px;
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 7px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  font: 11.5px/1 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.fig-tools .ft-group { display: flex; }
+.fig-tools .ft-group + .ft-group { border-left: 1px solid #3a3a3a; padding-left: 6px; }
+.fig-tools button { background: none; border: none; color: #aaa; padding: 5px 7px; border-radius: 4px; white-space: nowrap; }
+.fig-tools button:hover { background: #333; color: #eee; }
+.fig-tools button.on { color: var(--accent); background: rgba(201, 168, 106, 0.14); }
+body.light .fig-tools { background: #fff; border-color: #d9d4ca; box-shadow: 0 6px 20px rgba(0,0,0,0.14); }
+body.light .fig-tools .ft-group + .ft-group { border-left-color: #e6e2da; }
+body.light .fig-tools button { color: #5f5b53; }
+body.light .fig-tools button:hover { background: #f0ede7; color: #1c1a17; }
+.paper-body figcaption {
+  text-align: left; font-size: 0.86em; line-height: 1.5; margin-top: 0.6em; outline: none; user-select: text;
+  white-space: pre-wrap; min-height: 1.5em;
+}
+.paper-body figcaption::before { font-weight: 700; margin-right: 0.35em; }
+.paper-body figure.fig figcaption::before { content: var(--paper-fig-word, 'Figure') ' ' attr(data-num) '.'; }
+.paper-body figure.tbl figcaption::before { content: var(--paper-tab-word, 'Table') ' ' attr(data-num) '.'; }
+.paper-body figcaption:empty::after { content: var(--paper-caption-ph, 'Add a caption'); color: #b9b4a8; font-style: italic; }
+.paper-body figure.tbl figcaption { margin: 0 0 0.5em; }
+.paper-body figure.tbl table {
+  border-collapse: collapse; margin: 0 auto; font-size: 0.88em; line-height: 1.45;
+  border-top: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; min-width: 40%;
+}
+.paper-body figure.tbl th, .paper-body figure.tbl td {
+  padding: 0.3em 0.75em; text-align: left; vertical-align: top; min-width: 3em; outline: none; user-select: text; white-space: pre-wrap;
+}
+.paper-body figure.tbl tr:first-child th { border-bottom: 1px solid currentColor; }
+.paper-body figure.tbl th:focus, .paper-body figure.tbl td:focus { background: rgba(201, 168, 106, 0.12); }
+
+/* --- the reference list: made from the citations, never typed --- */
+#paper-refs { min-height: 0; padding-top: 56px; padding-bottom: 64px; font-family: var(--body-font); }
+#paper-refs h2 { font-size: calc(15px * var(--page-zoom, 1)); letter-spacing: 3px; text-transform: uppercase; text-align: center; font-weight: 400; color: var(--paper-soft); margin-bottom: 26px; }
+#paper-refs .pr-empty { text-align: center; font-style: italic; color: var(--paper-faint); font-size: 15px; }
+#paper-refs .pr-list { font-size: calc(var(--editor-size, 17px) * 0.88 * var(--page-zoom, 1)); line-height: 1.5; }
+#paper-refs .pr-entry { margin-bottom: 0.65em; overflow-wrap: anywhere; }
+#paper-refs .pr-list.hanging .pr-entry { padding-left: 2em; text-indent: -2em; }
+#paper-refs .pr-list.numeric .csl-entry { display: flex; gap: 0.6em; }
+#paper-refs .csl-left-margin { min-width: 2.2em; color: var(--paper-soft); }
+#paper-refs .csl-right-inline { flex: 1; }
+
+/* --- the @ picker --- */
+.paper-picker {
+  position: fixed; z-index: 960; width: 440px; max-width: calc(100vw - 16px); max-height: 50vh; overflow-y: auto;
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5); font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.paper-picker .pp-row { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+.paper-picker .pp-row.active { background: #3a3428; }
+.paper-picker .pp-main { color: #e8e4da; }
+.paper-picker .pp-sub { color: #8c877d; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paper-picker .pp-label .pp-main { color: #cdb98f; }
+.paper-picker .pp-lookup .pp-main { color: var(--accent); }
+.paper-picker .pp-zotero .pp-main { color: #d0a7a7; }
+body.light .paper-picker .pp-zotero .pp-main { color: #a3443c; }
+.paper-picker .pp-hint { cursor: default; }
+.paper-picker .pp-hint .pp-main { color: #aaa; font-style: italic; }
+.paper-picker .pp-hint .pp-sub { white-space: normal; }
+
+/* --- the panel under a citation or maths --- */
+.paper-pop {
+  position: fixed; z-index: 955; min-width: 320px; max-width: min(560px, calc(100vw - 16px));
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 8px; padding: 10px 12px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5); color: #ddd; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.paper-pop input[type="text"], .paper-pop input:not([type]), .paper-pop textarea {
+  background: #1b1b1b; border: 1px solid #3a3a3a; border-radius: 5px; color: #eee; padding: 5px 8px; font: inherit; outline: none;
+}
+.paper-pop input:focus, .paper-pop textarea:focus { border-color: var(--accent); }
+.cite-pop .cp-hint { color: #8c877d; font-size: 11.5px; margin-top: 4px; }
+.cite-pop .cp-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid #333; }
+.cite-pop .cp-name { color: #e8e4da; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cite-pop .cp-fields { grid-column: 1; display: flex; gap: 6px; }
+.cite-pop .cp-fields input { flex: 1; min-width: 0; font-size: 12px; }
+.cite-pop .cp-del { grid-column: 2; grid-row: 1 / span 2; align-self: center; background: none; border: none; color: #888; font-size: 18px; padding: 0 4px; }
+.cite-pop .cp-del:hover { color: #e06c5f; }
+.cite-pop .cp-narrative { display: flex; gap: 6px; align-items: center; margin-top: 8px; color: #bbb; cursor: pointer; }
+body.light .paper-picker, body.light .paper-pop { background: #fff; border-color: #d9d4ca; box-shadow: 0 8px 28px rgba(0,0,0,0.16); color: #2b2926; }
+body.light .paper-picker .pp-main, body.light .cite-pop .cp-name { color: #2b2926; }
+body.light .paper-picker .pp-row.active { background: #f0e9da; }
+body.light .paper-picker .pp-label .pp-main { color: #7c5d26; }
+body.light .paper-pop input:not([type="checkbox"]), body.light .paper-pop textarea { background: #faf9f6; border-color: #d6d1c7; color: #2b2926; }
+body.light .cite-pop .cp-row { border-bottom-color: #ebe7df; }
+body.light .cite-pop .cp-narrative { color: #4f4b44; }
+
+/* --- the authors --- */
+.modal.paper-authors { width: min(760px, calc(100vw / var(--ui-zoom, 1) - 32px)); }
+.paper-authors .pa-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid #333; }
+.paper-authors .pa-main, .paper-authors .pa-side { display: flex; flex-direction: column; gap: 6px; }
+.paper-authors input:not([type="checkbox"]) {
+  display: block; width: 100%; padding: 7px 10px; background: var(--bg); border: 1px solid #3a3a3a; border-radius: 6px; color: #eee; font-size: 13.5px; margin: 0;
+}
+.paper-authors input:focus { outline: none; border-color: var(--accent); }
+.paper-authors input.pa-name { font-size: 15px; }
+.paper-authors input.bad { border-color: #c0392b; }
+.paper-authors .pa-more, .paper-authors .pa-add { background: none; border: none; color: #8a8a8a; font-size: 12.5px; text-align: left; padding: 2px 0; cursor: pointer; }
+.paper-authors .pa-more:hover, .paper-authors .pa-add:hover { color: var(--accent); }
+.paper-authors .pa-add { margin-top: 12px; font-size: 13.5px; }
+.modal.paper-authors label.pa-corr { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #aaa; margin: 2px 0 0; cursor: pointer; }
+.modal.paper-authors .pa-corr input { display: inline-block; width: auto; margin: 0; accent-color: var(--accent); }
+.paper-authors .pa-tools { display: flex; gap: 4px; justify-content: flex-end; }
+.paper-authors .pa-tools button { background: none; border: 1px solid #3a3a3a; border-radius: 5px; color: #999; width: 26px; height: 24px; font-size: 13px; }
+.paper-authors .pa-tools button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.paper-authors .pa-tools button:disabled { opacity: 0.3; cursor: default; }
+.pa-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+body.light .paper-authors input:not([type="checkbox"]), body.light .paper-ref input, body.light .paper-ref textarea, body.light .paper-ref select { background: #fff; border-color: #d6d1c7; color: #2b2926; }
+body.light .paper-authors .pa-row { border-bottom-color: #e6e2da; }
+
+/* --- a reference, by hand --- */
+.modal.paper-ref { width: min(680px, calc(100vw / var(--ui-zoom, 1) - 32px)); }
+.paper-ref .pr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 12px; }
+.paper-ref .pr-field { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: 12px; color: #999; }
+.paper-ref .pr-field.wide { grid-column: span 4; }
+.paper-ref .pr-field:nth-child(1), .paper-ref .pr-field:nth-child(2) { grid-column: span 2; }
+.paper-ref input, .paper-ref textarea, .paper-ref select {
+  width: 100%; padding: 7px 9px; background: var(--bg); border: 1px solid #3a3a3a; border-radius: 6px; color: #eee; font: 13.5px -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; resize: vertical;
+}
+.paper-ref input:focus, .paper-ref textarea:focus, .paper-ref select:focus { outline: none; border-color: var(--accent); }
+
+/* --- a symbol, by hand --- */
+.paper-sym .ps-preview { min-height: 2.2em; display: flex; align-items: center; justify-content: center; font-size: 1.5em; margin: -4px 0 10px; color: var(--accent); }
+.paper-sym .pr-field:nth-child(4) { grid-column: span 2; }
+.paper-sym .pr-check { grid-column: span 4; font-size: 13px; color: #bbb; display: flex; align-items: center; gap: 6px; }
+.paper-sym .pr-check input { width: auto; }
+.paper-sym .ps-sources { position: relative; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.paper-sym .ps-sources input { flex: 1 1 180px; width: auto; }
+.paper-sym .ps-chip { border: 1px solid #3a3a3a; background: none; color: inherit; border-radius: 12px; padding: 3px 9px; font-size: 12.5px; cursor: pointer; }
+.paper-sym .ps-chip:hover, .paper-sym .ps-chip:focus-visible { border-color: var(--accent); }
+.paper-sym .ps-found { position: absolute; top: 100%; left: 0; right: 0; z-index: 3; background: var(--bg); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.paper-sym .ps-found:empty { display: none; }
+.paper-sym .ps-found .pp-row { padding: 6px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paper-sym .ps-found .pp-row.active { background: rgba(201,168,106,.18); }
+body.light .paper-sym .ps-chip { border-color: #d6d1c7; }
+body.light .paper-sym .pr-check { color: #555; }
+
+/* --- the References tab --- */
+#references-view { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+#references-view .rl-top { position: sticky; top: 0; background: var(--paper); padding: 4px 0 14px; z-index: 2; }
+#references-view .rl-add {
+  width: 100%; resize: none; padding: 10px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--ink) 18%, var(--paper));
+  background: color-mix(in srgb, var(--ink) 3%, var(--paper)); color: var(--ink); font: 14px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; outline: none;
+}
+#references-view .rl-add:focus { border-color: var(--accent); }
+#references-view .rl-gaps { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+#references-view .rl-views { display: flex; gap: 18px; margin-bottom: 10px; }
+#references-view .rl-view { background: none; border: none; padding: 0 0 3px; font-size: 13px; color: var(--paper-soft, #777); cursor: pointer; border-bottom: 1.5px solid transparent; }
+#references-view .rl-view.on { color: var(--paper-ink, inherit); border-bottom-color: var(--accent); }
+#references-view .rl-view:focus-visible { outline: none; color: var(--accent); }
+#references-view .ps-row .ps-glyph { flex: 0 0 4.5em; display: flex; align-items: center; font-size: 1.15em; }
+#references-view .ps-row .ps-glyph svg { overflow: visible; }
+#references-view .ps-row .ps-value { font-variant-numeric: tabular-nums; }
+#references-view .ps-row .ps-kind { font-size: 0.8em; text-transform: lowercase; letter-spacing: 0.04em; color: var(--paper-soft, #777); }
+#references-view .rl-tools { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; margin-top: 8px; font-size: 12.5px; }
+#references-view .rl-tool { background: none; border: none; padding: 0; color: var(--paper-soft, #777); cursor: pointer; font-size: 12.5px; }
+#references-view .rl-tool:hover { color: var(--accent); }
+#references-view .rl-linked { color: var(--ink); }
+#references-view .rl-count { margin-left: auto; color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
+#references-view .rl-row {
+  display: flex; gap: 14px; align-items: flex-start; padding: 10px 8px; margin: 0 -8px; border-radius: 6px; cursor: pointer;
+  font-family: var(--body-font); font-size: 15px; line-height: 1.45; color: var(--ink); outline: none;
+}
+#references-view .rl-row:hover, #references-view .rl-row:focus-visible { background: color-mix(in srgb, var(--ink) 5%, var(--paper)); }
+#references-view .rl-row.uncited .rl-main { opacity: 0.6; }
+#references-view .rl-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#references-view .rl-doi { font-size: 12px; color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
+#references-view .rl-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font: 11.5px -apple-system, BlinkMacSystemFont, sans-serif; color: color-mix(in srgb, var(--ink) 50%, var(--paper)); white-space: nowrap; }
+#references-view .rl-side code { font: 11.5px Menlo, Consolas, monospace; }
+#references-view .rl-del { background: none; border: none; color: inherit; font-size: 16px; line-height: 1; opacity: 0; padding: 2px 4px; }
+#references-view .rl-row:hover .rl-del, #references-view .rl-del:focus { opacity: 1; }
+#references-view .rl-del:hover { color: var(--red); }
+#references-view .rl-empty { padding: 30px 10px; text-align: center; font-family: var(--body-font); color: var(--ink); line-height: 1.6; }
+#references-view .rl-empty .soft { font-size: 14px; max-width: 460px; margin: 8px auto 0; }
+
+/* --- the pane: the paper's sections --- */
+#nav-pane.paper .nav-item.paper-sec .n-row { justify-content: flex-start; gap: 8px; }
+#nav-pane.paper .nav-item.paper-sec .n-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#nav-pane.paper .nav-item.paper-sec .n-num { color: #6d6d6d; font-size: 11.5px; min-width: 22px; }
+#nav-pane.paper .nav-item.ps-h2 { padding-left: 32px; }
+#nav-pane.paper .nav-item.ps-h3 { padding-left: 46px; }
+#nav-pane.paper .nav-item.ps-h2 .n-row, #nav-pane.paper .nav-item.ps-h3 .n-row { font-size: 12.5px; }
+#nav-pane.paper .nav-item.ps-front, #nav-pane.paper .nav-item.ps-refs { font-style: italic; }
+#nav-pane.paper .nav-item.dragging { opacity: 0.4; }
+
+/* --- a paper on the shelf: a sheet, its title set like the first page --- */
+.book.paper-tile {
+  width: 112px; border-radius: 1px; display: block; background: #fbfaf7; color: #1c1c1c;
+  box-shadow: 2px 2px 0 -1px #e6e2d8, 3px 3px 0 -1px rgba(0,0,0,0.2), 2px 4px 10px rgba(0,0,0,0.45);
+}
+.paper-tile .pt-text { position: absolute; inset: 18px 12px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; pointer-events: none; }
+.paper-tile .pt-title { font: 700 9.5px/1.25 Georgia, serif; overflow-wrap: anywhere; }
+.paper-tile .pt-title.long { font-size: 8px; }
+.paper-tile .pt-author { font: 7px/1.3 Georgia, serif; color: #55524c; }
+.paper-tile .pt-lines { width: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.paper-tile .pt-lines i { display: block; height: 2px; background: #dcd8cf; border-radius: 1px; }
+.paper-tile .pt-lines i:nth-child(2n) { width: 86%; }
+body.light .book.paper-tile { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 2px 2px 0 -1px #eee, 1px 2px 6px rgba(0,0,0,0.18); }
 
 /* a script's title, set bold, underlined or italic as a whole (⌘B ⌘U ⌘I) */
 #paper.script #tp-title.tp-b { font-weight: bold; }

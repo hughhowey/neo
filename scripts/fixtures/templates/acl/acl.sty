@@ -1,0 +1,39 @@
+% A stand-in for *ACL's acl.sty, written for NEO's tests: only what
+% acl_latex.tex uses. The real one comes from the venue.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{acl}[2025/01/01 NEO test stand-in]
+\newif\ifacl@finalcopy
+\newif\ifacl@anonymize
+\newif\ifacl@hyperref
+\acl@hyperreftrue
+\DeclareOption{final}{\acl@finalcopytrue\acl@anonymizefalse}
+\DeclareOption{review}{\acl@finalcopyfalse\acl@anonymizetrue}
+\DeclareOption{preprint}{\acl@finalcopytrue\acl@anonymizefalse}
+\DeclareOption{hyperref}{\acl@hyperreftrue}
+\DeclareOption{nohyperref}{\acl@hyperreffalse}
+\ProcessOptions\relax
+\PassOptionsToPackage{a4paper,margin=2.5cm,heightrounded=true}{geometry}
+\RequirePackage{geometry}
+\flushbottom \twocolumn \sloppy
+% \And and \AND are set where the title is made, as in the real style
+% (amsmath, loaded later, has an \And of its own)
+\renewcommand{\maketitle}{%
+  \def\And{\end{tabular}\hskip 1em plus 2fil\begin{tabular}[t]{c}\bf\ignorespaces}%
+  \def\AND{\end{tabular}\par\begin{tabular}[t]{c}\bf\ignorespaces}%
+  \twocolumn[{\centering
+  {\Large\bfseries\@title\par}\vskip 1em
+  \ifacl@anonymize
+    {\bf Anonymous ACL submission}\par
+  \else
+    \begin{tabular}[t]{c}\bf\@author\end{tabular}\par
+  \fi\vskip 2em}]}
+\RequirePackage{natbib}
+\renewcommand\cite{\citep}
+\bibliographystyle{plainnat}
+\ifacl@hyperref
+  \PassOptionsToPackage{breaklinks}{hyperref}
+  \RequirePackage{hyperref}
+\else
+  \def\href#1#2{{#2}}
+  \usepackage{url}
+\fi

@@ -25,6 +25,7 @@ pocket/www/jszip.min.js
 pocket/www/locales/
 pocket/www/hunspell/
 pocket/www/dict/
+pocket/www/paper/
 
 # working files beside the repo, never part of it
 Claude outputs/

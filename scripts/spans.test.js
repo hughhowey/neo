@@ -9,6 +9,8 @@ const { test } = require('node:test');
 // what a chapter's page saves (captureBody), run on its own
 const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 const context = vm.createContext({});
+// the spans NEO keeps, as app.js lists them; a book here is never a paper
+vm.runInContext(app.match(/^const KEPT_SPANS = .*$/m)[0] + '\nconst isPaper = () => false;', context);
 vm.runInContext(app.slice(app.indexOf('function captureBody('), app.indexOf('// A chapter that opens on a line of dialogue')), context);
 vm.runInContext('this.api = { captureBody, dropJunkSpans };', context);
 const { captureBody, dropJunkSpans } = context.api;
@@ -29,6 +31,15 @@ test('NEO\'s own placeholder flags stay, and so does everything inside them', ()
   // a flag inside a junk span, and a junk span inside a flag
   assert.equal(dropJunkSpans('<span style="x"><span class="ph-mark">a<span style="y">b</span></span></span>'),
     '<span class="ph-mark">ab</span>');
+});
+
+test('a paper\'s citations, maths, symbols and panel captions stay', () => {
+  const page = '<p>As shown <span class="cite" contenteditable="false" data-cite="[]">(Lee, 2020)</span>, '
+    + '<span class="math editing" contenteditable="true"><span style="x">x^2</span></span> and <span class="sym" data-sym="mu">\\mu</span>.</p>'
+    + '<figure class="fig"><span class="subcap">left</span></figure>';
+  assert.equal(dropJunkSpans(page), page.replace('<span style="x">x^2</span>', 'x^2'));
+  // a class that only ends in a kept one's name is no kept span
+  assert.equal(dropJunkSpans('<span class="not-math">y</span>'), 'y');
 });
 
 test('a chapter with no spans is saved as it is', () => {

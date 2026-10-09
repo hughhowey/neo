@@ -14,6 +14,30 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 - Do not save UI decoration into chapter HTML. Search highlights, spellcheck underlines, and focus dimming use the CSS Highlight API so they stay out of the file.
 - Do not rewrite a chapter that has not changed. Libraries are synced with iCloud and Syncthing. A timer that writes every chapter on an interval will fight the other device.
 
+## Papers
+
+A book whose `book.json` says `"format": "paper"` is an academic paper. Right-click (long-press) a shelf's + for New Paper. What the feature is *for* (and the rules a new academic feature is checked against) is in [docs/writing-principles.md](docs/writing-principles.md); read it before adding to it. The feature lives in `paper/`: `paper.js` (the editor: title page, headings, citations, maths, figures, tables, the pane, menus, export glue), `library.js` (the References tab), and three plain modules the tests load in node: `references.js` (BibTeX, RIS and CSL JSON in; BibTeX out; DOIs; keys; the @ picker's ranking), `symbols.js` (LaTeX's names for characters, a paper's symbol definitions: their names, order and sync), `editing.js` (the editing pass's rules), `cite.js` (citeproc-js and the CSL styles in `paper/csl`) `journals.js` (each journal's page, habits, citation style and LaTeX class), `omml.js` (MathJax's MathML as Word equations) and `export.js` (LaTeX, Pandoc Markdown, one-file Markdown, plain text, EPUB, HTML and Word from a plain model of the paper). `app.js` calls in at a handful of hooks, each guarded by `isPaper()`.
+
+- Like a script, the paper is one chapter, so selection runs through it. Headings are `<p class="h1|h2|h3" data-id="sec-…">`; there are no *** breaks and Enter never splits a chapter.
+- Citations, cross-references and inline maths are uneditable spans (`.cite` with `data-cite` JSON, `.xref` with `data-ref`, `.math` holding its TeX); a display equation is `<p class="eq">` holding its TeX. Figures and tables are `<figure class="fig|tbl">` with editable captions and cells. The text inside each is saved, so a chapter file reads sensibly on its own.
+- Numbers (`data-num`), section hints (`data-hint`), a figure's `blob:` picture and `data-missing` are runtime only; `captureBody` strips them through `paperStrip`. Maths is drawn into a shadow root, which `innerHTML` never serializes.
+- Maths is edited in place (`editMath`): the span becomes editable and its shadow root shows the TeX through a `<slot>` beside a live drawing. The caret must sit in the TeX's text node (at an element boundary the engine settles it outside), keys are routed by where the caret is (`mathCaretIn`), not by the event target (the chapter is the editing host), and `paperStrip` saves the editing state as plain maths. While it's edited the TeX starts with a zero-width space (`MATH_HOLD`): without it, empty TeX takes no typing and TeX selected whole is typed over as the span itself. Read TeX with `texOf`, never `textContent`. Arrow keys, Backspace and Delete beside maths open it (`paperStepIn`), and the arrows at its ends close it. An equation being edited loses its `user-select: none`.
+- A cross-reference's saved text is in the journal's words (`NeoJournals.refLabel`: Fig. 2, Table 1, Section 3), never the interface language's, so two devices save the same chapter. Headings and equations that arrive without an id get one from their text and place (`paperIdFor`), the same on every device. A citation whose reference isn't in `references.json` (perhaps not synced yet) keeps its saved words and is only marked.
+- Lists are paragraphs too: `<p class="li" data-list="ul|ol">`, nested by `data-level` (2, 3); `- `, `* ` or `1. ` at a line's start makes one (`paperListKey`), Tab and ⇧Tab nest, numbers are runtime `data-num` (`paperListNumbers`).
+- Symbols are the paper's own notation, in `symbols.json` beside `references.json`: `[{ id, tex, meaning, unit, value, kind: 'parameter'|'variable', table, cite }]`, `id` being the name typed as `\id`. On the page a symbol is `<span class="sym" data-sym="id">` holding its TeX (kept to the definition by `paperSymbolsShown`); one whose definition is gone stays as its maths, marked. `\name` then a space or punctuation (`paperSymbolKey`) becomes a defined symbol, else LaTeX's character for it (`NeoSymbols.TEX_CHARS`: `\mu` → μ), never inside maths; the LaTeX export writes such characters back as commands so pdflatex compiles them. `/symbols` puts `<p class="symtab" data-kind="">` in the paper: empty in the file, the table drawn into its shadow root from the definitions (marked for the table, of its kind, in nomenclature order), its sources cited in reading order with the page's citations (`paperRenderCites`). The References tab has a Symbols view (`drawSymbols` in `library.js`); ⇧F10 beside maths can define one from it.
+- `/` on an empty line opens the @ picker's list of things to insert (`INSERT_COMMANDS`: figure, table, equation, citation, cross-reference, headings), found by a word or its LaTeX name (`/includegraphics`, `/section`, `/ref`). Anywhere else a `/` is a slash.
+- Editing is asked for, never shown while writing (docs/writing-principles.md, section 5). Edit → Editing Pass runs `NeoEditing.check` (`paper/editing.js`: plain string rules over the paragraphs' text, atoms as U+FFFC) plus `figureOrderFlags` and marks the results with the `neo-edit` highlight; ⌘' steps through them, and a right-click or ⇧F10 on one shows its note (`flag.key` translated with `flag.vars`) and its fix. View → First and Last Sentences dims each paragraph's middle with the `neo-skim` highlight (`NeoEditing.sentences`). Neither changes the file.
+- A venue's LaTeX template (NeurIPS, ICML, ICLR, ACL, a workshop's) is imported from Format → Journal → From a LaTeX Template…: `paper:template-import` keeps the cleaned files beside the paper as `template.zip` (`templatePath` drops absolute paths, `..` and zip litter), `NeoTemplate.read` (`paper/template.js`) finds its main `.tex`, kind, review switch and page limit, and that goes in `book.paper.template` with `book.paper.journal` set to `'template'`. The page and Preview take the venue's look (`NeoJournals.templateLook`: ICML, ICLR and ACL beside NeurIPS, else one made from the template's class options); the LaTeX export fills the template (`NeoTemplate.fill`), its preamble and files kept as given, its example text left out. NEO never bundles a venue's files. Removing the template sends `template.zip` to the system trash.
+- `book.paper.anonymous` (File → Anonymous for Review) makes `paperModel` leave out the authors, affiliations and the Acknowledgements, Funding and Author contributions sections (`anonymize`), so every preview and export is ready for double-blind review; the page keeps everything and says so under the authors.
+- File → Export → Talk Outline is `NeoPaperExport.talk`: `talk.md` for Pandoc, `talk-marp.md` for Marp, and the figures, its narrative from `model.moves` (the abstract's sentences sorted by `abstractMoves`, the same cues as the abstract guide).
+- Nothing in a paper needs the pointer. The arrows step into and out of maths, equations, captions and cells (`paperStepIn`, `figureKey`); Shift+F10 or the menu key opens what a click would, for where the caret is (`paperMenuKey`); ⌥↑ ⌥↓ move a section in the pane. A selection that deletes a whole figure or table sends its words to Darlings first.
+- A figure is one picture (`data-src` on the figure) or panels (`.panel[data-src]` with a `.subcap` each). Panels sit in one row unless the figure has `data-cols` (1–4 to a row); a panel may be `data-colspan` 2 or 3 wide. `panelRows` in `export.js` gives every export the same widths the page's CSS draws, a row not full centred, and moving or removing a panel relinks the cross-references to it (`relinkPanels`). Its layout is `data-width` (25/33/50/67), `data-wrap` (left/right: text beside it, `wrapfigure`), `data-place` (LaTeX float placement h/t/b/p, or H pinned) and `data-span="page"` (both columns: `figure*`); tables take `data-place` and `data-span` too.
+- `book.paper.journal` picks the journal (default `preprint`); choosing one also sets the citation style. File → Preview prints the paper's HTML, in the journal's CSS, through `paper:preview` into a PDF window; Preview As does the same in another journal's look and style, rendering the citations aside (`paperRenderCites`) so the page is untouched. The LaTeX export uses the journal's class; every journal's compiles (checked with tectonic).
+- The engine's `insertHTML` puts an uneditable span outside its paragraph at a line's end, so `placeAtom` inserts them by hand, snapshots the structure first and sends ⌘Z to the structural undo. `stripJunkSpans` unwraps every span but NEO's own (`KEPT_SPANS` in `app.js`: placeholders, `.cite`, `.xref`, `.math`, a panel's `.subcap`); add a new span class there.
+- References are `references.json` (CSL JSON, the citation key as `id`). Figures are `figure-<id>.<ext>` and a writer's own style is `style.csl`, all in the book folder, read and written through `paper:read` and `paper:write`, which accept only those names. A linked reference file's path lives in `userData/paper-links.json`, per machine (a synced path could name any file on another device); `paper:linked` reads only the path stored there. `paper:lookup` sends a DOI to doi.org, only when the writer asks; Pocket asks Crossref (DataCite for arXiv DOIs) directly. `paper:zotero` asks Zotero on 127.0.0.1 only (Better BibTeX's JSON-RPC `item.search`, else Zotero 7's local API) and backs off for a minute when nothing answers.
+- MathJax (`mathjax-full`) and citeproc-js load the first time a paper opens. MathJax runs without its `html`, `require` and `autoload` extensions (no `\href`, `\class`, `\style`), and `texSvg` strips any link from what it draws; only `es5/tex-svg-full.js` is packaged (`build.files`). citeproc is CPAL/AGPL; see `licenses/citeproc`. Styles and locales are CC BY-SA (`licenses/csl`).
+- `scripts/paper-*.test.js` test the plain modules (every Word and EPUB part goes through `xmllint` where it's installed); `npm run test:paper` drives a paper end to end in Electron and takes every way out, reading the .docx back with `textutil` and compiling the LaTeX with `tectonic` where they're installed (`NEO_SHOTS=<folder>` saves screenshots and the exports). The EPUB passes W3C EPUBCheck, and Microsoft Word opens the .docx with its equations as Word equations.
+
 ## Where the code is
 
 | File | Role |
@@ -29,12 +53,15 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `spell-worker.js` | Hunspell WASM, forked with `utilityProcess`. Messages: `load`, `check`, `suggest`, `add` |
 | `spell-ro.js` | Romanian diacritics, used by the worker. Does not alter the manuscript |
 | `locales/<code>.json` | One language. Regional files (`fr-CA.json`) hold only the strings that differ |
+| `paper/` | Papers: see Papers above |
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
 
-`app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export.
+`app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, command palette.
 
 Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app.js` handles it on `window.neo.onMenu`.
+
+The command palette (View → Command Palette…, ⌘⇧P; COMMAND PALETTE in `app.js`) is the menu read back: `commands:list` walks the live application menu and `commands:run` clicks the chosen item, so a new menu item is in the palette by itself and can't drift from it. Add a command to the menu, not to the palette. What has no menu item (a paper's `/` inserts, its sections) comes from `paperPaletteCommands`; a book's chapters are added in `openPalette`.
 
 ## Outline cards
 
@@ -95,7 +122,7 @@ index.html + app.js  →  preload.js (window.neo)  →  main.js  →  NEO Librar
                                                spell-worker.js
 ```
 
-The window is created with `contextIsolation: true` and `nodeIntegration: false`. New renderer capabilities are added in three places: an `ipcMain.handle` in `main.js`, a method on `window.neo` in `preload.js`, and the call site in `app.js`.
+The window is created with `contextIsolation: true` and `nodeIntegration: false`, and never navigates away from `index.html` or opens a window (`will-navigate`, `setWindowOpenHandler` in `createWindow`): `window.neo` would go with any page it showed. Open a link in the browser with `shell.openExternal`. New renderer capabilities are added in three places: an `ipcMain.handle` in `main.js`, a method on `window.neo` in `preload.js`, and the call site in `app.js`.
 
 ## Files on disk
 
@@ -117,6 +144,8 @@ NEO Library/
     stickies.json
     cover-<ts>.<ext>    writer-chosen image
     art-<ts>.<ext>      painted image, plus art.json
+    references.json     a paper's references (CSL JSON); symbols.json its symbols
+    template.zip        a paper's venue LaTeX template, when it has one
 ```
 
 App settings and the cover-art API key live in Electron `userData` (`settings.json`, `secrets.json`), not in the library. The key is encrypted with `safeStorage` when the OS allows it. Do not write secrets into the library.
@@ -152,7 +181,7 @@ node scripts/i18n.js template
 node scripts/i18n.js check fr
 ```
 
-`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, `index.html`, and Pocket's own `pocket/www/index.html` and `pocket/www/pocket-bridge.js`. A new string in another file will not enter the template until that list includes it. Pocket's page marks its words with the same `data-i18n*` attributes as the desktop's, and its ⋯ sheet and bridge use `t()`.
+`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, `paper/paper.js`, `paper/library.js`, `paper/editing.js` (whose notes are marked with a local `tk`), `index.html`, and Pocket's own `pocket/www/index.html` and `pocket/www/pocket-bridge.js`. A new string in another file will not enter the template until that list includes it. Pocket's page marks its words with the same `data-i18n*` attributes as the desktop's, and its ⋯ sheet and bridge use `t()`.
 
 Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 
@@ -162,7 +191,7 @@ Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.
 
 `pocket/` is a Capacitor app that runs the desktop editor. Its bridge (`pocket/www/pocket-bridge.js`) implements `window.neo` against the phone's library folder. Android shares `Documents/NEO Library` via sync. iOS uses the app folder, optionally iCloud, with `LibraryHome.swift` locating that folder.
 
-`scripts/pocket-www.js` (run by CI, and by hand before a local build) copies `app.js`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, `locales/`, Hunspell's browser build, and the `SPELL_LANGUAGES` dictionaries from `main.js` into `pocket/www/`. Pocket's checker is `pocket/www/pocket-spell.js`, a module worker with the same messages as `spell-worker.js`. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app.js`.
+`scripts/pocket-www.js` (run by CI, and by hand before a local build) copies `app.js`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, `locales/`, `paper/` with MathJax and citeproc-js, Hunspell's browser build, and the `SPELL_LANGUAGES` dictionaries from `main.js` into `pocket/www/`. Pocket's checker is `pocket/www/pocket-spell.js`, a module worker with the same messages as `spell-worker.js`. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app.js`.
 
 ## Commands
 
@@ -174,6 +203,7 @@ npm run test:coverage      # node --test --experimental-test-coverage scripts/*.
 npm run lint               # oxlint, Electron's standard-style JavaScript rules
 npm run test:spellcheck    # node --test scripts/spellcheck.test.js
 npm run test:dashes        # node --test scripts/dashes.test.js
+npm run test:paper         # a paper written and exported end to end, in Electron
 npm run bundle             # Hugh: brings in the newest .bundle from ~/Downloads and pushes main
 npm run release            # Hugh: next version (x.y.9 → x.(y+1).0), commit, push, tag (npm run release -- 2.0.0 for another)
 npm run package:mac        # macOS build; npm run package calls this

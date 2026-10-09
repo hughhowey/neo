@@ -1,0 +1,19 @@
+citeproc-js citation processor
+
+NEO sets a paper's citations and reference list with citeproc-js 2.4.63
+(the npm package citeproc, by Frank Bennett), the processor inside Zotero
+and Mendeley. It ships unmodified in app.asar under node_modules/citeproc,
+and NEO Pocket carries the same file as paper/vendor/citeproc.js.
+
+citeproc-js is dual-licensed under the Common Public Attribution License
+1.0 (CPAL) or the GNU Affero General Public License 3.0 (AGPL). NEO
+distributes it under the CPAL option; its notice is upstream-license.txt
+beside this file, and the license text is at
+  https://opensource.org/license/cpal_1-0
+NEO's MIT license does not replace citeproc-js's license, and NEO does not
+remove the alternative.
+
+Source availability
+
+NEO does not modify citeproc-js. Its source:
+  https://github.com/Juris-M/citeproc-js
