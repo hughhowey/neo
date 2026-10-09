@@ -228,6 +228,8 @@ function writeLibrary(lib = library) {
 // keeps its own.
 const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'focus', 'posMode', 'outlineView', 'vimKeys'];
 const DEVICE_LOOK_KEY = 'neo-device-look';
+const EDITOR_SIZE_MIN = 8;
+const EDITOR_SIZE_MAX = 22;
 function deviceLookOf(lib) {
   const out = {};
   for (const k of DEVICE_LOOK) if (lib && lib[k] !== undefined) out[k] = lib[k];
@@ -12955,7 +12957,7 @@ function applyFonts() {
   document.documentElement.style.setProperty('--ui-zoom', uiZoom);
   document.documentElement.classList.toggle('ui-zoomed', uiZoom > 1);
   if (window.neo.uiZoomState) window.neo.uiZoomState(uiZoom);
-  const size = Math.min(22, Math.max(14, library.editorFontSize || 17));
+  const size = Math.min(EDITOR_SIZE_MAX, Math.max(EDITOR_SIZE_MIN, library.editorFontSize || 17));
   document.documentElement.style.setProperty('--editor-size', size + 'px');
   applyPageZoom();
 }
@@ -15110,7 +15112,7 @@ async function setEditorFontSize(value) {
     return;
   }
   const cur = library.editorFontSize || 17;
-  library.editorFontSize = value === 0 ? 17 : Math.min(22, Math.max(14, cur + value));
+  library.editorFontSize = value === 0 ? 17 : Math.min(EDITOR_SIZE_MAX, Math.max(EDITOR_SIZE_MIN, cur + value));
   if (value === 0) rememberZoom(pageZoomKey(), 1); // ⌘0 resets this mode's pinch zoom too
   await writeLibrary(library);
   keepReadingPlace(applyFonts);
