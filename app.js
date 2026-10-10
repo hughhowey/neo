@@ -7607,6 +7607,40 @@ $$('.tab').forEach((tab) => {
   });
 });
 
+// ---- darlings drag rules:
+// A selection collapses when the very next mousedown lands inside it. On macOS that quick
+// mousedown is the start of the drag itself, so dragging freshly selected text to Darlings
+// did nothing: the selection collapsed before a drag could begin (#325). Keep the browser's
+// default action for a moment after the selection was made, so the drag survives it; past the
+// window a click collapses the selection as it always did.
+const DRAG_KEEP_SELECTION_MS = 800;
+function keepsSelectionForDrag(collapsed, madeAt, now) {
+  return !collapsed && now - madeAt <= DRAG_KEEP_SELECTION_MS;
+}
+// ---- end of darlings drag rules ----
+
+let selectionMadeAt = 0;
+document.addEventListener('mouseup', () => {
+  const sel = window.getSelection();
+  if (sel.rangeCount && !sel.isCollapsed) selectionMadeAt = Date.now();
+});
+document.addEventListener(
+  'mousedown',
+  (e) => {
+    if (currentTab !== 'manuscript') return;
+    const sel = window.getSelection();
+    if (!keepsSelectionForDrag(sel.isCollapsed, selectionMadeAt, Date.now())) return;
+    const range = sel.getRangeAt(0);
+    const node = e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
+    if (!node || !node.closest || !node.closest('.chapter-body') || !range.intersectsNode(node)) return;
+    const start = range.startContainer.parentElement;
+    if (!start || !start.closest || !start.closest('.chapter-body')) return;
+    // The selection stays, so a drag can start from inside it. Every other click is untouched.
+    e.preventDefault();
+  },
+  true,
+);
+
 // Darlings tab is a drop target for selected text
 const darlingsTab = $('.tab.darlings');
 // The selection usually collapses by the time a drag lands on the Darlings
