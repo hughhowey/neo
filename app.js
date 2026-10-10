@@ -226,7 +226,7 @@ function writeLibrary(lib = library) {
 // library's copy is the last device's, so a device opening the library for
 // the first time starts out the way the writer last had it, and from then on
 // keeps its own.
-const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'focus', 'posMode', 'outlineView', 'vimKeys'];
+const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'focus', 'posMode', 'outlineView', 'vimKeys', 'pagedView', 'twoPageView'];
 const DEVICE_LOOK_KEY = 'neo-device-look';
 const EDITOR_SIZE_MIN = 8;
 const EDITOR_SIZE_MAX = 22;
@@ -2689,6 +2689,7 @@ function renderChapters() {
     spRepaginate();
     if (document.fonts) document.fonts.load('1em "Courier Prime"').then(() => spSchedule(0)).catch(() => {});
   }
+  applyPaged();
   renderNav();
 }
 
@@ -3152,6 +3153,21 @@ function styleKeepScroll(e) {
   return true;
 }
 
+// the piece of a chapter's text (one page's worth) nearest a point
+function nearestPageText(x, y) {
+  let best = null;
+  for (const body of document.querySelectorAll('#chapters .chapter-body')) {
+    if (!body.isContentEditable) continue;
+    for (const rect of body.getClientRects()) {
+      const dx = Math.max(rect.left - x, 0, x - rect.right);
+      const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+      const d = dx * dx + dy * dy;
+      if (!best || d < best.d) best = { d, body, rect };
+    }
+  }
+  return best;
+}
+
 // A click on the page's empty space puts the caret where it means: below
 // the text, at the end of that chapter; in the margin beside a line, on that
 // line; above the first line, at the start. Margins, the space under the
@@ -3164,6 +3180,26 @@ function caretFromEmptyClick(e) {
   if (!t || !t.closest || t.closest('[contenteditable="true"], input, textarea, button, a, .pop-menu, .ph-mark, #title-page')) return;
   if (t.closest('.chapter-head') && t !== t.closest('.chapter-head')) return; // its number and title answer clicks themselves
   if (!(t.matches('.chapter, .chapter-head, #chapters, #paper, #paper-scroll, #editor-view'))) return;
+  if (document.body.classList.contains('paged')) {
+    // cut into pages: the nearest page's text takes the click, margins and gaps included
+    const hit = nearestPageText(e.clientX, e.clientY);
+    if (!hit) return;
+    e.preventDefault();
+    const { body: pageBody, rect: box } = hit;
+    const pageChId = pageBody.closest('.chapter').dataset.id;
+    const px = Math.min(Math.max(e.clientX, box.left + 2), box.right - 2);
+    const py = Math.min(Math.max(e.clientY, box.top + 2), box.bottom - 2);
+    const at = document.caretRangeFromPoint(px, py);
+    if (!at || !pageBody.contains(at.startContainer)) { focusChapter(pageChId); return; }
+    pageBody.focus({ preventScroll: true });
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(at);
+    currentChapterId = pageChId;
+    highlightNav();
+    updateCounters();
+    return;
+  }
   // the chapter whose page this is, or the one just above a gap
   let sec = t.closest('.chapter');
   if (!sec) {
@@ -8303,6 +8339,15 @@ function orderSectionNotes(chId) {
 // desktop set. `library.pageZoom` / `library.cardZoom` stay as the fallback for devices that have
 // not chosen yet, which keeps an existing zoom as the default.
 const PAGE_ZOOM_RANGE = { min: 0.75, max: 3 };
+// The Pages view (Format → Show Pages) lets the page shrink further, so that
+// two fit side by side in a window of any size
+const PAGES_ZOOM_MIN = 0.4;
+let pagedEnabled = false;
+let twoPageEnabled = false;
+let pagesQueued = false;
+const pagesDirty = new Set();
+const pagesOn = () => pagedEnabled && !isScript();
+const pageZoomRange = () => ({ min: pagesOn() ? PAGES_ZOOM_MIN : PAGE_ZOOM_RANGE.min, max: PAGE_ZOOM_RANGE.max });
 const CARD_ZOOM_RANGE = { min: 0.55, max: 1.5 };
 const CARD_ZOOM_KEY = 'neo.cardZoom';
 const pageZoomKey = () => 'neo.pageZoom.' + (isScript() ? 'script' : 'novel');
@@ -8324,10 +8369,105 @@ function rememberZoom(key, value) {
   try { localStorage.setItem(key, String(value)); } catch { /* storage can be off */ }
 }
 
-const activePageZoom = () => readStoredZoom(pageZoomKey(), library.pageZoom || 1, PAGE_ZOOM_RANGE);
+const activePageZoom = () => readStoredZoom(pageZoomKey(), library.pageZoom || 1, pageZoomRange());
 function applyPageZoom() {
   document.documentElement.style.setProperty('--page-zoom', activePageZoom());
   updateZoomDisplay();
+  fitSpread();
+  queuePages(true);
+}
+
+// ---- Pages view (Format → Show Pages, Two Pages Side by Side) ----
+// The chapters can be shown as separate pages, like a word processor's. The
+// text is the same text: styles.css cuts #chapters into page-high columns.
+// This side decides when that applies (never for a script, which has pages
+// of its own), when two pages fit side by side, and how many pages each
+// chapter runs to, so that its last page is a whole page too.
+const PAGES_GAP = 28; // px between pages at 100%: styles.css --pg-gap-base
+
+function applyPaged() {
+  fitSpread();
+  if (window.neo.pagesState) window.neo.pagesState({ paged: pagedEnabled, twoUp: twoPageEnabled }); // the Format menu's ticks
+  queuePages(true);
+}
+
+// the width of a page at 100%, as styles.css has it (it follows the window)
+function pageWidthPx() {
+  let probe = $('#pg-probe');
+  if (!probe) {
+    probe = document.createElement('div');
+    probe.id = 'pg-probe';
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;height:0;width:var(--page-w)';
+    document.body.appendChild(probe);
+  }
+  return probe.offsetWidth;
+}
+
+// The pages are shown for a book (not a script) when the writer has them on,
+// and two to a row once two fit the window at this zoom
+function fitSpread() {
+  document.body.classList.toggle('paged', pagesOn());
+  let two = false;
+  if (pagesOn() && twoPageEnabled) {
+    const view = $('#editor-view');
+    const room = view.hidden ? 0 : view.clientWidth * 0.94;
+    two = (2 * pageWidthPx() + PAGES_GAP) * activePageZoom() + 24 <= room;
+  }
+  document.body.classList.toggle('pages-two', two);
+}
+
+function queuePages(all, sec) {
+  if (all) pagesDirty.add('*');
+  else if (sec) pagesDirty.add(sec);
+  if (pagesQueued) return;
+  pagesQueued = true;
+  requestAnimationFrame(() => { pagesQueued = false; fitPages(); });
+}
+
+// A chapter's last page is cut short where its words end, and a page the
+// words don't fill should still be a page: tell each chapter how many it
+// runs to (the pieces its text is in), and styles.css sets its height to that.
+function fitPages() {
+  const all = pagesDirty.has('*');
+  const todo = all ? $$('#chapters .chapter') : [...pagesDirty];
+  pagesDirty.clear();
+  if (!document.body.classList.contains('paged')) return;
+  for (const sec of todo) {
+    if (!sec.isConnected) continue;
+    const text = sec.querySelector('.chapter-body:not([hidden])') || sec.querySelector('.toc-list');
+    const n = text ? Math.max(1, text.getClientRects().length) : 1;
+    if (sec.dataset.pg !== String(n)) {
+      sec.dataset.pg = n;
+      sec.style.setProperty('--pg-n', n);
+    }
+  }
+}
+new MutationObserver((records) => {
+  if (!document.body.classList.contains('paged')) return;
+  for (const r of records) {
+    const el = r.target.nodeType === Node.ELEMENT_NODE ? r.target : r.target.parentElement;
+    const sec = el && el.closest ? el.closest('.chapter') : null;
+    if (sec) queuePages(false, sec); else queuePages(true);
+  }
+}).observe($('#chapters'), { childList: true, characterData: true, subtree: true });
+new ResizeObserver(() => { fitSpread(); queuePages(true); }).observe($('#editor-view'));
+window.addEventListener('resize', () => { fitSpread(); queuePages(true); });
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => queuePages(true));
+
+function togglePaged() {
+  pagedEnabled = !pagedEnabled;
+  library.pagedView = pagedEnabled;
+  writeLibrary(library);
+  keepReadingPlace(() => { applyPageZoom(); applyPaged(); });
+}
+function toggleTwoPage() {
+  if (!pagedEnabled) return; // greyed out in the menu until the pages are shown
+  twoPageEnabled = !twoPageEnabled;
+  library.twoPageView = twoPageEnabled;
+  writeLibrary(library);
+  keepReadingPlace(() => applyPaged());
+  if (twoPageEnabled && !document.body.classList.contains('pages-two')) toast(t('Zoom out until two pages fit side by side'));
 }
 
 function cardZoom() { return readStoredZoom(CARD_ZOOM_KEY, library.cardZoom || 1, CARD_ZOOM_RANGE); }
@@ -10389,7 +10529,9 @@ function walkNoteUpdate() {
   const note = at && at.id ? sectionNote(at.chId, at.id) : null;
   if (!note || !note.text || note.dismissed) { hideWalkNote(); return; }
   const chapter = body.closest('.chapter');
-  if (!walkEl || !walkEl.isConnected || walkEl.parentElement !== chapter || walkEl.dataset.sec !== note.id) {
+  // cut into pages, a chapter's sheet is in pieces, and the note sits on the paper instead
+  const host = document.body.classList.contains('paged') ? $('#paper') : chapter;
+  if (!walkEl || !walkEl.isConnected || walkEl.parentElement !== host || walkEl.dataset.sec !== note.id) {
     hideWalkNote();
     walkEl = document.createElement('div');
     walkEl.className = 'walk-note';
@@ -10411,7 +10553,7 @@ function walkNoteUpdate() {
       hideWalkNote();
     });
     walkEl.append(text, dismiss);
-    chapter.appendChild(walkEl);
+    host.appendChild(walkEl);
   }
   if (walkP !== p) {
     for (const q of body.querySelectorAll('p[data-walk]')) if (q !== p) q.removeAttribute('data-walk');
@@ -10423,14 +10565,16 @@ function walkNoteUpdate() {
 
 function placeWalkNote() {
   if (!walkEl || !walkP || !walkP.isConnected) return;
-  const chapter = walkEl.parentElement;
+  const host = walkEl.parentElement; // the chapter, or the paper when it is cut into pages
   const body = walkP.parentElement;
-  const c = chapter.getBoundingClientRect();
-  const b = body.getBoundingClientRect();
+  const c = host.getBoundingClientRect();
+  // a paragraph can run over a page break: the note goes under its last piece, in that page's column
+  const pieces = walkP.getClientRects();
+  const p = pieces.length ? pieces[pieces.length - 1] : walkP.getBoundingClientRect();
+  const b = [...body.getClientRects()].find((r) => p.left >= r.left - 1 && p.right <= r.right + 1 && p.top >= r.top - 1 && p.bottom <= r.bottom + 1) || body.getBoundingClientRect();
   walkEl.style.left = (b.left - c.left) + 'px';
   walkEl.style.width = b.width + 'px';
-  chapter.style.setProperty('--walk-h', (walkEl.offsetHeight + 8) + 'px');
-  const p = walkP.getBoundingClientRect();
+  walkP.closest('.chapter').style.setProperty('--walk-h', (walkEl.offsetHeight + 8) + 'px');
   walkEl.style.top = (p.bottom - c.top + 2) + 'px';
 }
 
@@ -13075,11 +13219,17 @@ function keepReadingPlace(change, at) {
 
 function setPageZoom(next, at) {
   // up to 300%: on a large monitor 160% still read small. The page itself
-  // never grows past the window (max-width in styles.css), only the type does.
-  next = Math.min(3, Math.max(0.75, next));
+  // never grows past the window (max-width in styles.css), only the type does;
+  // in the Pages view a page keeps its shape, and a window too small for it scrolls.
+  const range = pageZoomRange();
+  next = Math.min(range.max, Math.max(range.min, next));
   if (next === activePageZoom()) return;
   rememberZoom(pageZoomKey(), next);
-  keepReadingPlace(() => document.documentElement.style.setProperty('--page-zoom', next), at);
+  keepReadingPlace(() => {
+    document.documentElement.style.setProperty('--page-zoom', next);
+    fitSpread(); // two pages to a row, or back to one
+    queuePages(true);
+  }, at);
   updateZoomDisplay();
 }
 let cardWheel = 0;
@@ -15154,6 +15304,8 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
   if (msg.type === 'reshelve') reshelveBook();
   if (msg.type === 'typewriter') toggleTypewriter();
+  if (msg.type === 'pagedView') togglePaged();
+  if (msg.type === 'twoPageView') toggleTwoPage();
   if (msg.type === 'vim') toggleVim();
   if (msg.type === 'focus') setFocus(msg.value);
   if (msg.type === 'focusCycle') cycleFocus();
@@ -15473,6 +15625,10 @@ loadLibrary().then(() => {
   applyFonts();
   typewriterEnabled = !!library.typewriter;
   applyTypewriter();
+  pagedEnabled = !!library.pagedView;
+  twoPageEnabled = !!library.twoPageView;
+  applyPageZoom(); // the page zoom's range depends on the pages
+  applyPaged();
   vimEnabled = !!library.vimKeys;
   applyVim();
   focusLevel = FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';
