@@ -17,6 +17,9 @@
   --page-w: clamp(680px, 44vw, 760px);
   /* the room the scrollbar and the page's own shadow need beside it */
   --page-gutter: 80px;
+  /* how wide everything laid out as the manuscript is: one page, or, in the
+     Pages view with two pages side by side, a spread (see "Pages view") */
+  --sheet-w: var(--page-w);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -629,7 +632,7 @@ body.night #aux-editor * { color: inherit; }
 #paper-scroll {
   position: absolute; top: 0; bottom: 40px;
   left: 50%; transform: translateX(-50%);
-  width: min(calc((var(--page-w) + var(--page-gutter)) * var(--page-zoom, 1)), 94%);
+  width: min(calc((var(--sheet-w) + var(--page-gutter)) * var(--page-zoom, 1)), 94%);
   overflow-y: auto;
 }
 
@@ -641,7 +644,7 @@ body.night #aux-editor * { color: inherit; }
 
 /* Each page of the book is its own sheet of paper */
 #paper {
-  width: calc(var(--page-w) * var(--page-zoom, 1)); max-width: 92%;
+  width: calc(var(--sheet-w) * var(--page-zoom, 1)); max-width: 92%;
   margin: 40px auto 120px;
 }
 /* typewriter scrolling: room below the last line so it can sit mid-screen
@@ -676,6 +679,47 @@ body.focus-mode:not(.no-dropcap) .chapter-body.focus-cap:not(.cap-off):not(.no-c
   box-shadow: 0 4px 30px rgba(0,0,0,0.5);
   min-height: 85vh;
 }
+
+/* --- Pages view (Format → Show Pages) ---
+   The chapters are shown as separate pages the shape of a sheet of paper,
+   with the gap between them a word processor draws. Nothing is added to the
+   text: #chapters becomes a stack of columns one page high (column-height,
+   column-wrap), the chapters' sheets flow through them, and
+   box-decoration-break: clone gives each piece of a sheet its own paper,
+   margins and shadow. Every chapter starts on a fresh page. app.js sets
+   --pg-n, the pages a chapter runs to, so that its last page is a whole page
+   too; Two Pages Side by Side (body.pages-two, set when two fit the window)
+   makes the stack two columns wide. A script has pages of its own. */
+body.paged {
+  --pg-ratio: 1.4142; /* page height / width: A4. US Letter is 1.2941 */
+  --pg-gap-base: 28px;
+  --pg-w: calc(var(--page-w) * var(--page-zoom, 1));
+  --pg-h: round(calc(var(--pg-w) * var(--pg-ratio)), 1px); /* whole pixels, so a chapter's pages add up exactly */
+  --pg-m: calc(var(--pg-w) * 0.12); /* the margins, about an inch */
+  --pg-gap: calc(var(--pg-gap-base) * var(--page-zoom, 1));
+}
+body.paged.pages-two { --sheet-w: calc(var(--page-w) * 2 + var(--pg-gap-base)); }
+/* a page keeps its shape: zoomed past the window it scrolls sideways */
+body.paged #paper:not(.script) { max-width: none; position: relative; }
+body.paged #paper:not(.script) #chapters {
+  column-count: 1; column-height: var(--pg-h); column-wrap: wrap; column-fill: auto;
+  column-gap: var(--pg-gap); row-gap: var(--pg-gap);
+}
+body.paged.pages-two #paper:not(.script) #chapters { column-count: 2; }
+body.paged #paper:not(.script) .chapter.sheet {
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  break-before: column;
+  padding: var(--pg-m);
+  margin: 0;
+  min-height: calc(var(--pg-n, 1) * var(--pg-h) - 0.5px); /* (half a pixel under, or rounding adds a page) */
+}
+body.paged #paper:not(.script) #title-page {
+  width: var(--pg-w); height: var(--pg-h); min-height: 0;
+  margin: 0 auto var(--pg-gap); padding: var(--pg-m);
+}
+/* a page zoomed out is the whole page smaller, the title page's lines too */
+body.paged #paper:not(.script) #tp-subtitle { font-size: calc(17px * var(--page-zoom, 1)); margin-top: calc(14px * var(--page-zoom, 1)); min-height: 0; }
+body.paged #paper:not(.script) #tp-author { font-size: calc(14px * var(--page-zoom, 1)); margin-top: calc(46px * var(--page-zoom, 1)); letter-spacing: calc(3px * var(--page-zoom, 1)); }
 
 /* --- Title page: a sheet of its own --- */
 #title-page {
@@ -1128,7 +1172,7 @@ body.focus-mode .walk-note { opacity: 0.6; }
 #nav-hotzone { position: fixed; left: 0; top: 0; bottom: 40px; width: 18px; z-index: 60; }
 /* the panes wake from well inside the margins, never over the page itself */
 #nav-hotzone, #side-hotzone {
-  width: clamp(18px, calc((100vw - min((var(--page-w) + var(--page-gutter)) * var(--page-zoom, 1), 94vw)) / 2 - 24px), 96px);
+  width: clamp(18px, calc((100vw - min((var(--sheet-w) + var(--page-gutter)) * var(--page-zoom, 1), 94vw)) / 2 - 24px), 96px);
 }
 #nav-pane {
   position: fixed; left: 0; top: 0; bottom: 40px; width: 248px;

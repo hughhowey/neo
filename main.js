@@ -2242,6 +2242,15 @@ ipcMain.on('typewriter:state', (_e, on) => {
   typewriterState = on;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// Format → Show Pages, and Two Pages Side by Side (which needs the first)
+let pagesState = { paged: false, twoUp: false };
+ipcMain.on('pages:state', (_e, st) => {
+  st = st || {};
+  const next = { paged: !!st.paged, twoUp: !!st.twoUp };
+  if (next.paged === pagesState.paged && next.twoUp === pagesState.twoUp) return;
+  pagesState = next;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
 // View → Vim Keys shows whether they're on
 let vimState = false;
 ipcMain.on('vim:state', (_e, on) => {
@@ -2477,6 +2486,22 @@ function buildMenu() {
         { label: t('Larger Text'), accelerator: 'CmdOrCtrl-Plus', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
         { label: t('Smaller Text'), accelerator: 'CmdOrCtrl-Minus', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
         { label: t('Reset Text Size'), accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
+        { type: 'separator', visible: !scriptState.on },
+        {
+          visible: !scriptState.on, // a script has its own pages
+          label: t('Show Pages'),
+          type: 'checkbox',
+          checked: pagesState.paged,
+          click: () => sendToWindow({ type: 'pagedView' })
+        },
+        {
+          visible: !scriptState.on,
+          label: t('Two Pages Side by Side'),
+          type: 'checkbox',
+          checked: pagesState.twoUp,
+          enabled: pagesState.paged, // greyed out until the pages are shown
+          click: () => sendToWindow({ type: 'twoPageView' })
+        },
         { type: 'separator' },
         {
           label: t('Typewriter Scrolling'),

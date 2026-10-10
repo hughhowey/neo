@@ -591,6 +591,7 @@
   "Shot": "",
   "Show All": "",
   "Show NEO’s painting": "",
+  "Show Pages": "",
   "Show the abstract": "",
   "Show your cover art": "",
   "Shown on that name’s title pages": "",
@@ -697,6 +698,7 @@
   "Try Again": "",
   "Turn a chapter into a section": "",
   "Turn a section into a chapter": "",
+  "Two Pages Side by Side": "",
   "Typed around a word (or pasted). Undo right after keeps the asterisks. Format → Markdown Emphasis turns it off.": "",
   "Typeface": "",
   "Typewriter scrolling": "",
@@ -771,5 +773,6 @@
   "Your words stay on the page until it can.": "",
   "Zoom": "",
   "Zoom in": "",
-  "Zoom out": ""
+  "Zoom out": "",
+  "Zoom out until two pages fit side by side": ""
 }
