@@ -12,6 +12,7 @@
     "test:words": "electron scripts/words.e2e.js",
     "test:tabs": "electron scripts/tabs.e2e.js",
     "test:caret": "electron scripts/caret.e2e.js",
+    "test:pages": "electron scripts/pages.e2e.js",
     "test": "node --test \"scripts/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"scripts/*.test.js\"",
     "lint": "oxlint",
