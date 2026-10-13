@@ -292,7 +292,8 @@ describe('what may travel', () => {
     }
     for (const bad of ['../x.json', 'book-a/../../x.json', 'book-a/..', '_design/neo', 'Backups/neo-backup.zip', 'book-a/book.json.bak',
       'book-a/book.json.tmp', 'book-a/.DS_Store', 'neo-errors.log', '_catalog.txt', 'book-a/x/y.html', 'book-a/chapters/../../z.html',
-      'book-a\\..\\z.html', 'book-a/con:1.html', 'other/book.json', 'book-a/chapters/ch.html/extra']) {
+      'book-a\\..\\z.html', 'book-a/con:1.html', 'other/book.json', 'book-a/chapters/ch.html/extra',
+      'book-a/.git/HEAD', 'book-a/.git/objects/ab/cdef.json', 'book-a/.gitignore', 'book-a/chapters/.gitignore']) {
       assert.equal(validPath(bad), false, bad);
     }
   });
