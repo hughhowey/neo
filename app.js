@@ -226,7 +226,7 @@ function writeLibrary(lib = library) {
 // library's copy is the last device's, so a device opening the library for
 // the first time starts out the way the writer last had it, and from then on
 // keeps its own.
-const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'focus', 'posMode', 'outlineView', 'vimKeys'];
+const DEVICE_LOOK = ['pageTheme', 'uiBright', 'uiBrightAside', 'uiZoom', 'editorFontSize', 'typewriter', 'nbspMarks', 'focus', 'posMode', 'outlineView', 'vimKeys'];
 const DEVICE_LOOK_KEY = 'neo-device-look';
 function deviceLookOf(lib) {
   const out = {};
@@ -2696,6 +2696,7 @@ function renderChapters() {
     healStrayNbsp(body);
     wireChapterBody(body, chId);
   });
+  if (nbspMarksEnabled) paintNonBreakingMarks();
   if (isScript()) {
     // the pages are counted before the pane lists the scenes; again once
     // Courier Prime has arrived, in case the first count was in another face
@@ -2837,6 +2838,7 @@ function wireChapterBody(body, chId) {
     chapterHTML[chId] = captureBody(body);
     wordCache[chId] = null;
     scheduleChapterSave(chId);
+    if (nbspMarksEnabled) paintNonBreakingMarks();
     if (spellOn) scheduleSpellRescan(chId, body);
     updateCounters();
     scheduleNavRefresh();
@@ -13265,6 +13267,7 @@ function showSpellMenu(x, y, word, suggestions, actions) {
 }
 
 let typewriterEnabled = false;
+let nbspMarksEnabled = false;
 
 // ---- look up rules:
 // macOS shows the system dictionary for a selected word; the menu only makes sense for one word,
@@ -13317,6 +13320,19 @@ function typewriterRoom() {
 }
 new ResizeObserver(() => typewriterRoom()).observe($('#chapters'));
 window.addEventListener('resize', typewriterRoom);
+function applyNbspMarks() {
+  if (window.neo.nbspMarksState) window.neo.nbspMarksState(nbspMarksEnabled); // the Format menu's tick
+  paintNonBreakingMarks();
+}
+function toggleNbspMarks() {
+  nbspMarksEnabled = !nbspMarksEnabled;
+  library.nbspMarks = nbspMarksEnabled;
+  writeLibrary(library);
+  applyNbspMarks();
+  toast(nbspMarksEnabled
+    ? t('Non-breaking marks ON — the spaces and hyphens that hold a line together are tinted')
+    : t('Non-breaking marks off'));
+}
 function toggleTypewriter() {
   typewriterEnabled = !typewriterEnabled;
   library.typewriter = typewriterEnabled;
@@ -15005,6 +15021,51 @@ function healStrayNbsp(root) {
   }
   return changed;
 }
+// ---- non-breaking marks: the characters a wrap must not break at, and the
+// range rule behind the Format menu's Non-Breaking Marks option. The three are
+// U+00A0 no-break space, U+202F narrow no-break space and U+2011 no-break
+// hyphen; all get the same unobtrusive light gray, the way Word and
+// LibreOffice show them — one "this character is special", not a colour code.
+// A streak of the same character is one run.
+const NB_CHARS = { '\u00a0': 'space', '\u202f': 'narrow', '\u2011': 'hyphen' };
+function nonBreakingRuns(text) {
+  const runs = [];
+  let i = 0;
+  while (i < text.length) {
+    const kind = NB_CHARS[text[i]];
+    if (!kind) { i += 1; continue; }
+    let j = i + 1;
+    while (j < text.length && text[j] === text[i]) j += 1;
+    runs.push({ start: i, end: j, kind });
+    i = j;
+  }
+  return runs;
+}
+
+// Paints those characters in every open chapter with the CSS Highlight API,
+// so the marks never enter the chapter HTML — the same door search,
+// spellcheck and focus use. Off means nothing is painted at all.
+const NB_MARK_NAME = 'neo-nb-mark';
+function paintNonBreakingMarks() {
+  if (!(window.CSS && CSS.highlights && window.Highlight)) return;
+  CSS.highlights.delete(NB_MARK_NAME);
+  if (!nbspMarksEnabled) return;
+  const marks = new Highlight();
+  for (const body of $$('#chapters .chapter-body')) {
+    const walk = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      for (const run of nonBreakingRuns(node.data)) {
+        const range = document.createRange();
+        range.setStart(node, run.start);
+        range.setEnd(node, run.end);
+        marks.add(range);
+      }
+    }
+  }
+  CSS.highlights.set(NB_MARK_NAME, marks);
+}
+// ---- end of non-breaking marks ----
 function paraRuns(pHtml, flip) {
   const holder = document.createElement('template'); // inert: nothing loads or runs
   holder.innerHTML = pHtml;
@@ -16025,6 +16086,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
   if (msg.type === 'reshelve') reshelveBook();
   if (msg.type === 'typewriter') toggleTypewriter();
+  if (msg.type === 'nbspMarks') toggleNbspMarks();
   if (msg.type === 'vim') toggleVim();
   if (msg.type === 'focus') setFocus(msg.value);
   if (msg.type === 'focusCycle') cycleFocus();
@@ -16344,6 +16406,8 @@ loadLibrary().then(() => {
   applyFonts();
   typewriterEnabled = !!library.typewriter;
   applyTypewriter();
+  nbspMarksEnabled = !!library.nbspMarks;
+  applyNbspMarks();
   vimEnabled = !!library.vimKeys;
   applyVim();
   focusLevel = FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';

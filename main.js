@@ -2242,6 +2242,14 @@ ipcMain.on('typewriter:state', (_e, on) => {
   typewriterState = on;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// Format → Non-Breaking Marks shows whether the tint is on
+let nbspMarksState = false;
+ipcMain.on('nbspmarks:state', (_e, on) => {
+  on = !!on;
+  if (on === nbspMarksState) return;
+  nbspMarksState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
 // View → Vim Keys shows whether they're on
 let vimState = false;
 ipcMain.on('vim:state', (_e, on) => {
@@ -2484,6 +2492,12 @@ function buildMenu() {
           type: 'checkbox',
           checked: typewriterState,
           click: () => sendToWindow({ type: 'typewriter' })
+        },
+        {
+          label: t('Non-Breaking Marks'),
+          type: 'checkbox',
+          checked: nbspMarksState,
+          click: () => sendToWindow({ type: 'nbspMarks' })
         },
         { type: 'separator' },
         // tick when the caret sits in one; the keys are the editor's own

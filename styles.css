@@ -638,6 +638,9 @@ body.night #aux-editor * { color: inherit; }
 ::highlight(neo-search-current) { background: #c9a86a; color: #1c1c1c; }
 /* the sentence Read Aloud is on (⌘⇧U) */
 ::highlight(neo-speak) { background: rgba(201, 168, 106, 0.28); }
+/* Non-Breaking Marks (Format menu): the spaces and hyphens a wrap must not
+   break at — U+00A0, U+202F and U+2011 — in one unobtrusive light gray */
+::highlight(neo-nb-mark) { background: rgba(127, 127, 127, 0.25); }
 
 /* Each page of the book is its own sheet of paper */
 #paper {
