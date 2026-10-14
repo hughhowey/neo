@@ -2330,6 +2330,24 @@ function buildMenu() {
     : isWin
       ? ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia', 'Jost', 'iA Writer Quattro']
       : ['Gelasio', 'TeX Gyre Pagella', 'Libre Baskerville', 'Alegreya', 'Source Serif Pro', 'Jost', 'iA Writer Quattro'];
+  // Keys the page answers itself, shown in the menu's shortcut column (a tab
+  // in the label is no column on macOS: it printed as text, #372). Windows
+  // and Linux leave an unregistered key to the page. macOS still makes it the
+  // item's key equivalent, which runs when the page lets the key through, as
+  // ⇧Enter over a selection or in a box: that press is the page's, so the
+  // item lets it go and puts back the tick it flipped. A click, or Return in
+  // the open menu, still runs it.
+  const pageKey = (accelerator, run) => ({
+    accelerator,
+    registerAccelerator: false,
+    click: (_item, _win, e) => {
+      const ownKeys = e && e.triggeredByAccelerator &&
+        !!e.shiftKey === accelerator.includes('Shift') &&
+        !!(isMac ? e.metaKey : e.ctrlKey) === accelerator.includes('CmdOrCtrl');
+      if (!ownKeys) { run(); return; }
+      setImmediate(() => { try { buildMenu(); } catch (err) { logError('menu', err); } });
+    }
+  });
   const template = [
     // appMenu exists only on macOS — including it on Windows throws,
     // which is exactly what kept NEO from ever opening a window there
@@ -2518,16 +2536,16 @@ function buildMenu() {
         { type: 'separator' },
         // tick when the caret sits in one; the keys are the editor's own
         // (they split or continue a paragraph, which a menu item can't), so
-        // they're named here without an accelerator
+        // they're shown, not registered (pageKey)
         // a script's elements stand where a book's paragraph kinds do
         ...(scriptState.on ? [
           [t('Scene Heading'), 'heading'], [t('Action'), 'action'], [t('Character'), 'character'], [t('Parenthetical'), 'paren'],
           [t('Dialogue'), 'dialogue'], [t('Transition'), 'transition'], [t('Shot'), 'shot']
         ].map(([label, value], i) => ({
-          label: label + '\t' + (isMac ? '⌘' : 'Ctrl+') + (i + 1),
+          label,
+          ...pageKey('CmdOrCtrl+' + (i + 1), () => sendToWindow({ type: 'scriptElement', value })),
           type: 'radio',
-          checked: scriptState.element === value,
-          click: () => sendToWindow({ type: 'scriptElement', value })
+          checked: scriptState.element === value
         })) : []),
         // the script's own style, kept with that script
         ...(scriptState.on ? [
@@ -2537,17 +2555,17 @@ function buildMenu() {
         ] : []),
         {
           visible: !scriptState.on,
-          label: t('Flush Paragraph') + '\t' + (isMac ? '⇧Enter' : 'Shift+Enter'),
+          label: t('Flush Paragraph'),
+          ...pageKey('Shift+Enter', () => sendToWindow({ type: 'flush' })),
           type: 'checkbox',
-          checked: flushState,
-          click: () => sendToWindow({ type: 'flush' })
+          checked: flushState
         },
         {
           visible: !scriptState.on,
-          label: t('Poetry Paragraph') + '\t' + (isMac ? '⇧⌘Enter' : 'Ctrl+Shift+Enter'),
+          label: t('Poetry Paragraph'),
+          ...pageKey('CmdOrCtrl+Shift+Enter', () => sendToWindow({ type: 'poetry' })),
           type: 'checkbox',
-          checked: poetryState,
-          click: () => sendToWindow({ type: 'poetry' })
+          checked: poetryState
         },
         { type: 'separator' },
         // *italic* and **bold** as you type or paste; off for writers who
