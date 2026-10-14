@@ -14,9 +14,14 @@
   --dropcap-font: "Didot", "Bodoni 72", Georgia, serif;
   /* the page: a book page's width, which in a window wide enough to leave
      room on both sides grows a little (never past a comfortable line) */
-  --page-w: clamp(680px, 44vw, 760px);
+  --page-wf: 1;      /* Format → Page Width: Regular 1, Wide, Wider (app.js) */
+  --page-pad-x: 72px; /* the page's side margins at that width */
+  --page-w: calc(clamp(680px, 44vw, 760px) * var(--page-wf));
   /* the room the scrollbar and the page's own shadow need beside it */
   --page-gutter: 80px;
+  /* how wide everything laid out as the manuscript is: one page, or, in the
+     Pages view with two pages side by side, a spread (see "Pages view") */
+  --sheet-w: var(--page-w);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -629,7 +634,7 @@ body.night #aux-editor * { color: inherit; }
 #paper-scroll {
   position: absolute; top: 0; bottom: 40px;
   left: 50%; transform: translateX(-50%);
-  width: min(calc((var(--page-w) + var(--page-gutter)) * var(--page-zoom, 1)), 94%);
+  width: min(calc((var(--sheet-w) + var(--page-gutter)) * var(--page-zoom, 1)), 94%);
   overflow-y: auto;
 }
 
@@ -638,10 +643,13 @@ body.night #aux-editor * { color: inherit; }
 ::highlight(neo-search-current) { background: #c9a86a; color: #1c1c1c; }
 /* the sentence Read Aloud is on (⌘⇧U) */
 ::highlight(neo-speak) { background: rgba(201, 168, 106, 0.28); }
+/* Non-Breaking Marks (Format menu): the spaces and hyphens a wrap must not
+   break at — U+00A0, U+202F and U+2011 — in one unobtrusive light gray */
+::highlight(neo-nb-mark) { background: rgba(127, 127, 127, 0.25); }
 
 /* Each page of the book is its own sheet of paper */
 #paper {
-  width: calc(var(--page-w) * var(--page-zoom, 1)); max-width: 92%;
+  width: calc(var(--sheet-w) * var(--page-zoom, 1)); max-width: 92%;
   margin: 40px auto 120px;
 }
 /* typewriter scrolling: room below the last line so it can sit mid-screen
@@ -663,7 +671,7 @@ body.focus-mode.night .sheet ::selection { color: #d6d2c6; }
 body.focus-mode:not(.no-dropcap) .chapter-body.focus-cap:not(.cap-off):not(.no-cap):not(.opens-dialogue) p[data-first]::first-letter { color: var(--ink); }
 .sheet {
   background: var(--paper); color: var(--ink);
-  padding: 70px 72px 90px;
+  padding: 70px var(--page-pad-x) 90px;
   box-shadow: 0 4px 30px rgba(0,0,0,0.5);
   min-height: 88vh;
   margin-bottom: 44px;
@@ -672,10 +680,51 @@ body.focus-mode:not(.no-dropcap) .chapter-body.focus-cap:not(.cap-off):not(.no-c
   width: calc(var(--page-w) * var(--page-zoom, 1)); max-width: 92%;
   background: var(--paper); color: var(--ink);
   margin: 40px auto 120px;
-  padding: 70px 72px 90px;
+  padding: 70px var(--page-pad-x) 90px;
   box-shadow: 0 4px 30px rgba(0,0,0,0.5);
   min-height: 85vh;
 }
+
+/* --- Pages view (Format → Show Pages) ---
+   The chapters are shown as separate pages the shape of a sheet of paper,
+   with the gap between them a word processor draws. Nothing is added to the
+   text: #chapters becomes a stack of columns one page high (column-height,
+   column-wrap), the chapters' sheets flow through them, and
+   box-decoration-break: clone gives each piece of a sheet its own paper,
+   margins and shadow. Every chapter starts on a fresh page. app.js sets
+   --pg-n, the pages a chapter runs to, so that its last page is a whole page
+   too; Two Pages Side by Side (body.pages-two, set when two fit the window)
+   makes the stack two columns wide. A script has pages of its own. */
+body.paged {
+  --pg-ratio: 1.4142; /* page height / width: A4. US Letter is 1.2941 */
+  --pg-gap-base: 28px;
+  --pg-w: calc(var(--page-w) * var(--page-zoom, 1));
+  --pg-h: round(calc(var(--pg-w) * var(--pg-ratio)), 1px); /* whole pixels, so a chapter's pages add up exactly */
+  --pg-m: calc(var(--pg-w) * 0.12); /* the margins, about an inch */
+  --pg-gap: calc(var(--pg-gap-base) * var(--page-zoom, 1));
+}
+body.paged.pages-two { --sheet-w: calc(var(--page-w) * 2 + var(--pg-gap-base)); }
+/* a page keeps its shape: zoomed past the window it scrolls sideways */
+body.paged #paper:not(.script) { max-width: none; position: relative; }
+body.paged #paper:not(.script) #chapters {
+  column-count: 1; column-height: var(--pg-h); column-wrap: wrap; column-fill: auto;
+  column-gap: var(--pg-gap); row-gap: var(--pg-gap);
+}
+body.paged.pages-two #paper:not(.script) #chapters { column-count: 2; }
+body.paged #paper:not(.script) .chapter.sheet {
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  break-before: column;
+  padding: var(--pg-m);
+  margin: 0;
+  min-height: calc(var(--pg-n, 1) * var(--pg-h) - 0.5px); /* (half a pixel under, or rounding adds a page) */
+}
+body.paged #paper:not(.script) #title-page {
+  width: var(--pg-w); height: var(--pg-h); min-height: 0;
+  margin: 0 auto var(--pg-gap); padding: var(--pg-m);
+}
+/* a page zoomed out is the whole page smaller, the title page's lines too */
+body.paged #paper:not(.script) #tp-subtitle { font-size: calc(17px * var(--page-zoom, 1)); margin-top: calc(14px * var(--page-zoom, 1)); min-height: 0; }
+body.paged #paper:not(.script) #tp-author { font-size: calc(14px * var(--page-zoom, 1)); margin-top: calc(46px * var(--page-zoom, 1)); letter-spacing: calc(3px * var(--page-zoom, 1)); }
 
 /* --- Title page: a sheet of its own --- */
 #title-page {
@@ -775,7 +824,7 @@ body:not(.no-dropcap) .chapter-body:not(.cap-off):not(.no-cap):not(.opens-dialog
   padding: 6px 10px; border-radius: 5px; font-size: 14px; cursor: pointer;
   font-family: Georgia, serif;
 }
-.spell-menu button:hover:not(:disabled) { background: #333; }
+.spell-menu button:hover:not(:disabled), .spell-menu button:focus-visible { background: #333; outline: none; }
 .spell-menu button:disabled { color: #777; font-style: italic; }
 .spell-menu .sm-sep { height: 1px; background: #3a3a3a; margin: 4px 0; }
 body.bright .spell-menu { border-color: #4a4a4a; }
@@ -1128,7 +1177,7 @@ body.focus-mode .walk-note { opacity: 0.6; }
 #nav-hotzone { position: fixed; left: 0; top: 0; bottom: 40px; width: 18px; z-index: 60; }
 /* the panes wake from well inside the margins, never over the page itself */
 #nav-hotzone, #side-hotzone {
-  width: clamp(18px, calc((100vw - min((var(--page-w) + var(--page-gutter)) * var(--page-zoom, 1), 94vw)) / 2 - 24px), 96px);
+  width: clamp(18px, calc((100vw - min((var(--sheet-w) + var(--page-gutter)) * var(--page-zoom, 1), 94vw)) / 2 - 24px), 96px);
 }
 #nav-pane {
   position: fixed; left: 0; top: 0; bottom: 40px; width: 248px;
@@ -1249,7 +1298,11 @@ body.focus-mode .walk-note { opacity: 0.6; }
   padding: 0 16px 14px; font-size: 12px; text-transform: uppercase;
   letter-spacing: 2px; color: var(--muted);
 }
+/* the pin sits in the pane's top corner, above the cards, where it stays as
+   the pane scrolls: below the window's drag strip (#dragstrip, 28px), which
+   would take the click and move the window instead */
 #side-pin {
+  position: fixed; top: 32px; right: 10px; -webkit-app-region: no-drag;
   background: none; border: none; color: #555; font-size: 15px;
 }
 #side-pin.pinned { color: var(--accent); }
@@ -1646,6 +1699,24 @@ body.light .modal input { background: #fff; border-color: #cfcac0; color: #1c1a1
 body.light .modal input:focus { border-color: var(--accent); }
 body.light .btn-quiet { color: #5f5b53; }
 body.light .btn-quiet:hover { color: #1c1a17; }
+/* File → Export → Manuscript Format… (app.js, MANUSCRIPT FORMAT) */
+.ms-modal { width: 640px; }
+.ms-modal .ms-lead { font-size: 13px; color: var(--muted); }
+.ms-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.ms-modal fieldset { border: none; margin: 0; padding: 0; min-width: 0; }
+.ms-modal legend { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+.ms-modal label { margin-bottom: 10px; font-size: 12.5px; }
+.ms-modal input[type="text"], .ms-modal input[type="email"], .ms-modal textarea { margin-top: 4px; }
+.ms-modal textarea { display: block; width: 100%; margin-top: 4px; padding: 8px 12px; background: var(--bg); border: 1px solid #3a3a3a; border-radius: 6px; color: #eee; font: inherit; font-size: 13px; resize: vertical; }
+.ms-modal textarea:focus { outline: none; border-color: var(--accent); }
+.ms-modal .ms-inline { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ms-modal .ms-inline input { display: inline; width: auto; margin: 0; }
+.ms-font { display: flex; gap: 16px; margin: 4px 0 6px; }
+.ms-header-eg { font-size: 11.5px !important; color: var(--muted); margin: -4px 0 10px !important; font-family: "Times New Roman", serif; }
+.ms-count { font-size: 12.5px !important; color: var(--muted); margin: 6px 0 14px !important; }
+.ms-actions { display: flex; justify-content: flex-end; gap: 10px; }
+body.light .ms-modal textarea { background: #fff; border-color: #cfcac0; color: #1c1a17; }
+@media (max-width: 700px) { .ms-cols { grid-template-columns: 1fr; } }
 body.light .fr-font, body.light .fr-choice { background: #fff; border-color: #d6d1c7; color: #2b2926; }
 body.light .fr-font:hover { border-color: #a09a8f; }
 body.light .fr-font.sel { border-color: var(--accent); color: var(--accent); }
@@ -1662,7 +1733,7 @@ body.light .up-bar { background: #e4e0d8; }
 body.light .sheet, body.light #aux-paper { box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 28px rgba(0,0,0,0.1); }
 body.light .spell-menu { background: #fff; border-color: #d9d4ca; box-shadow: 0 6px 24px rgba(0,0,0,0.14); }
 body.light .spell-menu button { color: #2b2926; }
-body.light .spell-menu button:hover:not(:disabled) { background: #f0ede7; }
+body.light .spell-menu button:hover:not(:disabled), body.light .spell-menu button:focus-visible { background: #f0ede7; }
 body.light .spell-menu button:disabled { color: #857f75; }
 body.light .spell-menu .sm-sep { background: #e6e2da; }
 
@@ -2086,8 +2157,12 @@ body.light .snap-ch:hover { color: #1c1a17; }
 #editor-view.outline-tab #side-cards, #editor-view.darlings-tab #side-cards { display: none; }
 .side-card { background: #2a2a26; border: 1px solid #3a3934; border-radius: 6px; padding: 10px 12px; }
 .side-card.current { box-shadow: 0 0 0 2px var(--red); border-color: transparent; }
+.side-cards-title { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); padding: 0 4px; }
 .side-card-head { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #bdb8ad; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-card-section .side-card-head { font-weight: 500; color: #8f8a80; }
+.side-card-head { cursor: pointer; border-radius: 3px; }
+.side-card-head:hover, .side-card-head:focus-visible { color: #ece7dc; }
+.side-card-head:focus-visible { outline: 1px solid #6b675f; outline-offset: 2px; }
 .side-card textarea {
   width: 100%; background: none; border: none; outline: none; resize: none; overflow: hidden;
   color: #ddd; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; padding: 0;
@@ -2095,5 +2170,99 @@ body.light .snap-ch:hover { color: #1c1a17; }
 .side-card textarea::placeholder { color: #6b675f; font-style: italic; }
 body.light .side-card { background: #fbf5e3; border-color: #e6dfcc; }
 body.light .side-card-head { color: #5f5a50; }
+body.light .side-card-head:hover, body.light .side-card-head:focus-visible { color: #1f1d1a; }
 body.light .side-card textarea { color: #2b2926; }
 body.light .side-card textarea::placeholder { color: #a39d90; }
+
+/* ---------- the Notes tab (NOTES PAGES in app.js): a page for the book and one per chapter ---------- */
+/* the left pane turns the pages, the right one shows what the manuscript knows about the chapter */
+.nav-title-notes, #notes-nav, .side-title-chnotes, #notes-side { display: none; }
+#editor-view.notes-tab .nav-title-chapters, #editor-view.notes-tab #nav-list, #editor-view.notes-tab #nav-add { display: none; }
+#editor-view.notes-tab .nav-title-notes { display: inline; }
+#editor-view.notes-tab #notes-nav { display: block; }
+#editor-view.notes-tab .side-title-notes, #editor-view.notes-tab #sticky-list, #editor-view.notes-tab #side-cards { display: none; }
+#editor-view.notes-tab .side-title-chnotes { display: inline; }
+#editor-view.notes-tab #notes-side { display: block; }
+.notes-item .n-row { cursor: pointer; }
+.notes-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.notes-item.notes-book .n-label { font-weight: 600; }
+.notes-item .nav-note:empty::before { content: attr(data-ph); }
+.notes-here {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  display: inline-block; flex-shrink: 0; margin: 0 auto 0 8px;
+}
+.notes-item .n-row > .n-label + .notes-here + span { margin-left: 8px; }
+.notes-sep { height: 1px; background: #2c2c2c; margin: 6px 18px; }
+.notes-part {
+  padding: 14px 18px 4px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #5d5d5d;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ns-label {
+  display: flex; justify-content: space-between; padding: 10px 18px 6px;
+  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #6a6a6a;
+}
+.ns-empty { padding: 0 18px 6px; font-size: 12px; color: #555; font-style: italic; }
+.ns-card { cursor: default; }
+.ns-card.ns-darling { font-family: var(--body-font); font-size: 14px; border-left-color: #6a6a6a; }
+.ns-card .ns-text { white-space: pre-wrap; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.ns-card .s-actions { margin-top: 4px; }
+.ns-outline { outline: none; min-height: 18px; cursor: text; }
+.ns-outline:empty::before { content: attr(data-ph); color: #666; font-style: italic; }
+/* the page: a chapter's names the chapter, with the way back up to the book's */
+#notes-up {
+  display: block; margin: -40px auto 22px; background: none; border: none; padding: 2px 6px;
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; letter-spacing: 1px;
+  color: var(--muted); cursor: pointer;
+}
+#notes-up:hover, #notes-up:focus-visible { color: var(--accent); }
+#editor-view:not(.notes-tab) #notes-up, #editor-view:not(.notes-tab) #notes-outline { display: none; }
+#aux-paper.notes-chapter #aux-title { margin-bottom: 18px; }
+#notes-outline {
+  max-width: 34em; margin: 0 auto 40px; text-align: center; color: #8a8a8a;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+#notes-outline b { font-weight: 500; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; margin-right: 8px; }
+#aux-editor[data-ph]:not([data-ph=""]):empty::before { content: attr(data-ph); }
+body.light .notes-sep { background: #dedad2; }
+body.light .notes-part, body.light .ns-label { color: #8f8a80; }
+body.light .ns-empty, body.light .ns-outline:empty::before { color: #a39d92; }
+body.light #notes-outline { color: #6f6b63; }
+
+/* ---------- footnotes (FOOTNOTES in app.js) ---------- */
+/* the number is the page's own count, one series a chapter, never saved */
+.chapter-body { counter-reset: neo-fn; }
+.chapter-body .fn { counter-increment: neo-fn; cursor: pointer; }
+.chapter-body .fn::after {
+  content: counter(neo-fn); color: var(--accent);
+  font: 600 0.62em/0 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  vertical-align: super; padding: 0 1px 0 0.5px; font-style: normal;
+}
+.chapter-body .fn:hover::after { text-decoration: underline; }
+.chapter-body p[data-fnopen] { margin-bottom: var(--fn-h, 3em); }
+.fn-box {
+  position: absolute; z-index: 3; box-sizing: border-box; display: flex; gap: 10px; align-items: baseline;
+  padding: 8px 12px; border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--paper));
+  font-family: var(--body-font); line-height: 1.5; color: var(--ink);
+  font-size: calc(var(--editor-size, 17px) * 0.82 * var(--page-zoom, 1));
+}
+.fn-box .fn-num { color: var(--accent); font: 600 11px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+.fn-box .fn-text { flex: 1; min-width: 0; outline: none; white-space: pre-wrap; }
+.fn-box .fn-text:empty::before { content: attr(data-ph); color: color-mix(in srgb, var(--ink) 35%, var(--paper)); font-style: italic; }
+.fn-box .fn-hint {
+  flex: none; font: 10px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: color-mix(in srgb, var(--ink) 40%, var(--paper));
+}
+/* a chapter's notes under its last line, the way a book sets them */
+.fn-list {
+  margin: 2.4em 0 0; padding-top: 0.8em; position: relative;
+  font-family: var(--body-font); line-height: 1.5; color: var(--ink);
+  font-size: calc(var(--editor-size, 17px) * 0.8 * var(--page-zoom, 1));
+}
+.fn-list::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 30%;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 25%, var(--paper));
+}
+.fn-row { padding: 2px 0; cursor: pointer; border-radius: 3px; outline: none; }
+.fn-row:hover, .fn-row:focus-visible { background: color-mix(in srgb, var(--accent) 9%, var(--paper)); }
+.fn-row .fn-n { color: var(--accent); font: 600 0.75em -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; margin-right: 8px; }
