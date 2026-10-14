@@ -2088,6 +2088,9 @@ body.light .snap-ch:hover { color: #1c1a17; }
 .side-card.current { box-shadow: 0 0 0 2px var(--red); border-color: transparent; }
 .side-card-head { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #bdb8ad; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-card-section .side-card-head { font-weight: 500; color: #8f8a80; }
+.side-card-head { cursor: pointer; border-radius: 3px; }
+.side-card-head:hover, .side-card-head:focus-visible { color: #ece7dc; }
+.side-card-head:focus-visible { outline: 1px solid #6b675f; outline-offset: 2px; }
 .side-card textarea {
   width: 100%; background: none; border: none; outline: none; resize: none; overflow: hidden;
   color: #ddd; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; padding: 0;
@@ -2095,5 +2098,6 @@ body.light .snap-ch:hover { color: #1c1a17; }
 .side-card textarea::placeholder { color: #6b675f; font-style: italic; }
 body.light .side-card { background: #fbf5e3; border-color: #e6dfcc; }
 body.light .side-card-head { color: #5f5a50; }
+body.light .side-card-head:hover, body.light .side-card-head:focus-visible { color: #1f1d1a; }
 body.light .side-card textarea { color: #2b2926; }
 body.light .side-card textarea::placeholder { color: #a39d90; }

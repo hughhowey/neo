@@ -9275,12 +9275,16 @@ function goToCard(cell) {
   if (cell.dataset.kind === 'scene') { goToScene(cell); return; }
   const chId = cell.dataset.ch;
   switchTab('manuscript');
-  if (cell.dataset.kind === 'chapter') {
-    focusChapterStart(chId);
-    document.querySelector(`.chapter[data-id="${chId}"]`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
-    return;
-  }
-  const seg = chapterSegments(chId)[Number(cell.dataset.seg)];
+  if (cell.dataset.kind === 'chapter') { goToChapterTop(chId); return; }
+  goToSegment(chId, chapterSegments(chId)[Number(cell.dataset.seg)]);
+}
+function goToChapterTop(chId) {
+  focusChapterStart(chId);
+  document.querySelector(`.chapter[data-id="${chId}"]`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+}
+// the caret at a section's first line (a gray ghost selected, ready to be
+// written over), scrolled into view
+function goToSegment(chId, seg) {
   const p = seg && seg.ps[0];
   const body = chapterBodyEl(chId);
   if (!p || !body) { focusChapterStart(chId); return; }
@@ -10294,8 +10298,9 @@ function looseToScene(looseId, before) {
 function goToScene(cell) {
   const sc = sceneOfCell(cell);
   switchTab('manuscript');
-  if (!sc) return;
-  const p = sc.s.p;
+  if (sc) goToSceneHeading(sc.s.p);
+}
+function goToSceneHeading(p) {
   spBodyOf(p).focus({ preventScroll: true });
   spCaretToEnd(p);
   spLastPara = p;
@@ -10702,6 +10707,21 @@ function sideCardsUpdate(force) {
     const head = document.createElement('div');
     head.className = 'side-card-head';
     head.textContent = c.label;
+    // the card's name takes the caret to the top of its place on the page (#367)
+    head.tabIndex = 0;
+    head.setAttribute('role', 'button');
+    head.title = t('Go to the page');
+    const go = () => {
+      if (c.kind === 'chapter') goToChapterTop(c.id);
+      else if (c.kind === 'section') goToSegment(c.chId, chapterSegments(c.chId).find((s) => s.id === c.id));
+      else if (c.head.isConnected) goToSceneHeading(c.head);
+    };
+    head.addEventListener('click', go);
+    head.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      go();
+    });
     const ta = document.createElement('textarea');
     ta.spellcheck = false;
     ta.rows = 1;
