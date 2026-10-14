@@ -4136,6 +4136,7 @@ document.addEventListener('selectionchange', () => {
     if (capOffBody && capOffBody.isConnected) capOffBody.classList.remove('cap-off');
     if (capBody) capBody.classList.add('cap-off');
     capOffBody = capBody;
+    queueSoftHyphenTicks(); // the first lines wrap anew around the cap
   }
 });
 
@@ -13845,6 +13846,7 @@ function applyFonts() {
   const size = Math.min(22, Math.max(14, library.editorFontSize || 17));
   document.documentElement.style.setProperty('--editor-size', size + 'px');
   applyPageZoom();
+  queueSoftHyphenTicks(); // another face can wrap the same lines differently
 }
 
 // A built-in choice, or a font the writer picked from their own computer.
@@ -15042,11 +15044,39 @@ function nonBreakingRuns(text) {
   return runs;
 }
 
+// Soft hyphens (U+00AD) show too while the marks are on: the places a long
+// word (Donau|dampf|schiff|fahrt) may be broken by a reader that doesn't
+// hyphenate on its own. Mid-line a soft hyphen is zero wide, so a highlight
+// has nothing to paint; it gets a thin upright tick instead, told apart from
+// the gray box by its shape, not its colour. Where the line does break there,
+// the tick still stands before the hyphen the browser draws, so a soft
+// hyphen at a line's end reads differently from a typed one.
+const SOFT_HYPHEN = '\u00ad';
+function softHyphenOffsets(text) {
+  const out = [];
+  for (let i = text.indexOf(SOFT_HYPHEN); i !== -1; i = text.indexOf(SOFT_HYPHEN, i + 1)) out.push(i);
+  return out;
+}
+// Where a soft hyphen's tick goes on its sheet: from the box the browser
+// gives the character (zero wide mid-line, a hyphen's width at a break) and
+// the sheet's corner, at the character's left edge, 0.9em tall and centred
+// on the line of type. No box (the text isn't laid out) means no tick.
+function softHyphenTick(rect, origin, em) {
+  if (!rect || !(rect.height > 0)) return null;
+  const height = em * 0.9;
+  return {
+    left: rect.left - origin.left,
+    top: rect.top - origin.top + (rect.height - height) / 2,
+    height,
+  };
+}
+
 // Paints those characters in every open chapter with the CSS Highlight API,
 // so the marks never enter the chapter HTML — the same door search,
 // spellcheck and focus use. Off means nothing is painted at all.
 const NB_MARK_NAME = 'neo-nb-mark';
 function paintNonBreakingMarks() {
+  queueSoftHyphenTicks();
   if (!(window.CSS && CSS.highlights && window.Highlight)) return;
   CSS.highlights.delete(NB_MARK_NAME);
   if (!nbspMarksEnabled) return;
@@ -15066,6 +15096,81 @@ function paintNonBreakingMarks() {
   CSS.highlights.set(NB_MARK_NAME, marks);
 }
 // ---- end of non-breaking marks ----
+
+// The soft hyphens' ticks are drawn in a layer of their own on each sheet,
+// beside the chapter's text and never inside it: nothing to save, select or
+// put the caret in, and screen readers pass it by. Only the sheets in or near
+// view get one, so a long book costs no more than the chapter on screen.
+// Anything that can move the words (typing, the page's width, zoom, type
+// size, a font arriving, the drop cap stepping aside) starts a new pass;
+// scrolling only draws the sheets that come into view. One frame at a time.
+let shyPass = 0;
+let shyFrame = 0;
+const shyDrawn = new WeakMap(); // sheet → the pass its ticks were drawn for
+function queueSoftHyphenTicks(moved = true) {
+  if (moved) shyPass += 1;
+  if (shyFrame || (!nbspMarksEnabled && !document.querySelector('.shy-ticks'))) return;
+  shyFrame = requestAnimationFrame(drawSoftHyphenTicks);
+}
+function softHyphenRect(node, i) {
+  const range = document.createRange();
+  range.setStart(node, i);
+  range.setEnd(node, i + 1);
+  for (const r of range.getClientRects()) if (r.height > 0) return r;
+  range.collapse(true);
+  const r = range.getBoundingClientRect();
+  return r.height > 0 ? r : null;
+}
+function drawSoftHyphenTicks() {
+  shyFrame = 0;
+  const view = $('#paper-scroll').getBoundingClientRect();
+  for (const sheet of $$('#chapters .chapter')) {
+    const body = sheet.querySelector(':scope > .chapter-body');
+    const box = sheet.getBoundingClientRect();
+    const near = nbspMarksEnabled && body && !body.hidden && view.height > 0 &&
+      box.bottom > view.top - view.height && box.top < view.bottom + view.height;
+    let layer = sheet.querySelector(':scope > .shy-ticks');
+    if (!near) {
+      if (layer) layer.remove();
+      shyDrawn.delete(sheet);
+      continue;
+    }
+    if (shyDrawn.get(sheet) === shyPass) continue;
+    shyDrawn.set(sheet, shyPass);
+    const origin = { left: box.left + sheet.clientLeft, top: box.top + sheet.clientTop };
+    const ems = new Map();
+    const ticks = document.createDocumentFragment();
+    const walk = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      if (!node.data.includes(SOFT_HYPHEN)) continue;
+      const parent = node.parentElement;
+      if (!ems.has(parent)) ems.set(parent, parseFloat(getComputedStyle(parent).fontSize) || 17);
+      for (const i of softHyphenOffsets(node.data)) {
+        const at = softHyphenTick(softHyphenRect(node, i), origin, ems.get(parent));
+        if (!at) continue;
+        const tick = document.createElement('span');
+        tick.style.left = at.left + 'px';
+        tick.style.top = at.top + 'px';
+        tick.style.height = at.height + 'px';
+        ticks.appendChild(tick);
+      }
+    }
+    if (!ticks.childNodes.length) { if (layer) layer.remove(); continue; }
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.className = 'shy-ticks';
+      layer.setAttribute('aria-hidden', 'true');
+      layer.contentEditable = 'false';
+      sheet.appendChild(layer);
+    }
+    layer.replaceChildren(ticks);
+  }
+}
+new ResizeObserver(() => queueSoftHyphenTicks()).observe($('#chapters'));
+$('#paper-scroll').addEventListener('scroll', () => queueSoftHyphenTicks(false), { passive: true });
+window.addEventListener('resize', () => queueSoftHyphenTicks());
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => queueSoftHyphenTicks());
 function paraRuns(pHtml, flip) {
   const holder = document.createElement('template'); // inert: nothing loads or runs
   holder.innerHTML = pHtml;

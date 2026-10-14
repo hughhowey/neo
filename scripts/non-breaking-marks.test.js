@@ -12,7 +12,7 @@ const from = app.indexOf('// ---- non-breaking marks:');
 const to = app.indexOf('// ---- end of non-breaking marks ----');
 const context = vm.createContext({});
 vm.runInContext(app.slice(from, to), context);
-vm.runInContext('this.api = { NB_CHARS, nonBreakingRuns };', context);
+vm.runInContext('this.api = { NB_CHARS, nonBreakingRuns, SOFT_HYPHEN, softHyphenOffsets, softHyphenTick };', context);
 const api = context.api;
 
 // the runs come out of another realm, so they are compared as JSON
@@ -48,4 +48,53 @@ test('runs keep their order and do not merge across different characters', () =>
       { start: 6, end: 7, kind: 'narrow' },
     ]),
   );
+});
+
+// soft hyphens: found by offset, kept out of the gray runs, and each given a
+// tick at its left edge
+
+const offsets = (text) => JSON.stringify(api.softHyphenOffsets(text));
+
+test('the soft hyphen is U+00AD', () => {
+  assert.equal(api.SOFT_HYPHEN, '\u00ad');
+});
+
+test('plain text has no soft hyphens', () => {
+  assert.equal(offsets('Donaudampfschifffahrt'), '[]');
+  assert.equal(offsets(''), '[]');
+});
+
+test('every soft hyphen is found, in order, including at the edges', () => {
+  assert.equal(offsets('Donau\u00addampf\u00adschiff\u00adfahrt'), '[5,11,18]');
+  assert.equal(offsets('\u00adab\u00ad'), '[0,3]');
+  assert.equal(offsets('a\u00ad\u00adb'), '[1,2]');
+});
+
+test('soft hyphens are not non-breaking runs, and the runs still show beside them', () => {
+  assert.equal(runs('Donau\u00addampf'), '[]');
+  assert.equal(
+    runs('Dr.\u00a0Donau\u00adschiff'),
+    JSON.stringify([{ start: 3, end: 4, kind: 'space' }]),
+  );
+});
+
+const tick = (rect, origin, em) => JSON.stringify(api.softHyphenTick(rect, origin, em));
+
+test('mid-line: a zero-wide soft hyphen gets a 0.9em tick centred on its line', () => {
+  assert.equal(
+    tick({ left: 300, top: 220, width: 0, height: 24 }, { left: 100, top: 20 }, 20),
+    JSON.stringify({ left: 200, top: 203, height: 18 }),
+  );
+});
+
+test('at a line break: the tick stands at the drawn hyphen\'s left edge', () => {
+  assert.equal(
+    tick({ left: 640, top: 420, width: 7, height: 24 }, { left: 100, top: 20 }, 20),
+    JSON.stringify({ left: 540, top: 403, height: 18 }),
+  );
+});
+
+test('no box, or a box with no height, draws no tick', () => {
+  assert.equal(api.softHyphenTick(null, { left: 0, top: 0 }, 17), null);
+  assert.equal(api.softHyphenTick({ left: 5, top: 5, width: 0, height: 0 }, { left: 0, top: 0 }, 17), null);
 });
