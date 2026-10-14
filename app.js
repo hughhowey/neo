@@ -6314,7 +6314,7 @@ function spHighlightScene() {
 function spReportState() {
   if (!window.neo.scriptState) return;
   const on = !!book && isScript() && !$('#editor-view').hidden;
-  window.neo.scriptState({ on, element: on ? spShownElement || 'action' : null, underline: on && spUnderlineOn(), contd: on && spContdOn() });
+  window.neo.scriptState({ book: !!book && !$('#editor-view').hidden, on, element: on ? spShownElement || 'action' : null, underline: on && spUnderlineOn(), contd: on && spContdOn() });
 }
 // the Format menu's two script-style items, and Page Break Here
 function spToggleStyle(key) {
@@ -6591,7 +6591,7 @@ function spPaste(e, body, chId) {
   let lines = null;
   if (html && /class="[^"]*\bsp-|script-body/.test(html)) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    lines = [...doc.body.querySelectorAll('p')].map((p) => ({ type: spType(p), html: paraRuns(p.innerHTML, false).filter((r) => r.text).map(runHtml).join('') }));
+    lines = [...doc.body.querySelectorAll('p')].map((p) => ({ type: spType(p), html: paraRuns(p.innerHTML, false).filter((r) => r.text).map((r) => runHtml(r)).join('') }));
   } else if (text && /\n/.test(text.trim())) {
     lines = spFromFountain(text).map((l) => ({ type: l.type, newPage: l.newPage, html: spRunsFromFountain(l.text).map((x) => runHtml(x)).join('') }));
   }
@@ -7464,8 +7464,10 @@ function navDropInd() {
   }
   return ind;
 }
+// files from Finder dropped on the pane become chapters where they land
+const navFileDrag = (e) => e.dataTransfer.types.includes('Files') && !!book && !isScript();
 navList.addEventListener('dragover', (e) => {
-  if (!e.dataTransfer.types.includes('application/x-neo-chapter')) return;
+  if (!e.dataTransfer.types.includes('application/x-neo-chapter') && !navFileDrag(e)) return;
   e.preventDefault();
   const ind = navDropInd();
   const items = [...navList.querySelectorAll('.nav-item:not(.dragging)')];
@@ -7486,6 +7488,15 @@ navList.addEventListener('dragleave', (e) => {
   if (ind) ind.remove();
 });
 navList.addEventListener('drop', async (e) => {
+  if (e.dataTransfer.files && e.dataTransfer.files.length && navFileDrag(e)) {
+    e.preventDefault();
+    const ind = document.querySelector('.nav-drop-ind');
+    let next = ind ? ind.nextElementSibling : null;
+    while (next && !next.classList.contains('nav-item')) next = next.nextElementSibling;
+    if (ind) ind.remove();
+    await importDroppedChapters(e.dataTransfer.files, next ? next.dataset.id : null);
+    return;
+  }
   const chId = e.dataTransfer.getData('application/x-neo-chapter');
   if (!chId) return;
   e.preventDefault();
@@ -7539,6 +7550,17 @@ function wireHoverPane(hotzone, pane, isPinnable) {
   });
 }
 wireHoverPane($('#nav-hotzone'), $('#nav-pane'), true);
+// a drag from Finder fires no mouseenter: files over the hot zone open the
+// Chapters pane, so they can be dropped between chapters
+$('#nav-hotzone').addEventListener('dragenter', (e) => {
+  if (navFileDrag(e)) $('#nav-pane').classList.add('open');
+});
+$('#nav-pane').addEventListener('dragleave', (e) => {
+  const pane = $('#nav-pane');
+  if (!navFileDrag(e) || pane.dataset.pinned === '1') return;
+  if (e.relatedTarget && (pane.contains(e.relatedTarget) || e.relatedTarget.id === 'nav-hotzone')) return;
+  pane.classList.remove('open');
+});
 wireHoverPane($('#side-hotzone'), $('#side-pane'), true);
 
 // leaving the window closes unpinned panes (they used to stick open)
@@ -9855,6 +9877,20 @@ function dragOver(st) {
   if (edge) st.scroller = setInterval(() => { sc.scrollTop += edge * 14; st.target = dragTarget(st); showDropCaret(st.target); }, 30);
 }
 
+// the card under the pointer, or the nearest one in its line
+function nearestCard(cells, x, y) {
+  let best = null;
+  let bestD = Infinity;
+  for (const c of cells) {
+    const r = c.getBoundingClientRect();
+    const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+    const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+    const d = dy * 3 + dx;
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
 // where a card would land: { cell, side } on the board, or the loose pane
 function dragTarget(st) {
   // a loose card holding a whole chapter goes back in as a chapter
@@ -9866,16 +9902,7 @@ function dragTarget(st) {
   if (overPane) return pane.classList.contains('drop-ready') ? { loose: true } : null;
   const cells = [...outlineBoard().querySelectorAll('.ob-cell:not(.ob-lifted):not([data-new])')];
   if (!cells.length) return null;
-  // the card under the pointer, or the nearest one in its line
-  let best = null;
-  let bestD = Infinity;
-  for (const c of cells) {
-    const r = c.getBoundingClientRect();
-    const dy = st.y < r.top ? r.top - st.y : st.y > r.bottom ? st.y - r.bottom : 0;
-    const dx = st.x < r.left ? r.left - st.x : st.x > r.right ? st.x - r.right : 0;
-    const d = dy * 3 + dx;
-    if (d < bestD) { bestD = d; best = c; }
-  }
+  let best = nearestCard(cells, st.x, st.y);
   const r = best.getBoundingClientRect();
   // over the middle of a chapter card: into that chapter (a chapter joins
   // it as a section; a section or loose card goes to its end)
@@ -9929,6 +9956,64 @@ function showDropCaret(target) {
   caret.style.top = (r.top + 6) + 'px';
   caret.style.height = Math.max(10, r.height - 12) + 'px';
 }
+
+// ---- files dropped on the Outline ----
+// A document from Finder or Explorer goes in as chapters between chapters:
+// before a chapter card (or List line) when it's dropped on that card's left
+// half (the line's top half), otherwise after the chapter the card is in.
+// The caret is the card drag's own.
+const chapterAfter = (chId) => book.chapterOrder[book.chapterOrder.indexOf(chId) + 1] || null;
+function outlineFileTarget(x, y) {
+  if (boardShowing()) {
+    const cells = [...outlineBoard().querySelectorAll('.ob-cell:not([data-new])')];
+    if (!cells.length) return { beforeId: null };
+    const best = nearestCard(cells, x, y);
+    const r = best.getBoundingClientRect();
+    if (best.dataset.kind === 'chapter' && x < r.left + r.width / 2) return { cell: best, side: 'before', beforeId: best.dataset.ch };
+    const run = cells.filter((c) => c.dataset.ch === best.dataset.ch);
+    return { cell: run[run.length - 1], side: 'after', beforeId: chapterAfter(best.dataset.ch) };
+  }
+  const lines = $$('#outline-list .ol-line');
+  if (!lines.length) return { beforeId: null };
+  let best = lines[lines.length - 1];
+  for (const l of lines) if (y < l.getBoundingClientRect().bottom) { best = l; break; }
+  const r = best.getBoundingClientRect();
+  if (!best.classList.contains('ol-section') && y < r.top + r.height / 2) return { line: best, side: 'before', beforeId: best.dataset.chId };
+  const run = lines.filter((l) => l.dataset.chId === best.dataset.chId);
+  return { line: run[run.length - 1], side: 'after', beforeId: chapterAfter(best.dataset.chId) };
+}
+function showFileCaret(target) {
+  if (!target || (!target.cell && !target.line)) { $('#ob-caret')?.remove(); return; }
+  if (target.cell) { showDropCaret(target); $('#ob-caret').style.width = ''; return; }
+  // the List: a line across, above or below the chapter's lines
+  showDropCaret(null);
+  const caret = document.createElement('div');
+  caret.id = 'ob-caret';
+  document.body.appendChild(caret);
+  const r = target.line.getBoundingClientRect();
+  caret.style.left = r.left + 'px';
+  caret.style.width = r.width + 'px';
+  caret.style.height = '3px';
+  caret.style.top = (target.side === 'before' ? r.top - 2 : r.bottom - 1) + 'px';
+}
+const outlineFileDrag = (e) => currentTab === 'outline' && navFileDrag(e);
+$('#paper-scroll').addEventListener('dragover', (e) => {
+  if (!outlineFileDrag(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  showFileCaret(outlineFileTarget(e.clientX, e.clientY));
+});
+$('#paper-scroll').addEventListener('dragleave', (e) => {
+  if (e.relatedTarget && $('#paper-scroll').contains(e.relatedTarget)) return;
+  if (outlineFileDrag(e)) showFileCaret(null);
+});
+$('#paper-scroll').addEventListener('drop', async (e) => {
+  if (!outlineFileDrag(e) || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  const target = outlineFileTarget(e.clientX, e.clientY);
+  showFileCaret(null);
+  await importDroppedChapters(e.dataTransfer.files, target.beforeId);
+});
 
 function dropCard(src, target) {
   if (!target || !book) return;
@@ -11219,6 +11304,9 @@ function scheduleChapterSave(chId) {
     // above while this save waited: its words are already where they belong,
     // and writing now would only leave an empty stray file in chapters/
     if (book.id !== bookId || !book.chapterOrder.includes(chId)) return;
+    // a flush (a blur, the 20 s tick) wrote these words while this save
+    // waited; a write still on its way may yet fail, so this one queues behind it
+    if (!writing[chId] && chapterHTML[chId] === savedHTML[chId]) return;
     persistChapter(chId);
   }, 800);
 }
@@ -12392,6 +12480,9 @@ async function structuralUndo() {
   restoreCaret(snap.caret); // back to work, no announcement
   if (snap.rejoin) rejoinAtCaret();
   resetNativeUndo();
+  // an undo that sets writing aside says where it went (#377): a chapter that
+  // went back looks, to the writer, like words that vanished
+  if (displaced.length) toast(t('Words you wrote since went to Darlings, so nothing is lost'), 8000);
 }
 
 // after undoing a double-Enter break, close the split the gesture made:
@@ -12890,12 +12981,7 @@ async function addImportedBooks(results, shelf) {
     meta.chapterTitles = {};
     for (const ch of r.chapters) {
       const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-      const html = ch.paras.map((p) => {
-        if (p.scene) return '<p class="scene-break">***</p>';
-        // hyphens set as dialogue dashes, the same as typing them
-        return `<p>${importedEmphasis(escHtml(dialogueDashes(p.text || '', dashStyle())))}</p>`;
-      }).join('') || '<p><br></p>';
-      await window.neo.writeChapter(meta.id, chId, html);
+      await window.neo.writeChapter(meta.id, chId, importedChapterHTML(ch));
       if (ch.title) meta.chapterTitles[chId] = ch.title;
       if (ch.role) meta[ch.role] = chId;
       meta.chapterOrder.push(chId);
@@ -12910,6 +12996,89 @@ async function addImportedBooks(results, shelf) {
   if (!$('#bookshelf-view').hidden) renderShelves();
   if (ok) toast(t('{n} books imported onto “{shelf}” — chapters and scene breaks detected', { n: ok, shelf: shelf.name }), 6000);
   else if (scripts) toast(t('{n} scripts imported onto “{shelf}”', { n: scripts, shelf: shelf.name }), 6000);
+}
+
+// One imported chapter's paragraphs as a chapter body
+function importedChapterHTML(ch) {
+  return ch.paras.map((p) => {
+    if (p.scene) return '<p class="scene-break">***</p>';
+    // hyphens set as dialogue dashes, the same as typing them
+    return `<p>${importedEmphasis(escHtml(dialogueDashes(p.text || '', dashStyle())))}</p>`;
+  }).join('') || '<p><br></p>';
+}
+
+// Files brought into the open book as chapters (#178), before the chapter
+// `beforeId` (at the end when there is none). The words are new files, so
+// nothing already in the book is rewritten. A structural undo takes the
+// chapters out again, and the words are still in the files they came from.
+async function importChaptersIntoBook(results, beforeId) {
+  if (!book || isScript()) return 0;
+  const bookId = book.id;
+  const adding = [];
+  for (const r of results) {
+    if (r.error) { toast(t('Couldn’t import {name}: {error}', { name: r.name, error: r.error }), 6000); continue; }
+    if (r.script) { toast(t('Couldn’t import {name}: {error}', { name: r.name, error: t('a script can’t become chapters of a book') }), 6000); continue; }
+    r.chapters.forEach((ch) => {
+      // a file of one chapter is usually named for it: the title its first
+      // line gave (the parser harvests it as the book's) names the chapter;
+      // in a file of several, that title was the old book's
+      const title = ch.title || (r.chapters.length === 1 && r.title) || '';
+      adding.push({ title, html: importedChapterHTML(ch) });
+    });
+  }
+  if (!adding.length || !book || book.id !== bookId) return 0;
+  snapshotStructure('chapters imported');
+  let at = beforeId ? book.chapterOrder.indexOf(beforeId) : -1;
+  if (at < 0) at = book.chapterOrder.length;
+  const ids = [];
+  try {
+    for (const a of adding) {
+      const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      chapterHTML[chId] = a.html;
+      ids.push(chId);
+      // every chapter file is on disk before book.json names it
+      await persistChapter(chId);
+    }
+  } catch (err) {
+    window.neo.logError('import chapters: ' + (err && err.message || err));
+    for (const chId of ids) delete chapterHTML[chId];
+    undoStack.pop();
+    toast(t('Couldn’t import the chapters: {error}', { error: String(err && err.message || err) }), 6000);
+    return 0;
+  }
+  if (!book || book.id !== bookId) return 0;
+  book.chapterTitles = book.chapterTitles || {};
+  adding.forEach((a, i) => { if (a.title) book.chapterTitles[ids[i]] = a.title; });
+  book.chapterOrder.splice(at, 0, ...ids);
+  await saveMeta();
+  renderChapters();
+  if (currentTab === 'outline') renderOutline();
+  updateCounters();
+  toast(t('{n} chapters added to “{title}”', { n: ids.length, title: book.title || '' }), 6000);
+  return ids.length;
+}
+
+// Files dropped from Finder or Explorer (on the Chapters pane, or the
+// Outline) become chapters before `beforeId`
+async function importDroppedChapters(files, beforeId) {
+  const paths = [...files]
+    .map((f) => { try { return window.neo.pathForFile(f); } catch { return null; } })
+    .filter((p) => p && /\.(docx|txt|md)$/i.test(p));
+  if (!paths.length) { toast(t('No .docx, .txt, or .md files in that drop')); return; }
+  const bookId = book.id;
+  toast(t('Importing…'));
+  const results = await window.neo.importFiles(paths);
+  if (book && book.id === bookId) await importChaptersIntoBook(results, beforeId);
+}
+
+// File → Import Chapters…: after the chapter you're in, or at the end
+async function importChapters() {
+  if (!book || isScript() || $('#editor-view').hidden) return;
+  const bookId = book.id;
+  const results = await window.neo.importPick({ chapters: true });
+  if (!results.length || !book || book.id !== bookId) return;
+  const at = currentChapterId ? book.chapterOrder.indexOf(currentChapterId) + 1 : book.chapterOrder.length;
+  await importChaptersIntoBook(results, book.chapterOrder[at]);
 }
 
 // **bold**, *italic* and _italic_ from an imported file, the way Markdown
@@ -15863,8 +16032,9 @@ async function doExport(format, chId = null) {
 }
 
 function chooseEmailMethod() {
-  // Apple Mail only exists on Macs; elsewhere Gmail
-  if (!navigator.platform.toLowerCase().includes('mac')) return Promise.resolve('gmail');
+  // Gmail opens in the browser, which is no help to a writer with no Gmail
+  // account (#386): every computer is offered its own mail program too
+  const mac = navigator.platform.toLowerCase().includes('mac');
   return new Promise((resolve) => {
     const bd = document.createElement('div');
     bd.className = 'modal-backdrop';
@@ -15876,9 +16046,13 @@ function chooseEmailMethod() {
             <strong>Gmail</strong>
             <span>${t('Opens a pre-filled compose window in your browser. NEO shows you the PDF to drag into it.')}</span>
           </button>
-          <button class="fr-choice" data-m="mail">
+          ${mac ? `<button class="fr-choice" data-m="mail">
             <strong>Apple Mail</strong>
             <span>${t('Fully automatic — the PDF is attached and addressed. Just hit send.')}</span>
+          </button>` : ''}
+          <button class="fr-choice" data-m="mailto">
+            <strong>${t('Your mail program')}</strong>
+            <span>${t('Opens a new message in the program your computer uses for email. NEO shows you the PDF to attach.')}</span>
           </button>
         </div>
       </div>`;
@@ -15919,7 +16093,7 @@ async function doEmailDraft() {
   const body = t('Draft snapshot of “{title}” — {n} words.', { title: shownTitle(book.title), n: total }) + '\n'
     + t('Sent from NEO on {date}.', { date: new Date().toLocaleString(NeoI18n.getLocale()) }) + '\n\n'
     + t('SHA-256 fingerprint of the manuscript text:') + `\n${hash}\n\n`
-    + (library.emailMethod === 'gmail'
+    + (library.emailMethod === 'gmail' || library.emailMethod === 'mailto'
       ? t('The PDF snapshot is in the Finder window NEO just opened — drag it into this email before sending.')
       : t('PDF snapshot attached.'));
   toast(t('Preparing your draft…'));
@@ -15936,6 +16110,7 @@ async function doEmailDraft() {
     method: library.emailMethod
   });
   if (res.method === 'gmail') toast(t('Gmail compose opened — drag in the PDF NEO revealed, then send'), 8000);
+  else if (res.method === 'mailto') toast(t('Your mail program opened — attach the PDF NEO revealed, then send'), 8000);
   else if (res.ok) toast(t('Draft handed to Mail — hit send for your timestamp'));
   else toast(t('Mail unavailable — snapshot saved to your Exports folder instead'));
 }
@@ -16131,6 +16306,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'focus') setFocus(msg.value);
   if (msg.type === 'focusCycle') cycleFocus();
   if (msg.type === 'import') importBooks();
+  if (msg.type === 'importChapters') importChapters();
   if (msg.type === 'stats') openStats();
   if (msg.type === 'chapterStep') gotoChapter(msg.value);
   if (msg.type === 'writingStyle') {

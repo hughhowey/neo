@@ -6,6 +6,10 @@
     "one": "{n} book imported onto “{shelf}” — chapters and scene breaks detected",
     "other": "{n} books imported onto “{shelf}” — chapters and scene breaks detected"
   },
+  "{n} chapters added to “{title}”": {
+    "one": "{n} chapter added to “{title}”",
+    "other": "{n} chapters added to “{title}”"
+  },
   "{n} chapters": {
     "one": "{n} chapter",
     "other": "{n} chapters"

@@ -115,22 +115,26 @@ test('the shelf ignores the shortcut', async () => {
   assert.equal(await tab(), 'manuscript');
 });
 
-test('View → Go to has the four tabs and no key of its own', async () => {
-  const view = Menu.getApplicationMenu().items.find((i) => i.label === 'View');
-  const goTo = view.submenu.items.find((i) => i.label === 'Go to');
-  assert.deepEqual(goTo.submenu.items.map((i) => i.label), ['Manuscript', 'Notes', 'Outline', 'Darlings']);
-  assert.ok(goTo.submenu.items.every((i) => !i.accelerator));
+// The page catches these keys (3283508): a menu accelerator would flash the menu and take AltGr input
+test('no menu item takes Ctrl/Cmd+Alt+Left or Right from the page', async () => {
+  const items = (menu) => menu.items.flatMap((i) => [i, ...(i.submenu ? items(i.submenu) : [])]);
+  const taken = items(Menu.getApplicationMenu()).filter((i) => {
+    const keys = String(i.accelerator || '').toLowerCase().split('+');
+    return i.registerAccelerator !== false
+      && keys.some((k) => ['alt', 'option', 'altgr'].includes(k))
+      && keys.some((k) => ['cmdorctrl', 'commandorcontrol', 'cmd', 'command', 'ctrl', 'control', 'meta', 'super'].includes(k))
+      && ['left', 'right'].includes(keys[keys.length - 1]);
+  });
+  assert.deepEqual(taken.map((i) => i.accelerator), []);
 });
 
-test('the menu items switch tabs', async () => {
-  const view = Menu.getApplicationMenu().items.find((i) => i.label === 'View');
-  const goTo = view.submenu.items.find((i) => i.label === 'Go to');
-  goTo.submenu.items[3].click();
-  await tick(300);
-  assert.equal(await tab(), 'darlings');
-  goTo.submenu.items[0].click();
-  await tick(300);
-  assert.equal(await tab(), 'manuscript');
+// With no menu entry for the tabs, a click on the tab is the other way to each of the four
+test('clicking a tab switches to it', async () => {
+  for (const name of ['darlings', 'outline', 'notes', 'manuscript']) {
+    await js(`document.querySelector('.tab[data-tab="${name}"]').click()`);
+    await tick(300);
+    assert.equal(await tab(), name);
+  }
 });
 
 /* ---------- runner ---------- */

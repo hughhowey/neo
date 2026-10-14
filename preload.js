@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('neo', {
   exportSave: (payload) => ipcRenderer.invoke('export:save', payload),
   emailDraft: (payload) => ipcRenderer.invoke('email:draft', payload),
   logError: (msg) => ipcRenderer.invoke('log:error', msg),
-  importPick: () => ipcRenderer.invoke('import:pick'),
+  importPick: (opts) => ipcRenderer.invoke('import:pick', opts),
   libraryPath: () => ipcRenderer.invoke('library:path'),
   pickCover: () => ipcRenderer.invoke('cover:pick'),
   setCover: (bookId, srcPath) => ipcRenderer.invoke('cover:set', bookId, srcPath),
