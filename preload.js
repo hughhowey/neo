@@ -73,6 +73,15 @@ contextBridge.exposeInMainWorld('neo', {
   i18n: ipcRenderer.sendSync('i18n:get'),
   paper: ipcRenderer.sendSync('paper:get'), // 'Letter' or 'A4', from the computer's region
   plugins: ipcRenderer.sendSync('plugins:list'), // the plugin folders found at launch (plugins-main.js)
+  // a plugin's call to a main half: plugins.js fills in the calling plugin's
+  // id, but any script in the page can name any id (see plugins-main.js).
+  // The answer is { result } or { error }, since main.js would log a
+  // rejection again and might call it a refused save
+  pluginInvoke: async (id, channel, payload) => {
+    const answer = await ipcRenderer.invoke('plugin:invoke', id, channel, payload);
+    if ('error' in answer) throw new Error(answer.error);
+    return answer.result;
+  },
   reloadForLanguage: () => ipcRenderer.invoke('i18n:reload'),
 
   writingStyleState: (st) => ipcRenderer.send('style:state', st),

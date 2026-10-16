@@ -2,11 +2,13 @@
 
 // Plugins, main-process half. A plugin is a folder holding a plugin.json; the
 // folders sit under plugins/ in the app folder and, outside a packaged app,
-// under each comma-separated folder in NEO_PLUGIN_DIRS. This file finds them
-// and lists them for the window (plugins:list); the window loads each one's
-// script (plugins.js). It takes nothing from
-// Electron itself: main.js hands it app, ipcMain and logError through
-// wire(), and nothing runs when it is loaded.
+// under each comma-separated folder in NEO_PLUGIN_DIRS. This file finds them,
+// lists them for the window (plugins:list), where plugins.js loads each
+// one's script, and starts the main half of each plugin that has one (its
+// manifest's main): an activate(host) that answers the plugin's own window
+// half (plugin:invoke). It takes nothing from Electron itself: main.js hands
+// it app, ipcMain and logError through wire(), and nothing runs when it is
+// loaded.
 
 const fs = require('fs');
 const path = require('path');
@@ -16,6 +18,10 @@ const MANIFEST_KEYS = ['id', 'apiVersion', 'renderer', 'main'];
 const PLUGIN_ID = /^[a-z][a-z0-9-]{1,31}$/;
 const FILE_NAME = /^[A-Za-z0-9_][A-Za-z0-9._-]*\.(js|cjs)$/;
 const NEWEST_API = 1; // the newest plugin API this NEO knows (plugins.js has the list)
+// how long a main half's activate may take to settle (start)
+const ACTIVATE_MS = 10000;
+// how long the main halves wait for a window to ask for its plugin list
+const ASK_MS = 5000;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const onlyKeys = (o, keys) => Object.keys(o).every((k) => keys.includes(k));
@@ -29,13 +35,26 @@ function validManifest(m) {
   return isFileName(m.renderer) && optionalFile(m.main);
 }
 
-// { app, ipcMain, logError, appRoot }, from wire()
+// { app, ipcMain, logError, appRoot }, from wire(), and, where a test
+// needs another, activateMs (ACTIVATE_MS) and defer (see holdUntilAsked)
 let host = null;
 let found = null; // discover()'s answer, kept for the life of the process
+// Each started main half by plugin id: { id, ready, failed, timedOut,
+// handlers }. ready settles once its activate has, or its time limit has
+// passed, and never rejects; handlers maps a channel to a function.
+let mains = new Map();
 
 function wire(deps) {
-  host = { ...deps };
+  host = { ...deps, activateMs: deps.activateMs ?? ACTIVATE_MS, defer: deps.defer ?? holdUntilAsked };
   found = null;
+  mains = new Map();
+  waiting = [];
+  released = false;
+  clearTimeout(askTimer);
+  askTimer = null;
+  failures = new WeakMap();
+  // a plugin's window half calls its own main half (neo.invoke in plugins.js)
+  host.ipcMain.handle('plugin:invoke', (_e, id, channel, payload) => answer(id, channel, payload));
   // the window asks once, synchronously, before any of its code runs, and
   // waits until it has an answer, so a throw here would hang it. It gets no
   // mainPath: the window never touches the disk, so it needs no paths on it
@@ -46,7 +65,41 @@ function wire(deps) {
       host.logError('plugins', err);
       e.returnValue = [];
     }
+    // this is the last of the window's sendSync calls at load (preload.js),
+    // and its answer is sent when this listener returns: the main halves
+    // start on the next turn
+    setImmediate(release);
   });
+}
+
+// The main halves start once the window has its plugin list, not before: a
+// main entry's require, or the part of an activate before its first await,
+// is plugin code of any length, and the window's preload waits on its
+// sendSync answers, so all of it runs after them. A window that never asks
+// (its preload failed to load) must not leave the main halves, and the
+// invokes waiting on them, stuck: ASK_MS after the first is held, they start
+// all the same.
+let waiting = []; // the starts held back, until release()
+let released = false;
+let askTimer = null;
+function holdUntilAsked(go) {
+  if (released) {
+    go();
+    return;
+  }
+  waiting.push(go);
+  if (!askTimer) {
+    askTimer = setTimeout(release, ASK_MS);
+    askTimer.unref();
+  }
+}
+
+// once, however many windows ask
+function release() {
+  if (released) return;
+  released = true;
+  clearTimeout(askTimer);
+  for (const go of waiting.splice(0)) go();
 }
 
 function skip(folder, why) {
@@ -151,4 +204,194 @@ function discover() {
   return found;
 }
 
-module.exports = { wire, validManifest, discover };
+// A plugin's main half: what its activate(host) receives and the IPC it
+// answers. plugin:invoke routes on the id the window sends, and nothing
+// checks that the caller is that plugin: every plugin's script runs in the
+// page beside NEO's own, and any of them can call window.neo.pluginInvoke
+// with another plugin's id. The id keeps a plugin from reaching another's
+// half by mistake, not on purpose, so every installed plugin is trusted with
+// every main half.
+
+const CHANNEL = /^[a-z][a-z0-9.-]{0,63}$/;
+const LOG_LEVELS = ['error', 'warn', 'info', 'debug'];
+
+// What a plugin threw or passed, as one piece of text: an error's stack,
+// else JSON. A plugin can throw anything, and a Symbol or an object with no
+// prototype has no text form; the line must still be written.
+function textOf(what) {
+  try {
+    if (what && what.stack) return String(what.stack);
+    if (typeof what === 'string') return what;
+    const json = JSON.stringify(what);
+    return json === undefined ? String(what) : json;
+  } catch {
+    return `(a value of type ${typeof what} with no text form)`;
+  }
+}
+
+// the short text of what a plugin threw: an error's message, else textOf
+function messageOf(what) {
+  try {
+    if (what && typeof what.message === 'string') return what.message;
+  } catch { /* a message that throws when read: textOf copes */ }
+  return textOf(what);
+}
+
+// A handler that fails every time it is called would add a line to
+// neo-errors.log, a file in the synced library written on the main thread,
+// on every call. Its first failure is logged, then one a minute at most,
+// with a count of those left out, as plugins.js does in the window. One
+// function that serves two channels has a minute for each.
+const QUIET_MS = 60000;
+let failures = new WeakMap(); // handler -> Map of channel -> { at, untold }
+function logFailure(entry, fn, doing, err) {
+  const now = performance.now();
+  if (!failures.has(fn)) failures.set(fn, new Map());
+  const byDoing = failures.get(fn);
+  const last = byDoing.get(doing);
+  if (last && now - last.at < QUIET_MS) {
+    last.untold++;
+    return;
+  }
+  byDoing.set(doing, { at: now, untold: 0 });
+  const more = last && last.untold ? `${last.untold} more failures of this handler since its last line; the latest: ` : '';
+  host.logError(`plugin ${entry.id}: ${doing}`, more + textOf(err));
+}
+
+// what activate(host) receives
+function apiFor(entry) {
+  const { id } = entry;
+  return Object.freeze({
+    id,
+    // answers neo.invoke(channel, payload) from this plugin's window half
+    handle(channel, fn) {
+      if (typeof channel !== 'string' || !CHANNEL.test(channel)) {
+        throw new TypeError(`handle: ${textOf(channel)} is not a channel name (${CHANNEL})`);
+      }
+      if (typeof fn !== 'function') throw new TypeError(`handle('${channel}') needs a function`);
+      if (entry.handlers.has(channel)) throw new TypeError(`handle: '${channel}' has a handler already`);
+      if (!entry.failed) entry.handlers.set(channel, fn);
+    },
+    // neo-errors.log sits in the synced library, so only what went wrong
+    // goes there; info and debug go to the console
+    log(level, message, data) {
+      if (!LOG_LEVELS.includes(level)) throw new TypeError(`log: no level is called ${textOf(level)}; there are ${LOG_LEVELS.join(', ')}`);
+      const line = textOf(message) + (data === undefined ? '' : ' ' + textOf(data));
+      if (level === 'error' || level === 'warn') host.logError(`plugin ${id}: ${level}`, line);
+      else console.log(`[plugin ${id}: ${level}] ${line}`);
+    }
+  });
+}
+
+// A main half that fails to start loses whatever it registered, and the
+// error goes to the log; NEO and the other plugins carry on
+function fail(entry, err) {
+  // once only: an activate that fails after its time limit has been reported
+  if (entry.failed) return;
+  entry.failed = true;
+  entry.handlers.clear();
+  host.logError(`plugin ${entry.id}: activate`, textOf(err));
+}
+
+// The file a main entry will be required from, or why it may not be. require
+// follows what it is given: a link, a main.js.js beside a missing main.js,
+// a package.json in a folder named main.js. So the path is resolved here,
+// must be a file inside the app folder, and is the path that is required.
+function realMain(mainPath) {
+  const real = fs.realpathSync.native(mainPath);
+  if (outsideApp(path.relative(fs.realpathSync.native(host.appRoot), real))) {
+    throw new Error(`its main entry leads outside the app folder, to ${real}`);
+  }
+  if (!fs.statSync(real).isFile()) throw new Error(`its main entry is not a file: ${real}`);
+  return real;
+}
+
+// An activate that awaits what never comes would leave its plugin's invokes
+// waiting for ever, and the log silent. Past activateMs it counts as failed:
+// logged once, and its pending and later invokes are refused, even if it
+// settles after all.
+function start(entry, mainPath) {
+  let result;
+  let async;
+  try {
+    const exported = require(realMain(mainPath));
+    if (!exported || typeof exported.activate !== 'function') throw new TypeError(`${mainPath} has no activate function`);
+    result = exported.activate(apiFor(entry));
+    async = !!result && typeof result.then === 'function';
+  } catch (err) {
+    fail(entry, err);
+    return Promise.resolve();
+  }
+  if (!async) return Promise.resolve();
+  const limit = host.activateMs;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      entry.timedOut = true;
+      fail(entry, `did not finish activating within ${limit / 1000} s, so its invokes are refused`);
+      resolve();
+    }, limit);
+    timer.unref();
+    Promise.resolve(result).then(() => {}, (err) => fail(entry, err)).then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+// Registers the main half of each plugin that has one, once, and starts it
+// when the window has its plugin list (host.defer; see holdUntilAsked). None
+// is awaited: an activate that returns a promise runs on while NEO starts.
+// An invoke that comes before a main half has started waits for it, as for
+// one still activating.
+function activateMains() {
+  for (const m of discover()) {
+    if (!m.mainPath || mains.has(m.id)) continue;
+    const entry = { id: m.id, ready: null, failed: false, timedOut: false, handlers: new Map() };
+    mains.set(m.id, entry);
+    entry.ready = new Promise((resolve) => host.defer(() => resolve(start(entry, m.mainPath))));
+  }
+}
+
+// plugin:invoke: waits until the plugin's main half has started, then
+// hands the payload to the handler it took for the channel. A handler's
+// error is logged here (see logFailure for how often) and goes back to the
+// window as a rejection naming the plugin and the channel (see answer).
+async function invoke(id, channel, payload) {
+  if (typeof channel !== 'string' || !CHANNEL.test(channel)) throw new TypeError(`${textOf(channel)} is not a channel name`);
+  const entry = mains.get(id);
+  if (!entry) throw new Error(`no plugin called ${textOf(id)} has a main half to answer ${channel}`);
+  await entry.ready;
+  if (entry.failed) throw new Error(`plugin ${entry.id} ${entry.timedOut ? 'did not finish activating' : 'failed to start its main half'}, so nothing answers ${channel}`);
+  const fn = entry.handlers.get(channel);
+  if (!fn) throw new Error(`plugin ${entry.id} has no handler for ${channel}`);
+  try {
+    // Electron clones the answer on its way to the window; one it cannot
+    // clone (a function, a Promise inside an object) would leave the invoke
+    // waiting for ever, with only the console to say why. Cloned here, it
+    // fails as a failure of the handler.
+    return structuredClone(await fn(payload));
+  } catch (err) {
+    logFailure(entry, fn, `invoke ${channel}`, err);
+    throw new Error(`plugin ${entry.id}: ${channel} failed: ${messageOf(err)}`);
+  }
+}
+
+// What plugin:invoke sends back is { result } or { error }, never a
+// rejection: main.js logs every rejected handler again and, for an EPERM,
+// EACCES or EROFS inside the library, tells the writer NEO can't save, and
+// a plugin's failure is neither a refused save nor main.js's to log.
+// preload.js turns { error } back into the rejection. A refusal (a name
+// that is no channel, a plugin with no main half, a channel with no
+// handler) is not logged here either: it rejects to the caller. A caller
+// that drops the promise leaves an unhandled rejection in the window, where
+// plugins.js logs it under the plugin's name, at most once a minute, and
+// tells the writer nothing.
+async function answer(id, channel, payload) {
+  try {
+    return { result: await invoke(id, channel, payload) };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+module.exports = { wire, validManifest, discover, activateMains };
