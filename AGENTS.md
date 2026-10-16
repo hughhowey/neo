@@ -30,6 +30,8 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `backup-worker.js` | The day's backup zip, forked with `utilityProcess` by `dailyBackup` so a file that won't come off iCloud never holds the main process |
 | `spell-ro.js` | Romanian diacritics, used by the worker. Does not alter the manuscript |
 | `manuscript.js` | Standard manuscript format: the word count's rounding, the header's surname, the `.docx`'s parts and the PDF's page, from a model the window hands it. Plain JavaScript that also runs in Node (`window.NeoManuscript`, loaded by `index.html`) |
+| `plugins.js` | Plugins, window half: loads each plugin's script after `app.js` and hands its `activate` the plugin API. `window.NeoPlugins`, loaded by `index.html`; `app.js` calls it from one guarded line at its end |
+| `plugins-main.js` | Plugins, main half: finds the plugin folders, lists them for the window (`plugins:list`) and starts each one's main-process half (`plugin:invoke`). Wired by `main.js` |
 | `locales/<code>.json` | One language. Regional files (`fr-CA.json`) hold only the strings that differ |
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
@@ -124,6 +126,17 @@ A book's right-click on the shelf is a small menu (`popMenu`) on the desktop, wi
 
 Pocket makes PDFs through `NeoPdf`, a native plugin in each project: Android opens its print screen (Save as PDF), iOS draws the pages into a file for the share sheet. A script's title can be set bold, underlined or italic as a whole (`book.titleStyle`, ⌘B ⌘U ⌘I on the title page), and keeps it in the PDF, Fountain and Final Draft.
 
+## Plugins
+
+A plugin is a folder with a `plugin.json`: `id`, `apiVersion`, `renderer` (a script for the window), and optionally `main` (a script for the main process), `title` and `description`. NEO reads them from `plugins/` in the app folder and, when not packaged, from the comma-separated folders in `NEO_PLUGIN_DIRS`, which must lie inside the app folder because the page's CSP is `'self'`. With no plugins installed NEO behaves exactly as before.
+
+- The window script calls `NeoPlugins.register({ id, apiVersion, activate(neo) })`. API 1 hands it `neo.invoke(channel, payload)`, a call to its own main half.
+- The main script exports `activate(host)`, which gets `host.id`, `host.handle(channel, fn)` and `host.log(level, message, data)`. The main halves start after the window has its plugin list, and one whose `activate` takes more than 10 s is refused.
+- A plugin's failure is logged to `neo-errors.log` under `plugin <id>:`, at most once a minute, and never shown to the writer. NEO's own error net does not hear of it.
+- `pluginsOff` in `settings.json` (a list of ids) turns plugins off on this device. They are still listed, with `on: false`, but neither half runs. It is read once, at launch.
+- A plugin's script runs in NEO's page and can reach all of `window.neo`, so a plugin is trusted like NEO's own code. A new capability for plugins is a new call in the API, behind a new `apiVersion`.
+- `scripts/fixtures/plugins/ping` is the smallest plugin with both halves. `npm run test:plugins` runs it and the failing fixtures in Electron; `scripts/plugins-main.test.js` covers discovery, the main halves and the window half in `vm`.
+
 ## Processes
 
 ```
@@ -216,6 +229,7 @@ npm run test:coverage      # node --test --experimental-test-coverage scripts/*.
 npm run lint               # oxlint, Electron's standard-style JavaScript rules
 npm run test:spellcheck    # node --test scripts/spellcheck.test.js
 npm run test:dashes        # node --test scripts/dashes.test.js
+npm run test:plugins       # electron scripts/plugins.e2e.js, with the fixture plugins
 npm run bundle             # Hugh: brings in the newest .bundle from ~/Downloads and pushes main
 npm run try                # Hugh: opens the newest .bundle's NEO on a copy of the library, pushes nothing (-- fresh: an empty library)
 npm run release            # Hugh: next version (x.y.9 → x.(y+1).0), commit, push, tag (npm run release -- 2.0.0 for another)
