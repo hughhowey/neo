@@ -970,3 +970,344 @@ describe('main halves when no window asks for the plugin list', { concurrency: 1
     assert.equal(order.filter((name) => name === 'activate ping').length, 1);
   });
 });
+
+describe('the window half', () => {
+  // Pocket runs app.js without plugins.js, so each call app.js makes into the
+  // plugin host stands behind a check that the host is there
+  const unguarded = (source) => source.split(/\r?\n/).flatMap((line, i) => [...line.matchAll(/\bNeoPlugins\./g)]
+    .filter((m) => !/\bif \(window\.NeoPlugins(\)| &&)/.test(line.slice(0, m.index)))
+    .map(() => `app.js:${i + 1}: ${line.trim()}`));
+
+  test('the hook is guarded: every NeoPlugins call in app.js sits behind window.NeoPlugins', () => {
+    const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+    assert.ok((app.match(/\bNeoPlugins\./g) || []).length >= 1, 'app.js calls the plugin host');
+    assert.deepEqual(unguarded(app), []);
+  });
+
+  test('the guard check finds a call left unguarded', () => {
+    const source = [
+      'if (window.NeoPlugins) NeoPlugins.attach();',
+      'NeoPlugins.attach();',
+      'window.NeoPlugins.attach();',
+      'if (!window.NeoPlugins) NeoPlugins.attach();'
+    ].join('\n');
+    assert.deepEqual(unguarded(source).map((line) => line.split(': ')[0]), ['app.js:2', 'app.js:3', 'app.js:4']);
+  });
+
+  // plugins.js in a vm, with window.neo.plugins as given and stand-ins for
+  // the page: what it would add to the page (an element's remove() takes it
+  // off again), what it logs, and what it writes to the console. logError,
+  // when given, stands in for the log; clock.now is what performance.now()
+  // reads; invoked holds what reached window.neo.pluginInvoke; fire(type,
+  // event) is the page dispatching an event to the window's listeners;
+  // running(src, fn) runs fn as the script loaded from src does.
+  function windowHalf(list, logError = null) {
+    const added = [];
+    const logged = [];
+    const consoled = [];
+    const invoked = [];
+    const clock = { now: 0 };
+    const windowListeners = [];
+    const page = { appendChild: (el) => added.push(el) };
+    const element = (tag) => ({
+      tag,
+      remove() {
+        const i = added.indexOf(this);
+        if (i >= 0) added.splice(i, 1);
+      }
+    });
+    const context = vm.createContext({
+      neo: {
+        plugins: list,
+        logError: logError || ((line) => logged.push(line)),
+        pluginInvoke: async (...args) => { invoked.push(args); return { answered: args[2] }; }
+      },
+      // currentScript is plugins.js itself while it loads
+      document: { head: page, body: page, createElement: element, currentScript: { src: 'plugins.js' } },
+      addEventListener: (type, fn) => windowListeners.push([type, fn]),
+      performance: { now: () => clock.now },
+      console: { error: (...args) => consoled.push(args.map(String).join(' ')) }
+    });
+    context.window = context;
+    vm.runInContext(fs.readFileSync(path.join(root, 'plugins.js'), 'utf8'), context, { filename: 'plugins.js' });
+    context.document.currentScript = null;
+    const fire = (type, event) => windowListeners.filter(([t]) => t === type).forEach(([, fn]) => fn(event));
+    // fn run as the script at src is, with document.currentScript naming it
+    const running = (src, fn) => {
+      context.document.currentScript = { src };
+      try {
+        return fn();
+      } finally {
+        context.document.currentScript = null;
+      }
+    };
+    return { NeoPlugins: context.NeoPlugins, added, logged, consoled, invoked, clock, fire, running, neo: context.neo };
+  }
+
+  const listed = (id, apiVersion = 1) => ({ id, apiVersion, rendererUrl: `plugins/${id}/renderer.js` });
+  // the host with one listed plugin, p, registered with activate; neo is
+  // the API p was handed
+  function withPlugin(activate = () => {}, logError = null) {
+    const host = windowHalf([listed('p')], logError);
+    host.NeoPlugins.attach();
+    let neo = null;
+    host.NeoPlugins.register({ id: 'p', apiVersion: 1, activate(api) { neo = api; return activate(api); } });
+    return { ...host, neo };
+  }
+  // a rejected promise's handlers have run
+  const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+  test('attach puts in each listed plugin\'s script, in order and once', () => {
+    const host = windowHalf([listed('a'), listed('b')]);
+    host.NeoPlugins.attach();
+    host.NeoPlugins.attach();
+    assert.deepEqual(host.added.map((el) => [el.tag, el.src, el.async]), [
+      ['script', 'plugins/a/renderer.js', false],
+      ['script', 'plugins/b/renderer.js', false]
+    ]);
+  });
+
+  test('a plugin is handed invoke and nothing else, frozen', () => {
+    const { neo } = withPlugin();
+    assert.deepEqual(Object.keys(neo), ['invoke']);
+    assert.ok(Object.isFrozen(neo));
+  });
+
+  test('no list, one that is not an array, or an empty one: no plugins, and nothing breaks', () => {
+    for (const list of [undefined, null, {}, 'ping', []]) {
+      const host = windowHalf(list);
+      host.NeoPlugins.attach();
+      assert.deepEqual(host.added, [], String(list));
+      let activated = false;
+      host.NeoPlugins.register({ id: 'ping', apiVersion: 1, activate() { activated = true; } });
+      assert.equal(activated, false, String(list));
+      assert.match(host.logged[0], /^plugin ping: .*not activated/, String(list));
+    }
+  });
+
+  test('a plugin written for an API this NEO does not know, or another than its plugin.json says, is refused', () => {
+    const host = windowHalf([listed('ahead', 5), listed('mismatched')]);
+    host.NeoPlugins.attach();
+    let activated = 0;
+    host.NeoPlugins.register({ id: 'ahead', apiVersion: 5, activate() { activated++; } });
+    host.NeoPlugins.register({ id: 'mismatched', apiVersion: 2, activate() { activated++; } });
+    assert.equal(activated, 0);
+    assert.equal(host.logged.length, 2);
+    assert.match(host.logged[0], /^plugin ahead: apiVersion 5\b.*knows 1\b.*not activated/);
+    assert.match(host.logged[1], /^plugin mismatched: apiVersion 2, where its plugin\.json says 1\b.*not activated/);
+  });
+
+  test('a plugin with no activate, or one that registers twice, is refused and logged', () => {
+    const host = windowHalf([listed('p'), listed('q')]);
+    host.NeoPlugins.attach();
+    let activated = 0;
+    host.NeoPlugins.register({ id: 'p', apiVersion: 1 });
+    host.NeoPlugins.register({ id: 'q', apiVersion: 1, activate() { activated++; } });
+    host.NeoPlugins.register({ id: 'q', apiVersion: 1, activate() { activated++; } });
+    assert.equal(activated, 1);
+    assert.match(host.logged[0], /^plugin p: no activate function, so it is not activated/);
+    assert.match(host.logged[1], /^plugin q: registered already, so it is not activated/);
+  });
+
+  test('a script that registers under another id than its plugin.json is refused under the id it gave', () => {
+    const host = windowHalf([listed('works'), listed('wrong')]);
+    host.NeoPlugins.attach();
+    host.running('plugins/wrong/renderer.js', () => host.NeoPlugins.register({ id: 'someone-else', apiVersion: 1, activate() {} }));
+    assert.match(host.logged[0], /^plugin someone-else: not among the plugins NEO found at launch, so it is not activated/);
+  });
+
+  test('a script that will not load is logged under its plugin, and the rest still load', () => {
+    const host = windowHalf([listed('gone'), listed('works')]);
+    host.NeoPlugins.attach();
+    host.added.find((el) => el.src === 'plugins/gone/renderer.js').onerror();
+    assert.deepEqual(host.logged, ['plugin gone: could not load plugins/gone/renderer.js']);
+    assert.equal(host.added.length, 2);
+  });
+
+  test('attach skips a null or id-less entry in the list, as register does', () => {
+    const host = windowHalf([null, { apiVersion: 1, rendererUrl: 'plugins/x/renderer.js' }, listed('p')]);
+    host.NeoPlugins.attach();
+    assert.deepEqual(host.added.map((el) => el.src), ['plugins/p/renderer.js']);
+    let activated = false;
+    host.NeoPlugins.register({ apiVersion: 1, activate() { activated = true; } });
+    assert.equal(activated, false, 'a plugin with no id never matches an entry with none');
+  });
+
+  test('invoke reaches the calling plugin\'s own main half, and a plugin that failed to activate invokes nothing', async () => {
+    const { neo, invoked } = withPlugin();
+    assert.deepEqual(await neo.invoke('ping', { a: 1 }), { answered: { a: 1 } });
+    assert.deepEqual(invoked, [['p', 'ping', { a: 1 }]], 'the id is the caller\'s own');
+    const failed = withPlugin(() => { throw new Error('activate fails on purpose'); });
+    await assert.rejects(failed.neo.invoke('ping', { a: 2 }), /\bp\b.*\bping\b/);
+    assert.deepEqual(failed.invoked, []);
+  });
+
+  test('an activate that throws or rejects is logged with its stack, and the plugin invokes nothing after', async () => {
+    const thrown = withPlugin(() => { throw new Error('activate threw on purpose'); });
+    assert.equal(thrown.logged.length, 1, thrown.logged.join('\n'));
+    assert.match(thrown.logged[0], /^plugin p: Error: activate threw on purpose\n\s+at /);
+    const rejected = withPlugin(async () => {
+      await null;
+      throw new Error('activate rejected on purpose');
+    });
+    await settled();
+    assert.equal(rejected.logged.length, 1, rejected.logged.join('\n'));
+    assert.match(rejected.logged[0], /^plugin p: Error: activate rejected on purpose\n\s+at /);
+    await assert.rejects(rejected.neo.invoke('ping'), /not active/);
+    assert.deepEqual(rejected.invoked, []);
+  });
+
+  test('an error thrown in a plugin script is logged under its name and goes no further', () => {
+    const host = windowHalf([listed('works'), listed('early')]);
+    host.NeoPlugins.attach();
+    host.NeoPlugins.register({ id: 'works', apiVersion: 1, activate() {} });
+    // a script's error as the page reports it: its filename is the script's URL
+    const error = (filename, err) => {
+      const event = { filename, lineno: 3, message: `Uncaught ${err.message}`, error: err, stopped: false, stopImmediatePropagation() { this.stopped = true; } };
+      host.fire('error', event);
+      return event.stopped;
+    };
+    assert.equal(error('plugins/early/renderer.js', new Error('early on purpose')), true);
+    assert.match(host.logged[0], /^plugin early: Error: early on purpose\n\s+at /);
+    // one from a plugin that registered is logged too
+    assert.equal(error('plugins/works/renderer.js', new Error('late on purpose')), true);
+    assert.match(host.logged[1], /^plugin works: Error: late on purpose\n\s+at /);
+    // a script of NEO's own is not the host's
+    assert.equal(error('app.js', new Error('not a plugin')), false);
+    assert.equal(host.logged.length, 2);
+    // a thrown value that is no Error is logged by the page's message, once
+    // the minute in which a plugin's errors are logged but once has passed
+    host.clock.now += 60000;
+    const plain = { filename: 'plugins/works/renderer.js', lineno: 9, message: 'Uncaught thrown', error: null, stopImmediatePropagation() {} };
+    host.fire('error', plain);
+    assert.equal(host.logged[2], 'plugin works: Uncaught thrown @ plugins/works/renderer.js:9');
+  });
+
+  test('a plugin script that errors again and again is logged once, then at most once a minute with a count', () => {
+    const host = windowHalf([listed('works'), listed('other')]);
+    host.NeoPlugins.attach();
+    // each error is stopped, so NEO's net never tells the writer, logged or not
+    const error = (filename, message) => {
+      const event = { filename, lineno: 3, message, error: new Error(message), stopped: false, stopImmediatePropagation() { this.stopped = true; } };
+      host.fire('error', event);
+      return event.stopped;
+    };
+    for (let i = 0; i < 110; i++) assert.equal(error('plugins/works/renderer.js', `tick ${i}`), true);
+    assert.equal(host.logged.length, 1);
+    assert.match(host.logged[0], /^plugin works: Error: tick 0\n\s+at /);
+    // another plugin's first is its own line
+    error('plugins/other/renderer.js', 'other ticks');
+    assert.equal(host.logged.length, 2);
+    // a minute on, the next is logged with the count of the 109 left out
+    host.clock.now += 60000;
+    error('plugins/works/renderer.js', 'tick 110');
+    assert.equal(host.logged.length, 3);
+    assert.match(host.logged[2], /^plugin works: 109 more failures of this plugin's script since its last line; the latest: Error: tick 110\n\s+at /);
+    // and a minute with none, the next is a first
+    host.clock.now += 60000;
+    error('plugins/works/renderer.js', 'tick 111');
+    assert.match(host.logged[3], /^plugin works: Error: tick 111\n/);
+  });
+
+  // A promise a plugin drops and that rejects reaches the page as an
+  // unhandled rejection, and NEO's net (app.js) would log it unlimited and
+  // tell the writer. The host takes the ones that are a plugin's: those it
+  // made for the plugin (an invoke refused, an invoke after a failed
+  // activate) and those with a plugin's script first in the stack.
+  test('a rejection a plugin does not catch is logged under the plugin once a minute, and goes no further', async () => {
+    const host = windowHalf([listed('works'), listed('broken')]);
+    host.NeoPlugins.attach();
+    let neo = null;
+    host.NeoPlugins.register({ id: 'works', apiVersion: 1, activate(api) { neo = api; } });
+    let dead = null;
+    host.NeoPlugins.register({ id: 'broken', apiVersion: 1, activate(api) { dead = api; throw new Error('broken on purpose'); } });
+    const logged = () => host.logged.filter((line) => !line.includes('broken on purpose'));
+    // what the page reports for a promise nobody handles
+    const dropped = (reason) => {
+      const event = { reason, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+      host.fire('unhandledrejection', event);
+      return event;
+    };
+    const taken = (event) => event.prevented && event.stopped;
+    // an invoke the main half refuses: the Error preload.js makes from the answer
+    host.neo.pluginInvoke = async () => { throw new Error('plugin works has no handler for index'); };
+    assert.equal(taken(dropped(await neo.invoke('index', 1).catch((err) => err))), true);
+    assert.equal(logged().length, 1);
+    assert.match(logged()[0], /^plugin works: Error: plugin works has no handler for index\n\s+at /);
+    // in the same minute: counted, and still taken
+    for (let i = 0; i < 3; i++) assert.equal(taken(dropped(await neo.invoke('index', i).catch((err) => err))), true);
+    assert.equal(logged().length, 1);
+    // a minute on: the next is logged with the count
+    host.clock.now += 60000;
+    assert.equal(taken(dropped(await neo.invoke('index', 9).catch((err) => err))), true);
+    assert.equal(logged().length, 2);
+    assert.match(logged()[1], /^plugin works: 3 more failures of this plugin's script since its last line; the latest: Error: plugin works has no handler for index/);
+    // the Error from invoking after a failed activate is the failed plugin's
+    assert.equal(taken(dropped(await dead.invoke('index').catch((err) => err))), true);
+    assert.match(logged()[2], /^plugin broken: Error: plugin broken is not active, so it cannot invoke index\n\s+at /);
+    // A plugin's own callback that throws: the first frame that names a
+    // script is the plugin's (one that names none, a builtin's, is passed
+    // over). V8's frame for an anonymous async function has no name to
+    // parse.
+    const thrown = (message, ...frames) => Object.assign(new Error(message), { stack: [`Error: ${message}`, ...frames.map((frame) => `    at ${frame}`)].join('\n') });
+    host.clock.now += 60000;
+    assert.equal(taken(dropped(thrown('a then callback throws', 'new Promise (<anonymous>)', 'plugins/works/renderer.js:12:30', 'async Promise.all (index 0)'))), true);
+    assert.match(logged()[3], /^plugin works: Error: a then callback throws\n\s+at new Promise/);
+    assert.equal(taken(dropped(thrown('after an await', 'async plugins/broken/renderer.js:7:5'))), true);
+    assert.match(logged()[4], /^plugin broken: Error: after an await\n/);
+    // the host answering a plugin's call (plugins.js frames, and no other
+    // script before the plugin's) is the plugin's call
+    host.clock.now += 60000;
+    assert.equal(taken(dropped(thrown('the host answers', 'Object.invoke (plugins.js:120:11)', 'plugins/works/renderer.js:3:3'))), true);
+    assert.match(logged()[5], /^plugin works: Error: the host answers\n/);
+    // Anything else is NEO's, left to its net and not logged here: not an
+    // Error with a stack, or any script but this file and the plugin's comes
+    // before the plugin's first frame. NEO's own code is one: a bug in it
+    // is not the plugin's, whatever plugin awaits it below.
+    const neos = [
+      new Error('NEO\'s own'),
+      Object.assign(new Error('app'), { stack: 'Error: app\n    at app.js:1:1' }),
+      thrown('a NEO bug', 'openBook (app.js:2513:9)', 'async reopen (plugins/works/renderer.js:7:5)'),
+      thrown('a NEO bug under a native frame', 'new Promise (<anonymous>)', 'openBook (app.js:2513:9)', 'async plugins/works/renderer.js:7:5'),
+      thrown('NEO calls the host', 'attach (plugins.js:200:5)', 'app.js:18000:39'),
+      'a string', undefined, null
+    ];
+    for (const reason of neos) {
+      const event = dropped(reason);
+      assert.deepEqual([event.prevented, event.stopped], [false, false], String(reason && reason.stack || reason));
+    }
+    assert.equal(logged().length, 6);
+  });
+
+  test('a log that throws or rejects never escapes into NEO: the line goes to the console instead', async () => {
+    const unhandled = [];
+    const onUnhandled = (err) => unhandled.push(err);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      for (const logError of [() => { throw new Error('log down'); }, () => Promise.reject(new Error('log down'))]) {
+        const host = withPlugin(() => { throw new Error('activate fails on purpose'); }, logError);
+        await settled();
+        assert.equal(host.consoled.length, 1, host.consoled.join('\n'));
+        assert.match(host.consoled[0], /^plugin p: Error: activate fails on purpose\n[\s\S]*Error: log down/);
+      }
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    assert.deepEqual(unhandled, []);
+  });
+
+  test('the comment at the top of plugins.js names every call a plugin is handed, and what its script can reach besides', () => {
+    const source = fs.readFileSync(path.join(root, 'plugins.js'), 'utf8');
+    const head = source.slice(0, source.indexOf('\'use strict\''));
+    const host = windowHalf([listed('p')]);
+    host.NeoPlugins.attach();
+    const calls = new Set();
+    host.NeoPlugins.register({ id: 'p', apiVersion: 1, activate(neo) { for (const name of Object.keys(neo)) calls.add(name); } });
+    assert.ok(calls.has('invoke'), [...calls].join(', '));
+    assert.deepEqual([...calls].filter((name) => !new RegExp(`\\b${name}\\(`).test(head)), [], head);
+    assert.match(head, /\bwindow\.neo\b/, 'it says window.neo is in reach of any plugin script');
+    assert.match(head, /\btrust/, 'and which plugins NEO trusts because of it');
+    assert.match(head, /\bapp folder\b/, 'it says where those plugins load from: the app folder');
+    assert.match(head, /\bnot packaged\b[^.]*\bNEO_PLUGIN_DIRS\b/, 'and, when NEO is not packaged, the folders in NEO_PLUGIN_DIRS');
+  });
+});
