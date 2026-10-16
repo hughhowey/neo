@@ -1,0 +1,5 @@
+{
+  "id": "dropper",
+  "apiVersion": 1,
+  "renderer": "renderer.js"
+}

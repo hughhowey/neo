@@ -1,0 +1,6 @@
+{
+  "id": "ping",
+  "apiVersion": 1,
+  "renderer": "renderer.js",
+  "main": "main.js"
+}

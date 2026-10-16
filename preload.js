@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('neo', {
   // interface language, fetched once before the page's scripts run
   i18n: ipcRenderer.sendSync('i18n:get'),
   paper: ipcRenderer.sendSync('paper:get'), // 'Letter' or 'A4', from the computer's region
+  plugins: ipcRenderer.sendSync('plugins:list'), // the plugin folders found at launch (plugins-main.js)
   reloadForLanguage: () => ipcRenderer.invoke('i18n:reload'),
 
   writingStyleState: (st) => ipcRenderer.send('style:state', st),
