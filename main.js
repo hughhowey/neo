@@ -2088,7 +2088,7 @@ ipcMain.handle('log:error', (_e, msg) => logError('renderer', msg));
 
 // plugins (plugins-main.js): plugins:list for the window, and each
 // plugin's main half (plugin:invoke)
-plugins.wire({ app, ipcMain, logError, appRoot: __dirname });
+plugins.wire({ app, ipcMain, logError, appRoot: __dirname, readSettings });
 
 // One zip of the whole library per day, keeping the last 14. Cheap insurance.
 // The day's backup is made in a process of its own (backup-worker.js). It

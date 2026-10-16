@@ -47,11 +47,11 @@ after(() => {
 
 // wires the module to stand-ins; dirs becomes NEO_PLUGIN_DIRS. Electron's
 // folders sit in the app folder (by default a temporary one that holds the
-// fixture plugins)
+// fixture plugins), and settings.json is settings
 function wire({
   appRoot = fixtureApp(), isPackaged = false, dirs,
   app = { isPackaged, getPath: (name) => path.join(appRoot, name) },
-  activateMs,
+  settings = {}, activateMs,
   // plugins-main.js starts each main half a turn after activateMains; the
   // tests start theirs at once unless a test passes null for its own way
   defer = (run) => run()
@@ -65,6 +65,7 @@ function wire({
     ipcMain: { on: (channel, fn) => handlers.set(channel, fn), handle: (channel, fn) => handlers.set(channel, fn) },
     logError: (source, err) => logs.push(`[${source}] ${err && err.stack ? err.stack : String(err)}`),
     appRoot,
+    readSettings: () => structuredClone(settings),
     defer,
     ...(activateMs === undefined ? {} : { activateMs })
   });
@@ -155,6 +156,26 @@ describe('plugin discovery', { concurrency: 1 }, () => {
     }
   });
 
+  test('a title and a description are listed as plugin.json gives them, and are refused when empty, too long or not text', () => {
+    const app = appFolder({
+      'plugins/a-named': plugin('named', { title: 'Named', description: 'What it does, in a sentence.' }),
+      'plugins/b-longest': plugin('longest', { title: '\u{1F600}'.repeat(64), description: 'd'.repeat(280) }),
+      'plugins/c-bare': plugin('bare'),
+      'plugins/empty-title': plugin('empty-title', { title: '' }),
+      'plugins/long-title': plugin('long-title', { title: 't'.repeat(65) }),
+      'plugins/long-description': plugin('long-description', { description: 'd'.repeat(281) }),
+      'plugins/number-title': plugin('number-title', { title: 7 }),
+      'plugins/null-description': plugin('null-description', { description: null })
+    });
+    const { logs } = wire({ appRoot: app });
+    assert.deepEqual(ids(), ['named', 'longest', 'bare']);
+    assert.equal(find('named').title, 'Named');
+    assert.equal(find('named').description, 'What it does, in a sentence.');
+    assert.equal(find('bare').title, undefined);
+    assert.equal(logs.length, 5, logs.join('\n'));
+    for (const line of logs) assert.match(line, /does not match the manifest format/);
+  });
+
   // a newer API may well add to the manifest too, so the rest of such a
   // manifest is not judged
   test('a manifest for a newer plugin API than this NEO knows is refused with a reason that names both versions', () => {
@@ -210,6 +231,30 @@ describe('plugin discovery', { concurrency: 1 }, () => {
     const shouted = app.toUpperCase() === app ? app.toLowerCase() : app.toUpperCase();
     wire({ appRoot: app, dirs: path.join(shouted, fixtures) });
     assert.equal(find('ping').rendererUrl, 'scripts/fixtures/plugins/ping/renderer.js');
+  });
+
+  test('each plugin is on unless settings.json names it in pluginsOff, and an off one is still listed', () => {
+    const app = appFolder({ 'plugins/alpha': plugin('alpha'), 'plugins/beta': plugin('beta'), 'plugins/gamma': plugin('gamma') });
+    const { handlers, logs } = wire({ appRoot: app, settings: { pluginsOff: ['beta', 'not-installed'] } });
+    assert.deepEqual(plugins.discover().map((m) => [m.id, m.on]), [['alpha', true], ['beta', false], ['gamma', true]]);
+    const event = {};
+    handlers.get('plugins:list')(event);
+    assert.deepEqual(event.returnValue.map((m) => [m.id, m.on]), [['alpha', true], ['beta', false], ['gamma', true]]);
+    assert.deepEqual(logs, []);
+  });
+
+  test('a pluginsOff that is not a list of ids is logged once and turns nothing off', () => {
+    const app = appFolder({ 'plugins/alpha': plugin('alpha') });
+    for (const pluginsOff of ['alpha', { alpha: true }, ['alpha', 7], null]) {
+      const { logs } = wire({ appRoot: app, settings: { pluginsOff } });
+      assert.deepEqual(plugins.discover().map((m) => [m.id, m.on]), [['alpha', true]], JSON.stringify(pluginsOff));
+      plugins.discover();
+      assert.equal(logs.length, 1, JSON.stringify(pluginsOff));
+      assert.match(logs[0], /^\[plugins\] pluginsOff in settings\.json is not a list of plugin ids/);
+    }
+    const { logs } = wire({ appRoot: app });
+    assert.equal(find('alpha').on, true);
+    assert.deepEqual(logs, [], 'no pluginsOff at all is no fault');
   });
 
   test('NEO_PLUGIN_DIRS is ignored in a packaged app', () => {
@@ -753,6 +798,19 @@ describe('a plugin\'s main half', { concurrency: 1 }, () => {
     assert.deepEqual(logs, []);
   });
 
+  test('the main half of a plugin that is off never starts, and an invoke to it rejects saying so', async () => {
+    const app = withMains({
+      off: "exports.activate = (host) => { exports.started = true; host.handle('echo', (p) => p); };",
+      on: "exports.activate = (host) => host.handle('echo', (p) => p);"
+    });
+    const { handlers, logs } = wire({ appRoot: app, settings: { pluginsOff: ['off'] } });
+    plugins.activateMains();
+    assert.equal(await invoke(handlers, 'on', 'echo', 1), 1);
+    await assert.rejects(invoke(handlers, 'off', 'echo'), /\boff\b.*\bturned off\b.*\becho\b/);
+    assert.equal(mainOf(app, 'off').started, undefined, 'its main entry was never required');
+    assert.deepEqual(logs, []);
+  });
+
   test('activateMains starts each main half once, however often it runs', async () => {
     const app = withMains({ once: "let n = 0; exports.activate = (host) => { n++; host.handle('count', () => n); };" });
     const { handlers } = wire({ appRoot: app });
@@ -1044,7 +1102,7 @@ describe('the window half', () => {
     return { NeoPlugins: context.NeoPlugins, added, logged, consoled, invoked, clock, fire, running, neo: context.neo };
   }
 
-  const listed = (id, apiVersion = 1) => ({ id, apiVersion, rendererUrl: `plugins/${id}/renderer.js` });
+  const listed = (id, apiVersion = 1) => ({ id, apiVersion, rendererUrl: `plugins/${id}/renderer.js`, on: true });
   // the host with one listed plugin, p, registered with activate; neo is
   // the API p was handed
   function withPlugin(activate = () => {}, logError = null) {
@@ -1065,6 +1123,16 @@ describe('the window half', () => {
       ['script', 'plugins/a/renderer.js', false],
       ['script', 'plugins/b/renderer.js', false]
     ]);
+  });
+
+  test('attach leaves out the script of a plugin that is off, and register refuses it', () => {
+    const host = windowHalf([listed('a'), { ...listed('b'), on: false }, listed('c')]);
+    host.NeoPlugins.attach();
+    assert.deepEqual(host.added.map((el) => el.src), ['plugins/a/renderer.js', 'plugins/c/renderer.js']);
+    let activated = false;
+    host.NeoPlugins.register({ id: 'b', apiVersion: 1, activate() { activated = true; } });
+    assert.equal(activated, false);
+    assert.match(host.logged[0], /^plugin b: turned off in settings\.json, so it is not activated/);
   });
 
   test('a plugin is handed invoke and nothing else, frozen', () => {

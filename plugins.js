@@ -1,6 +1,6 @@
 // Plugins, window half. main.js lists the plugin folders it found at launch
-// (plugins-main.js, on window.neo.plugins); this file loads each one's
-// script. The script calls NeoPlugins.register, and its activate(neo) is
+// (plugins-main.js, on window.neo.plugins); this file loads the script of
+// each one that is on. The script calls NeoPlugins.register, and its activate(neo) is
 // handed one call (apiFor):
 //   invoke(channel, payload)  a call to its own main half (plugins-main.js)
 // That is no wall. A plugin's script runs in NEO's page, where window.neo,
@@ -106,6 +106,7 @@
     const manifest = listed().find((m) => m.id === id);
     const refuse = (why) => log(id, `${why}, so it is not activated`);
     if (!manifest) return refuse('not among the plugins NEO found at launch');
+    if (manifest.on === false) return refuse('turned off in settings.json');
     if (plugin.apiVersion !== manifest.apiVersion || !API_VERSIONS.includes(plugin.apiVersion)) {
       return refuse(`apiVersion ${plugin.apiVersion}, where its plugin.json says ${manifest.apiVersion} and this NEO knows ${API_VERSIONS.join(', ')}`);
     }
@@ -130,6 +131,7 @@
     if (attached) return;
     attached = true;
     for (const m of listed()) {
+      if (m.on === false) continue;
       const script = document.createElement('script');
       script.src = m.rendererUrl;
       script.async = false;

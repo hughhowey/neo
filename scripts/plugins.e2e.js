@@ -2,8 +2,8 @@
 // a throwaway library, with the fixture plugins in scripts/fixtures/plugins:
 // ping sends a ping to its main half as it activates; broken throws while it
 // activates; throws-early throws before it registers; wrong-id registers
-// under another id; missing-script has no script at all; and dropper drops
-// the invokes the host refuses.
+// under another id; missing-script has no script at all; dropper drops the
+// invokes the host refuses; and switched-off is turned off in settings.json.
 // Run with `npm run test:plugins`.
 
 'use strict';
@@ -28,6 +28,8 @@ const LIBRARY = path.join(tmp, 'NEO Library');
 app.setPath('userData', path.join(tmp, 'app'));
 app.setPath('documents', tmp);
 fs.mkdirSync(LIBRARY);
+fs.mkdirSync(path.join(tmp, 'app'));
+fs.writeFileSync(path.join(tmp, 'app', 'settings.json'), JSON.stringify({ pluginsOff: ['switched-off'] }));
 // hintShown: the once-per-library Enter hint would otherwise fill #hint
 fs.writeFileSync(path.join(LIBRARY, 'library.json'), JSON.stringify({
   authorName: '', penNames: [], firstRunDone: true, moreFeatures: true, pageTheme: 'night', hintShown: true,
@@ -196,6 +198,16 @@ test('an invoke a plugin does not await, and that is refused, is logged under th
   assert.equal(errorLog().split('has a main half to answer index').length - 1, 1, 'one line for twenty refusals');
   assert.match(errorLog(), /\] \[renderer\] plugin dropper: Error: no plugin called dropper has a main half to answer index\r?\n\s+at /);
   assert.equal(await js('errorToastShown'), false, 'nothing was shown to the writer');
+});
+
+test('a plugin turned off in settings.json is listed, but neither of its halves runs', async () => {
+  const listed = await js(`window.neo.plugins.find((m) => m.id === 'switched-off')`);
+  assert.equal(listed.on, false);
+  assert.equal(listed.title, 'Switched Off');
+  assert.equal(await js('window.__switchedOffRan'), undefined, 'its script never loaded');
+  assert.equal(require('./fixtures/plugins/switched-off/main.js').started, false, 'its main half never started');
+  assert.match(await js(`window.neo.pluginInvoke('switched-off', 'ping').then(() => 'answered', (err) => err.message)`), /\bswitched-off\b.*\bturned off\b/);
+  assert.equal((await js(`window.neo.plugins.find((m) => m.id === 'ping')`)).on, true);
 });
 
 test('CSP', async () => {

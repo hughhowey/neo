@@ -6,17 +6,21 @@
 // lists them for the window (plugins:list), where plugins.js loads each
 // one's script, and starts the main half of each plugin that has one (its
 // manifest's main): an activate(host) that answers the plugin's own window
-// half (plugin:invoke). It takes nothing from Electron itself: main.js hands
-// it app, ipcMain and logError through wire(), and nothing runs when it is
-// loaded.
+// half (plugin:invoke). A plugin named in pluginsOff in settings.json is
+// listed but off: its script is never loaded and its main half never
+// starts. The setting is read once, at launch. This file takes nothing from
+// Electron itself: main.js hands it app, ipcMain, logError and the settings
+// through wire(), and nothing runs when it is loaded.
 
 const fs = require('fs');
 const path = require('path');
 
 // what a plugin.json may hold (validManifest)
-const MANIFEST_KEYS = ['id', 'apiVersion', 'renderer', 'main'];
+const MANIFEST_KEYS = ['id', 'apiVersion', 'title', 'description', 'renderer', 'main'];
 const PLUGIN_ID = /^[a-z][a-z0-9-]{1,31}$/;
 const FILE_NAME = /^[A-Za-z0-9_][A-Za-z0-9._-]*\.(js|cjs)$/;
+const MAX_TITLE = 64;
+const MAX_DESCRIPTION = 280;
 const NEWEST_API = 1; // the newest plugin API this NEO knows (plugins.js has the list)
 // how long a main half's activate may take to settle (start)
 const ACTIVATE_MS = 10000;
@@ -27,15 +31,18 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const onlyKeys = (o, keys) => Object.keys(o).every((k) => keys.includes(k));
 const isFileName = (v) => typeof v === 'string' && FILE_NAME.test(v);
 const optionalFile = (v) => v === undefined || isFileName(v);
+// a length counts code points, not UTF-16 units
+const optionalText = (v, max) => v === undefined || (typeof v === 'string' && v.length > 0 && [...v].length <= max);
 
 function validManifest(m) {
   if (!isObject(m) || !onlyKeys(m, MANIFEST_KEYS)) return false;
   if (typeof m.id !== 'string' || !PLUGIN_ID.test(m.id)) return false;
   if (!Number.isInteger(m.apiVersion) || m.apiVersion < 1 || m.apiVersion > NEWEST_API) return false;
+  if (!optionalText(m.title, MAX_TITLE) || !optionalText(m.description, MAX_DESCRIPTION)) return false;
   return isFileName(m.renderer) && optionalFile(m.main);
 }
 
-// { app, ipcMain, logError, appRoot }, from wire(), and, where a test
+// { app, ipcMain, logError, appRoot, readSettings }, from wire(), and, where a test
 // needs another, activateMs (ACTIVATE_MS) and defer (see holdUntilAsked)
 let host = null;
 let found = null; // discover()'s answer, kept for the life of the process
@@ -134,6 +141,17 @@ function urlOf(rel, folderName, file) {
 }
 
 // NEO_PLUGIN_DIRS is for development: a packaged app reads only plugins/
+// The ids settings.json turns off. A pluginsOff that is no list of ids is
+// logged and turns nothing off: a hand-edited setting gone wrong must not
+// leave the writer without plugins they rely on, nor be silent.
+function switchedOff() {
+  const off = host.readSettings().pluginsOff;
+  if (off === undefined) return new Set();
+  if (Array.isArray(off) && off.every((id) => typeof id === 'string')) return new Set(off);
+  host.logError('plugins', `pluginsOff in settings.json is not a list of plugin ids, so every plugin stays on: ${JSON.stringify(off)}`);
+  return new Set();
+}
+
 function extraRoots() {
   const { app, appRoot } = host;
   if (app.isPackaged || !process.env.NEO_PLUGIN_DIRS) return [];
@@ -152,6 +170,7 @@ function discover() {
     found = [];
     return found;
   }
+  const off = switchedOff();
   const bundled = path.join(appRoot, 'plugins');
   const byId = new Map();
   const list = [];
@@ -197,7 +216,7 @@ function discover() {
         || refusal(realApp, path.join(folder, manifest.renderer), 'its renderer');
       if (folderRefusal) { skip(folder, folderRefusal); continue; }
       byId.set(manifest.id, folder);
-      list.push({ ...manifest, rendererUrl, mainPath: manifest.main ? path.join(folder, manifest.main) : null });
+      list.push({ ...manifest, rendererUrl, on: !off.has(manifest.id), mainPath: manifest.main ? path.join(folder, manifest.main) : null });
     }
   }
   found = list;
@@ -345,7 +364,7 @@ function start(entry, mainPath) {
 // one still activating.
 function activateMains() {
   for (const m of discover()) {
-    if (!m.mainPath || mains.has(m.id)) continue;
+    if (!m.on || !m.mainPath || mains.has(m.id)) continue;
     const entry = { id: m.id, ready: null, failed: false, timedOut: false, handlers: new Map() };
     mains.set(m.id, entry);
     entry.ready = new Promise((resolve) => host.defer(() => resolve(start(entry, m.mainPath))));
@@ -359,6 +378,7 @@ function activateMains() {
 async function invoke(id, channel, payload) {
   if (typeof channel !== 'string' || !CHANNEL.test(channel)) throw new TypeError(`${textOf(channel)} is not a channel name`);
   const entry = mains.get(id);
+  if (!entry && discover().some((m) => m.id === id && !m.on)) throw new Error(`plugin ${id} is turned off in settings.json, so nothing answers ${channel}`);
   if (!entry) throw new Error(`no plugin called ${textOf(id)} has a main half to answer ${channel}`);
   await entry.ready;
   if (entry.failed) throw new Error(`plugin ${entry.id} ${entry.timedOut ? 'did not finish activating' : 'failed to start its main half'}, so nothing answers ${channel}`);
