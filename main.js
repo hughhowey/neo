@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { Buffer } = require('buffer');
+const plugins = require('./plugins-main.js');
 
 // Every disk request from the page passes through here: a write the system
 // refuses (see reportBlockedWrite) is explained to the writer, then the error
@@ -2085,6 +2086,10 @@ process.on('uncaughtException', (err) => logError('main', err));
 process.on('unhandledRejection', (err) => logError('main-promise', err));
 ipcMain.handle('log:error', (_e, msg) => logError('renderer', msg));
 
+// plugins (plugins-main.js): plugins:list for the window, and each
+// plugin's main half (plugin:invoke)
+plugins.wire({ app, ipcMain, logError, appRoot: __dirname, readSettings });
+
 // One zip of the whole library per day, keeping the last 14. Cheap insurance.
 // The day's backup is made in a process of its own (backup-worker.js). It
 // reads every file in the library, and a file iCloud (or a sync tool) won't
@@ -3340,6 +3345,9 @@ app.whenReady().then(() => {
     try { checkLibraryWritable(); } catch (err) { logError('library check', err); }
     try { ensureLibrary(); } catch (err) { logError('library', err); }
     createWindow();
+    // after the window; the main halves start a turn after it has its plugin
+    // list (or 5 s on), so no plugin's code runs before its first requests are answered
+    try { plugins.activateMains(); } catch (err) { logError('plugins', err); }
     try { announceLibraryFallback(); } catch (err) { logError('library notice', err); }
     try { initSpell(); } catch (err) { logError('spell', err); }
     try { buildMenu(); } catch (err) { logError('menu', err); }

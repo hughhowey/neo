@@ -18000,3 +18000,6 @@ function applyLook() {
   focusLevel = more && FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';
   applyFocus();
 }
+
+// Plugins (plugins.js) come last, once all of NEO is defined
+if (window.NeoPlugins) NeoPlugins.attach();

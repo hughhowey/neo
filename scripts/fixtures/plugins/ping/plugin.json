@@ -1,0 +1,8 @@
+{
+  "id": "ping",
+  "apiVersion": 1,
+  "title": "Ping",
+  "description": "The smallest plugin with both halves: its window half pings its main half.",
+  "renderer": "renderer.js",
+  "main": "main.js"
+}

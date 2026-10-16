@@ -1,0 +1,8 @@
+{
+  "id": "switched-off",
+  "apiVersion": 1,
+  "title": "Switched Off",
+  "description": "A plugin the test run turns off in settings.json, so neither of its halves should ever run.",
+  "renderer": "renderer.js",
+  "main": "main.js"
+}
