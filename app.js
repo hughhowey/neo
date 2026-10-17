@@ -16546,9 +16546,10 @@ function nonBreakingRuns(text) {
 // Soft hyphens (U+00AD) show too while the marks are on: the places a long
 // word (Donau|dampf|schiff|fahrt) may be broken by a reader that doesn't
 // hyphenate on its own. Mid-line a soft hyphen is zero wide, so a highlight
-// has nothing to paint; it gets a thin upright tick instead, told apart from
-// the gray box by its shape, not its colour. Where the line does break there,
-// the tick still stands before the hyphen the browser draws, so a soft
+// has nothing to paint; it gets a narrow tinted patch with a darker line
+// down its middle instead (as LibreOffice shades one), told apart from the
+// gray box by its shape, not its colour. Where the line does break there,
+// the mark still stands before the hyphen the browser draws, so a soft
 // hyphen at a line's end reads differently from a typed one.
 const SOFT_HYPHEN = '\u00ad';
 function softHyphenOffsets(text) {
@@ -16556,16 +16557,22 @@ function softHyphenOffsets(text) {
   for (let i = text.indexOf(SOFT_HYPHEN); i !== -1; i = text.indexOf(SOFT_HYPHEN, i + 1)) out.push(i);
   return out;
 }
-// Where a soft hyphen's tick goes on its sheet: from the box the browser
-// gives the character (zero wide mid-line, a hyphen's width at a break) and
-// the sheet's corner, at the character's left edge, 0.9em tall and centred
-// on the line of type. No box (the text isn't laid out) means no tick.
+// Where a soft hyphen's mark goes on its sheet: from the box the browser
+// gives the character and the sheet's corner. The box is zero wide, mid-line
+// and at a break alike (the hyphen drawn there lies outside it), so its left
+// edge is the break point whichever way the line runs. The mark is 0.28em
+// wide, centred on that point and reaching a little over the letters either
+// side, so the line keeps its length; 0.9em tall, centred on the line of
+// type. No box (the text isn't laid out) means no mark.
+const SHY_MARK_WIDTH = 0.28;
 function softHyphenTick(rect, origin, em) {
   if (!rect || !(rect.height > 0)) return null;
+  const width = em * SHY_MARK_WIDTH;
   const height = em * 0.9;
   return {
-    left: rect.left - origin.left,
+    left: rect.left - origin.left - width / 2,
     top: rect.top - origin.top + (rect.height - height) / 2,
+    width,
     height,
   };
 }
@@ -16652,6 +16659,7 @@ function drawSoftHyphenTicks() {
         const tick = document.createElement('span');
         tick.style.left = at.left + 'px';
         tick.style.top = at.top + 'px';
+        tick.style.width = at.width + 'px';
         tick.style.height = at.height + 'px';
         ticks.appendChild(tick);
       }
