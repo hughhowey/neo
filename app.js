@@ -14525,6 +14525,12 @@ new ResizeObserver(() => queueSoftHyphenTicks()).observe($('#chapters'));
 $('#paper-scroll').addEventListener('scroll', () => queueSoftHyphenTicks(false), { passive: true });
 window.addEventListener('resize', () => queueSoftHyphenTicks());
 if (document.fonts) document.fonts.addEventListener('loadingdone', () => queueSoftHyphenTicks());
+// a paragraph's alignment, poetry or flush, and the opening paragraph's
+// marks, are set on it as attributes: the words move, but nothing is typed
+// and no sheet changes size
+new MutationObserver((records) => {
+  if (records.some((r) => r.target.closest('.chapter-body, .chapter-head') || r.target.matches('.chapter'))) queueSoftHyphenTicks();
+}).observe($('#chapters'), { subtree: true, attributes: true, attributeFilter: ['style', 'class', 'dir', 'data-first', 'data-speech'] });
 window.addEventListener('resize', typewriterRoom);
 function applyNbspMarks() {
   if (window.neo.nbspMarksState) window.neo.nbspMarksState(nbspMarksEnabled); // the Format menu's tick
@@ -16595,7 +16601,8 @@ function paintNonBreakingMarks() {
 // put the caret in, and screen readers pass it by. Only the sheets in or near
 // view get one, so a long book costs no more than the chapter on screen.
 // Anything that can move the words (typing, the page's width, zoom, type
-// size, a font arriving, the drop cap stepping aside) starts a new pass;
+// size, a font arriving, the drop cap stepping aside, a paragraph's
+// alignment, poetry or flush) starts a new pass;
 // scrolling only draws the sheets that come into view. One frame at a time.
 let shyPass = 0;
 let shyFrame = 0;
