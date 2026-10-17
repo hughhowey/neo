@@ -20,13 +20,16 @@ const localRequire = createRequire(path.join(root, 'main.js'));
 const source = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 // (with Show More Features on: Poetry Paragraph is one of its items)
-function menuOn(platform, { script = false, more = true } = {}) {
+// view: the page's view state (body font, drop cap, alignment...) as the window reports it
+function menuOn(platform, { script = false, more = true, view = null } = {}) {
+  // the library and the app's settings both stand in a throwaway folder
+  const library = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-format-menu-'));
   const listeners = new Map();
   let template = null;
   const sent = [];
   let builds = 0;
   const electron = {
-    app: { commandLine: { appendSwitch() {} }, getPath: () => os.tmpdir(), getLocale: () => 'en', requestSingleInstanceLock: () => true, whenReady: () => ({ then() {} }), on() {} },
+    app: { commandLine: { appendSwitch() {} }, getPath: () => library, getLocale: () => 'en', requestSingleInstanceLock: () => true, whenReady: () => ({ then() {} }), on() {} },
     ipcMain: { on: (name, fn) => listeners.set(name, fn), handle() {} },
     BrowserWindow: { getFocusedWindow: () => ({ webContents: { send: (_ch, msg) => sent.push(msg.type) } }), getAllWindows: () => [] },
     // a built menu with no items: macOS's Edit menu watch has nothing to hold
@@ -45,11 +48,11 @@ function menuOn(platform, { script = false, more = true } = {}) {
     setImmediate: (fn) => fn()
   });
   vm.runInContext(source, context, { filename: path.join(root, 'main.js') });
-  const library = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-format-menu-'));
   context.library = library;
   vm.runInContext('LIBRARY_DIR = library; LIBRARY_FILE = require("path").join(library, "library.json");', context);
   try {
     listeners.get('more:state')(null, more);
+    if (view) listeners.get('view:state')({ sender: null }, view);
     if (script) listeners.get('script:state')(null, { on: true, book: true, element: 'action' });
     else vm.runInContext('buildMenu()', context);
   } finally {
@@ -135,4 +138,46 @@ describe('Format menu: the paragraph kinds show their keys as shortcuts', () => 
       assert.deepEqual(template.sent, ['scriptElement']);
     });
   }
+});
+
+// Electron's own rule for radio items: one joins the group of the nearest radio
+// item above it, unless a separator comes between them, and when the menu opens
+// a group with nothing checked shows its first item ticked. These are the labels
+// that open menu shows ticked.
+function shownTicks(items) {
+  const groups = [];
+  let group = null;
+  for (const i of items) {
+    if (i.type === 'separator') group = null;
+    else if (i.type === 'radio') {
+      if (!group) groups.push(group = []);
+      group.push(i);
+    }
+  }
+  return groups.flatMap((g) => g.some((i) => i.checked) ? g.filter((i) => i.checked) : [g[0]]).map((i) => i.label);
+}
+const view = (st) => ({ focus: 'off', pageTheme: 'night', uiBright: false, bodyFont: 'Georgia', dropCap: 'literary', align: 'left', ...st });
+
+describe('Format menu: Drop Cap Style ticks one choice (#422)', () => {
+  const choices = { literary: 'Literary', fantasy: 'Fantasy', scifi: 'Sci-Fi', none: 'Off' };
+  for (const platform of ['darwin', 'win32', 'linux']) {
+    for (const [value, label] of Object.entries(choices)) {
+      test(`${label} alone is ticked (${platform})`, () => {
+        const dropCap = item(format(menuOn(platform, { view: view({ dropCap: value }) })), 'Drop Cap Style').submenu;
+        assert.deepEqual(shownTicks(dropCap), [label]);
+      });
+    }
+  }
+
+  test('every radio choice in the menus is one group, so one tick shows', () => {
+    const groups = (items) => {
+      for (const i of items || []) {
+        if (!i.submenu) continue;
+        const ticks = shownTicks(i.submenu);
+        assert.ok(ticks.length <= 1, `${i.label}: ${JSON.stringify(ticks)}`);
+        groups(i.submenu);
+      }
+    };
+    for (const options of [{}, { script: true }]) groups(menuOn('darwin', { ...options, view: view({ dropCap: 'none' }) }));
+  });
 });
