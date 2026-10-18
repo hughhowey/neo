@@ -14109,6 +14109,103 @@ async function importBooks() {
   if (results.length) await addImportedBooks(results, shelvesFor(currentAuthor().id)[0] || library.shelves[0]);
 }
 
+// A whole Scrivener project → books, via a preview where you map each part.
+// Draft parts become books; everything else (Research, Characters…) can become
+// the book's Notes; each part's RTF is read the same way an imported .docx is,
+// so emphasis and scene breaks survive. A project mapped to more than one book
+// imports them as a series (book.series carries the project name).
+async function importScrivenerProject() {
+  const scan = await window.neo.scanScrivener();
+  if (!scan) return;                                    // cancelled at the file picker
+  if (scan.error) { toast(t('Couldn’t read that Scrivener project: {error}', { error: scan.error }), 6000); return; }
+  if (!scan.sections.length) { toast(t('That project has no documents to import')); return; }
+  const plan = await scrivenerImportModal(scan);
+  if (!plan) return;                                    // cancelled at the preview
+  const result = await window.neo.extractScrivener(scan.path, plan);
+  if (result.error) { toast(t('Couldn’t import that Scrivener project: {error}', { error: result.error }), 6000); return; }
+
+  const bookDefs = (result.books || []).filter((b) => b.chapters.length);
+  const noteDocs = result.notes || [];
+  if (!bookDefs.length && !noteDocs.length) { toast(t('Nothing was chosen to import')); return; }
+  // notes gathered from non-draft parts become the book's Notes page
+  const notesHtml = noteDocs.length
+    ? noteDocs.map((nd) => `<h3>${escHtml(nd.title || t('Untitled'))}</h3>${importedChapterHTML(nd)}`).join('<hr>')
+    : '';
+  const shelf = shelvesFor(currentAuthor().id)[0] || library.shelves[0];
+  // several books from one project are one series
+  const series = bookDefs.length > 1 ? (scan.title || '') : '';
+
+  const makeBook = async (title, chapters) => {
+    const meta = await window.neo.createBook({ author: displayAuthor(), title: title || scan.title || t('Imported Book') });
+    meta.title = title || scan.title || t('Imported Book');
+    if (series) meta.series = series;
+    meta.tabNames = {
+      notes: (library.tabDefaults && library.tabDefaults.notes) || 'Notes',
+      outline: (library.tabDefaults && library.tabDefaults.outline) || 'Outline'
+    };
+    meta.chapterTitles = {};
+    let words = 0;
+    for (const ch of chapters) {
+      const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      await window.neo.writeChapter(meta.id, chId, importedChapterHTML(ch));
+      if (ch.title) meta.chapterTitles[chId] = ch.title;
+      meta.chapterOrder.push(chId);
+      for (const p of ch.paras) words += countWords(p.text || '');
+    }
+    meta.wordCount = words;
+    if (notesHtml) await window.neo.writeAux(meta.id, 'notes', notesHtml);
+    await writeBookMeta(meta.id, meta);
+    await placeTitle(shelf, meta.id);
+  };
+
+  let books = 0;
+  for (const def of bookDefs) { await makeBook(def.title, def.chapters); books++; }
+  // notes with no book of their own still come home, in a book that holds them
+  if (!bookDefs.length && notesHtml) { await makeBook(scan.title || t('Imported Notes'), []); books++; }
+
+  await writeLibrary(library);
+  if (!$('#bookshelf-view').hidden) renderShelves();
+  toast(noteDocs.length
+    ? t('Imported {n} books and {m} notes from “{title}”', { n: books, m: noteDocs.length, title: scan.title })
+    : t('Imported {n} books from “{title}”', { n: books, title: scan.title }), 6000);
+}
+
+// Import preview: map each top-level part of the project to New book, Add to
+// Notes, or Skip. Draft parts default to books, everything else to notes.
+function scrivenerImportModal(scan) {
+  return new Promise((resolve) => {
+    const bd = document.createElement('div');
+    bd.className = 'modal-backdrop';
+    const rows = scan.sections.map((s, i) => {
+      const draft = s.region === 'draft';
+      const docs = t('{n} docs', { n: s.textCount });
+      return `<div class="scriv-row" style="display:flex;align-items:center;gap:10px;margin:7px 0">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.title)} <span style="opacity:.6">· ${docs}</span></span>
+        <select data-i="${i}" style="flex:0 0 150px;padding:4px">
+          <option value="book"${draft ? ' selected' : ''}>${t('New book')}</option>
+          <option value="notes"${draft ? '' : ' selected'}>${t('Add to Notes')}</option>
+          <option value="skip">${t('Skip')}</option>
+        </select>
+      </div>`;
+    }).join('');
+    bd.innerHTML = `
+      <div class="modal" style="width:540px;max-height:82vh;display:flex;flex-direction:column">
+        <h2 style="font-size:16px">${t('Import from Scrivener')}</h2>
+        <p>${t('“{title}” — choose what each part becomes. Draft folders default to books; everything else to Notes.', { title: escHtml(scan.title) })}</p>
+        <div style="overflow:auto;flex:1;padding:2px 2px 6px">${rows}</div>
+        <div style="text-align:right;margin-top:8px">
+          <button class="m-cancel btn-quiet">${t('Cancel')}</button>
+          <button class="fr-choice m-go" style="width:auto;display:inline-block"><strong>${t('Import')}</strong></button>
+        </div>
+      </div>`;
+    document.body.appendChild(bd);
+    const done = (v) => { bd.remove(); resolve(v); };
+    bd.querySelector('.m-go').onclick = () => done(scan.sections.map((s, i) => ({ uuid: s.uuid, action: bd.querySelector(`select[data-i="${i}"]`).value })));
+    bd.querySelector('.m-cancel').onclick = () => done(null);
+    bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } });
+  });
+}
+
 $('#import-btn').onclick = importBooks;
 
 /* ================================================================== */
@@ -17743,6 +17840,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'focusCycle') cycleFocus();
   if (msg.type === 'import') importBooks();
   if (msg.type === 'importChapters') importChapters();
+  if (msg.type === 'importScrivener') importScrivenerProject();
   if (msg.type === 'stats') openStats();
   if (msg.type === 'chapterStep') gotoChapter(msg.value);
   if (msg.type === 'writingStyle') {
