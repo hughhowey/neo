@@ -4693,26 +4693,9 @@ function smartKeys(e, body) {
   }
   if (e.key === '"' || e.key === "'") {
     e.preventDefault();
-    const before = prevChars(1);
-    const q = e.key === '"' ? bookQuotes(body) : quoteStyle();
-    let opening = before === '' || /[\s\(\[\{‘“«„‚»›‹>]/.test(before);
-    // after a dash, a quote usually closes speech that was cut off ("I was
-    // just—"); it opens one only when no quotation is open in the paragraph
-    if (before === '—' || before === '–') opening = !quoteIsOpen(range, e.key === '"' ? q : { open: '‘', close: '’' }, e.key === '"' ? '"' : '');
-    let ch;
-    if (e.key === "'") {
-      // most languages type ' as an apostrophe only; English, Dutch and
-      // German also open (and German closes) single quotes with it
-      const sq = singleQuotes(body);
-      if (!sq) ch = '’';
-      else if (opening) ch = sq.open;
-      // German's closing mark isn't its apostrophe: it closes only a single
-      // quotation that is open in the paragraph
-      else if (sq.close !== '’' && quoteIsOpen(range, sq, '')) ch = sq.close;
-      else ch = '’';
-    } else {
-      ch = opening ? q.open : q.close;
-    }
+    const double = e.key === '"';
+    const ch = typedQuote(e.key, prevChars(8), double ? bookQuotes(body) : null, double ? null : singleQuotes(body),
+      (q, straight) => quoteIsOpen(range, q, straight));
     document.execCommand('insertText', false, ch);
   }
 }
@@ -4747,6 +4730,40 @@ function quoteOpenIn(text, q, straight = '') {
     }
   }
   return depth > 0 || straights % 2 === 1;
+}
+
+// What a typed " or ' becomes. before: the text just before the caret (in
+// its text node); q: the double marks, sq: the single ones (null where '
+// is only an apostrophe); isOpen(marks, straight): is a quotation in those
+// marks open in the paragraph so far (quoteIsOpen).
+function typedQuote(key, before, q, sq, isOpen) {
+  const last = before.slice(-1);
+  let opening = quoteOpensAfter(before);
+  // after a dash, a quote usually closes speech that was cut off ("I was
+  // just—"); it opens one only when no quotation is open in the paragraph
+  if (last === '—' || last === '–') opening = !isOpen(key === '"' ? q : { open: '‘', close: '’' }, key === '"' ? '"' : '');
+  if (key === '"') return opening ? q.open : q.close;
+  // most languages type ' as an apostrophe only; English, Dutch and
+  // German also open (and German closes) single quotes with it
+  if (!sq) return '’';
+  if (opening) return sq.open;
+  // German's closing mark isn't its apostrophe: it closes only a single
+  // quotation that is open in the paragraph
+  if (sq.close !== '’' && isOpen(sq, '')) return sq.close;
+  return '’';
+}
+// Does a quote typed after this text open one? At the start, after a space
+// or a bracket, or after an opening mark (»› and „‚ nest), it does. But
+// ‘ “ « » › ‹ open in some languages and close in others: German »…›…‹«
+// and „…‚…‘“ close with the marks English and Swiss writing open with. So
+// a run of them faces the way the text before it says: after a word or
+// its punctuation (or French's narrow space before »), they closed a
+// quotation, and the quote typed next closes the one around it (#410).
+function quoteOpensAfter(before) {
+  let i = before.length;
+  while (i > 0 && /[‘“«»›‹]/.test(before[i - 1])) i--;
+  if (i === before.length) return before === '' || /[\s([{„‚>]/.test(before[i - 1]);
+  return !/[\p{L}\p{N}\p{M}.,;:!?…)\]}’”\u202f]/u.test(before[i - 1] || '');
 }
 
 // The quotation marks of the language being written: the spellcheck
