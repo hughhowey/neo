@@ -2065,6 +2065,221 @@ ipcMain.handle('import:pick', async (_e, opts) => {
 });
 
 // ---------------------------------------------------------------------------
+// Import a Scrivener project (.scriv). A Scrivener 3 project is a package: a
+// .scrivx binder (XML) lists the documents, and each document's text is RTF at
+// Files/Data/<UUID>/content.rtf. The Draft (Manuscript) folder's text
+// documents become the book's chapters, in binder order; Research and Trash
+// are left out. Bold and italic travel as Markdown, the same as the .docx
+// import, so a chapter reads the same whichever door it came through.
+// ---------------------------------------------------------------------------
+
+// Windows-1252's 0x80–0x9F (curly quotes, dashes, €): Cocoa RTF writes these
+// as \'xx bytes, meaning the code-page character, not a Latin-1 control.
+const CP1252 = { 0x80: '€', 0x82: '‚', 0x83: 'ƒ', 0x84: '„', 0x85: '…',
+  0x86: '†', 0x87: '‡', 0x88: 'ˆ', 0x89: '‰', 0x8A: 'Š', 0x8B: '‹',
+  0x8C: 'Œ', 0x8E: 'Ž', 0x91: '‘', 0x92: '’', 0x93: '“', 0x94: '”',
+  0x95: '•', 0x96: '–', 0x97: '—', 0x98: '˜', 0x99: '™', 0x9A: 'š',
+  0x9B: '›', 0x9C: 'œ', 0x9E: 'ž', 0x9F: 'Ÿ' };
+const cp1252 = (code) => CP1252[code] || String.fromCharCode(code);
+// RTF groups that are not the prose: fonts, colours, styles, metadata, pictures
+const RTF_SKIP_DEST = new Set(['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'header',
+  'footer', 'expandedcolortbl', 'filetbl', 'listtable', 'listoverridetable', 'rsidtbl',
+  'generator', 'datastore', 'themedata', 'colorschememapping', 'latentstyles', 'fldinst']);
+
+// A line that is only separators (***, #, • • •) is a scene break, not prose —
+// the same shapes the .docx/.txt import treats as a break.
+const isScrivSceneBreak = (t) => /^\s*([*#•~⁂—–-]\s*){1,7}$/.test(t || '');
+
+// Runs of one bold/italic state → Markdown, exactly the way
+// docxParagraphToMarkdown writes it: literal * _ \ escaped, markers hugging
+// the words, so the window's importedEmphasis turns them back into <b>/<i>.
+function scrivRunsToMarkdown(runs) {
+  const merged = [];
+  for (const run of runs) {
+    const esc = escapeMarks(run.text);
+    const last = merged[merged.length - 1];
+    if (last && last.bold === run.bold && last.italic === run.italic) last.text += esc;
+    else merged.push({ text: esc, bold: run.bold, italic: run.italic });
+  }
+  const wrap = (run) => {
+    const m = run.text.match(/^(\s*)([\s\S]*?)(\s*)$/);
+    let t = m[2];
+    if (!t) return run.text;
+    if (run.bold) t = '**' + t + '**';
+    if (run.italic) t = '*' + t + '*';
+    return m[1] + t + m[3];
+  };
+  return merged.map(wrap).join('').replace(/[ \t]+/g, ' ').replace(/ +([.,;:!?])/g, '$1').trim();
+}
+
+// Cocoa/Scrivener RTF → NEO paragraphs. A paragraph ends at \par or \line;
+// \b and \i runs become Markdown; a scene-break line becomes { scene: true }.
+function rtfToParagraphs(rtf) {
+  const paras = [];
+  const stack = [{ skip: false, bold: false, italic: false }];
+  const top = () => stack[stack.length - 1];
+  const skipping = () => stack.some((g) => g.skip);
+  let runs = [];
+  let cur = '', curBold = false, curItalic = false;
+  const endRun = () => { if (cur) runs.push({ text: cur, bold: curBold, italic: curItalic }); cur = ''; };
+  const add = (ch) => {
+    if (skipping()) return;
+    if (cur && (top().bold !== curBold || top().italic !== curItalic)) endRun();
+    if (!cur) { curBold = top().bold; curItalic = top().italic; }
+    cur += ch;
+  };
+  const flush = () => {
+    endRun();
+    const plain = runs.map((r) => r.text).join('').replace(/[ \t]+/g, ' ').trim();
+    if (plain) paras.push(isScrivSceneBreak(plain) ? { scene: true } : { text: scrivRunsToMarkdown(runs) });
+    runs = [];
+  };
+  const n = rtf.length;
+  let i = 0;
+  while (i < n) {
+    const c = rtf[i];
+    if (c === '{') { endRun(); stack.push({ skip: false, bold: top().bold, italic: top().italic }); i++; continue; }
+    if (c === '}') { endRun(); if (stack.length > 1) stack.pop(); i++; continue; }
+    if (c === '\\') {
+      const nx = rtf[i + 1];
+      if (nx === "'") { add(cp1252(parseInt(rtf.substr(i + 2, 2), 16))); i += 4; continue; }
+      if (nx === '\\' || nx === '{' || nx === '}') { add(nx); i += 2; continue; }
+      if (nx === '\n' || nx === '\r') { flush(); i += 2; continue; }
+      if (nx === '~') { add(' '); i += 2; continue; }
+      if (nx === '*') { top().skip = true; i += 2; continue; }
+      let j = i + 1, word = '';
+      while (j < n && /[a-zA-Z]/.test(rtf[j])) { word += rtf[j]; j++; }
+      let num = '';
+      if (rtf[j] === '-') { num += '-'; j++; }
+      while (j < n && /[0-9]/.test(rtf[j])) { num += rtf[j]; j++; }
+      if (rtf[j] === ' ') j++;
+      if (word === 'par' || word === 'line') flush();
+      else if (word === 'tab') add(' ');
+      else if (word === 'b') top().bold = num !== '0';
+      else if (word === 'i') top().italic = num !== '0';
+      else if (word === 'plain') { top().bold = false; top().italic = false; }
+      else if (word === 'u') {
+        let code = parseInt(num, 10);
+        if (!isNaN(code)) { if (code < 0) code += 65536; add(String.fromCodePoint(code)); }
+        if (rtf[j] && !'\\{}'.includes(rtf[j])) j++; // the \uN fallback character
+      } else if (RTF_SKIP_DEST.has(word)) top().skip = true;
+      i = j; continue;
+    }
+    if (c === '\n' || c === '\r') { i++; continue; }
+    add(c);
+    i++;
+  }
+  flush();
+  return paras;
+}
+
+// Strip a leading ordering token from a binder title ("7.01 Foo" → "Foo",
+// "Chapter 3 — Bar" → "Bar"). Documents sort by that prefix and NEO numbers
+// chapters itself, so it is noise. A real title ("1984") is left alone.
+function stripOrderingPrefix(name) {
+  const m = String(name).match(/^\s*(?:(?:chapter|chap|ch|part|pt|episode|ep|scene|sc)\b\.?\s*)?\d+(?:[-.]\d+)*\s*[-–—.:)\]]?\s+(.+)$/i);
+  if (m) { const rest = m[1].trim(); if (/[A-Za-z]/.test(rest)) return rest; }
+  return String(name).trim();
+}
+
+// A Scrivener document's title, or '' when it is only NEO's own numbering
+// ("Chapter 1", "VII", "7"): that adds nothing, since NEO numbers chapters.
+function scrivChapterTitle(name) {
+  const title = stripOrderingPrefix(name || 'Untitled');
+  const bare = title.replace(/[.…]+$/, '').trim();
+  const numeral = /^(\d{1,3}|[ivxlcdm]{1,7})$/i;
+  if (!bare || numeral.test(bare)) return '';
+  const afterWord = bare.replace(CHAPTER_WORDS, '').trim();
+  if (afterWord !== bare && (afterWord === '' || numeral.test(afterWord))) return '';
+  return title;
+}
+
+// The binder as a tree of { uuid, type, title, children }.
+function scrivBinderTree(scrivDir) {
+  const scrivx = fs.readdirSync(scrivDir).find((f) => f.toLowerCase().endsWith('.scrivx'));
+  if (!scrivx) throw new Error('Not a Scrivener project (no .scrivx inside)');
+  const xml = fs.readFileSync(path.join(scrivDir, scrivx), 'utf8');
+  const b0 = xml.indexOf('<Binder>');
+  const b1 = xml.indexOf('</Binder>');
+  const binder = xml.slice(b0 < 0 ? 0 : b0, b1 < 0 ? xml.length : b1);
+  const root = { children: [] };
+  const stack = [root];
+  const re = /<BinderItem\b([^>]*?)(\/?)>|<\/BinderItem>|<Title>([\s\S]*?)<\/Title>/g;
+  let m;
+  while ((m = re.exec(binder))) {
+    if (m[0] === '</BinderItem>') { if (stack.length > 1) stack.pop(); continue; }
+    if (m[3] !== undefined) { if (stack.length > 1) stack[stack.length - 1].title = decodeEntities(m[3].trim()); continue; }
+    const attrs = m[1] || '';
+    const node = {
+      uuid: (attrs.match(/UUID="([^"]+)"/i) || [])[1] || '',
+      type: (attrs.match(/Type="([^"]+)"/i) || [])[1] || '',
+      title: '', children: []
+    };
+    stack[stack.length - 1].children.push(node);
+    if (m[2] !== '/') stack.push(node);
+  }
+  return root;
+}
+
+// Every Text document under a node, in reading order.
+function scrivTextDocs(node, out) {
+  out = out || [];
+  for (const c of node.children) {
+    if (c.type === 'Text' && c.uuid) out.push(c);
+    if (c.children.length) scrivTextDocs(c, out);
+  }
+  return out;
+}
+
+// The manuscript's documents: the Draft (Manuscript) folder's, or — when a
+// project has none — everything outside the Trash.
+function scrivManuscriptDocs(root) {
+  const draft = root.children.find((c) => c.type === 'DraftFolder');
+  const scope = draft || { children: root.children.filter((c) => c.type !== 'TrashFolder') };
+  return scrivTextDocs(scope);
+}
+
+// One document → a chapter { title, paras }. A document with no text yet still
+// becomes a chapter, so the book keeps the shape the binder had.
+function scrivDocToChapter(scrivDir, uuid, title) {
+  let paras = [];
+  try {
+    const rtf = fs.readFileSync(path.join(scrivDir, 'Files', 'Data', uuid, 'content.rtf'), 'latin1');
+    paras = rtfToParagraphs(rtf);
+  } catch { /* a document that holds no text */ }
+  return { title: scrivChapterTitle(title), paras: paras.length ? paras : [{ text: '' }] };
+}
+
+// A whole project → one book: { name, title, chapters }, the shape the window's
+// addImportedBooks already turns into a book on the shelf.
+function scrivenerToBook(scrivDir) {
+  const root = scrivBinderTree(scrivDir);
+  const docs = scrivManuscriptDocs(root);
+  const title = path.basename(scrivDir).replace(/\.scriv$/i, '') || 'Untitled';
+  const chapters = docs.map((d) => scrivDocToChapter(scrivDir, d.uuid, d.title));
+  return { name: title, title, chapters: chapters.length ? chapters : [{ title: '', paras: [{ text: '' }] }] };
+}
+
+ipcMain.handle('import:scrivener', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  // On macOS a .scriv is a package the file dialog shows as a single file;
+  // on Windows and Linux it is an ordinary folder.
+  const mac = process.platform === 'darwin';
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: t('Import a Scrivener project'),
+    properties: [mac ? 'openFile' : 'openDirectory'],
+    filters: mac ? [{ name: t('Scrivener Project'), extensions: ['scriv'] }] : undefined
+  });
+  if (canceled || !filePaths.length) return null;
+  try {
+    return scrivenerToBook(filePaths[0]);
+  } catch (err) {
+    logError('import', err);
+    return { error: String(err.message || err) };
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Robustness: error log, daily backups, single instance
 // ---------------------------------------------------------------------------
 const ERROR_LOG = () => path.join(LIBRARY_DIR, 'neo-errors.log');
@@ -2657,6 +2872,7 @@ function buildMenu() {
           enabled: bookOpenState && !scriptState.on,
           click: () => sendToWindow({ type: 'importChapters' })
         },
+        { more: true, label: t('Import Scrivener Project…'), click: () => sendToWindow({ type: 'importScrivener' }) },
         { more: true, label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
         { label: t('Library Folder…'), click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
         { type: 'separator' },

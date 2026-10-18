@@ -14109,6 +14109,17 @@ async function importBooks() {
   if (results.length) await addImportedBooks(results, shelvesFor(currentAuthor().id)[0] || library.shelves[0]);
 }
 
+// A whole Scrivener project → one book on the shelf. The main process reads
+// the binder and each document's RTF; the Draft folder's documents become the
+// chapters, scene breaks and emphasis and all, through the same door as a
+// .docx or .txt manuscript.
+async function importScrivener() {
+  const result = await window.neo.importScrivener();
+  if (!result) return; // the picker was cancelled
+  if (result.error) { toast(t('Couldn’t read that Scrivener project: {error}', { error: result.error }), 6000); return; }
+  await addImportedBooks([result], shelvesFor(currentAuthor().id)[0] || library.shelves[0]);
+}
+
 $('#import-btn').onclick = importBooks;
 
 /* ================================================================== */
@@ -17743,6 +17754,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'focusCycle') cycleFocus();
   if (msg.type === 'import') importBooks();
   if (msg.type === 'importChapters') importChapters();
+  if (msg.type === 'importScrivener') importScrivener();
   if (msg.type === 'stats') openStats();
   if (msg.type === 'chapterStep') gotoChapter(msg.value);
   if (msg.type === 'writingStyle') {
