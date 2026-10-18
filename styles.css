@@ -702,19 +702,26 @@ body.night #aux-editor * { color: inherit; }
 /* the sentence Read Aloud is on (⌘⇧U) */
 ::highlight(neo-speak) { background: rgba(201, 168, 106, 0.28); }
 /* Non-Breaking Marks (Format menu): the spaces and hyphens a wrap must not
-   break at — U+00A0, U+202F and U+2011 — in one unobtrusive light gray */
+   break at — U+00A0, U+202F and U+2011 — in one quiet tint of the ink,
+   painted behind the letters. A little stronger on the night page, where a
+   faint patch on dark paper all but disappears */
+:root { --nb-mark-tint: color-mix(in srgb, var(--ink) 15%, transparent); }
+body.night { --nb-mark-tint: color-mix(in srgb, var(--ink) 22%, transparent); }
 /* ...and a soft hyphen (U+00AD), zero wide mid-line, as a patch of the same
-   gray an en space wide, centred where the word may break and laid over the
-   letters either side so the line keeps its length. Drawn in a layer of its
-   own on the sheet, outside the text (app.js, drawSoftHyphenTicks, which
-   sets each one's place and size, as tall as a no-break space's box) */
-::highlight(neo-nb-mark), .shy-ticks span { background: rgba(127, 127, 127, 0.25); }
+   tint an en space wide, centred where the word may break and reaching over
+   the letters either side so the line keeps its length. Drawn in a layer of
+   its own on the sheet, outside the text (app.js, drawSoftHyphenTicks, which
+   sets each one's place and size, as tall as a no-break space's box). The
+   layer sits behind the text like the highlight does, so the letters keep
+   their full ink: the sheet holds its own stacking while the layer is there,
+   and the layer goes under the sheet's text but over its paper */
+::highlight(neo-nb-mark), .shy-ticks span { background: var(--nb-mark-tint); }
+.chapter.sheet:has(> .shy-ticks) { isolation: isolate; }
 .shy-ticks {
-  position: absolute; inset: 0; z-index: 1;
+  position: absolute; inset: 0; z-index: -1;
   pointer-events: none; user-select: none; -webkit-user-select: none;
 }
 .shy-ticks span { position: absolute; }
-body.focus-mode .shy-ticks { opacity: 0.6; }
 
 /* Each page of the book is its own sheet of paper */
 #paper {
