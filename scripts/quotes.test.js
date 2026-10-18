@@ -83,6 +83,31 @@ describe('smart quotes: an inner quotation closing right before the outer one (#
   }
 });
 
+// Three levels deep. French nests « » (the typed ", spaced), then “ ” and
+// ‘ ’ typed by hand (' stays an apostrophe in French); Swedish nests ’…’
+// in ”…” or »…», and ' already types its ’.
+const N = NNBSP;
+const nesting = [
+  ['fr', '', `"J'ai demandé${N}: “Pouvez-vous répondre${N}? ‘Les arbres font-ils du bruit${N}?' ”"`,
+    `«${N}J’ai demandé${N}: “Pouvez-vous répondre${N}? ‘Les arbres font-ils du bruit${N}?’ ”${N}»`],
+  ['fr', '', `"Il a dit${N}: “Elle a crié ‘Non${N}!'”"`, `«${N}Il a dit${N}: “Elle a crié ‘Non${N}!’”${N}»`],
+  ['fr', '', `"“‘Non.'”"`, `«${N}“‘Non.’”${N}»`],
+  ['fr', '', `"Il a dit “‘non’${N}”" et partit.`, `«${N}Il a dit “‘non’${N}”${N}» et partit.`],
+  ['fr', '', `"Il a dit “non”, puis “oui”."`, `«${N}Il a dit “non”, puis “oui”.${N}»`],
+  ['sv', '', `"Han sa 'hej.'"`, '”Han sa ’hej.’”'],
+  ['sv', '', `"'Hej', sa han."`, '”’Hej’, sa han.”'],
+  ['sv', '»Ja» sa hon.', `"Han sa 'hej.'"`, '»Han sa ’hej.’»'],
+  ['sv', '»Ja» sa hon.', `"'Hej', sa han."`, '»’Hej’, sa han.»']
+];
+
+describe('smart quotes: quotations nested two and three deep', () => {
+  for (const [lang, chapter, keys, want] of nesting) {
+    test(`${lang}${chapter ? ` (book in ${chapter[0]}…)` : ''}: ${want}`, () => {
+      assert.equal(type(lang, keys, chapter), want);
+    });
+  }
+});
+
 describe('smart quotes: what already worked stays', () => {
   const cases = [
     // apostrophes inside and at the end of words
