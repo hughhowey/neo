@@ -80,30 +80,31 @@ test('soft hyphens are not non-breaking runs, and the runs still show beside the
 
 const tick = (rect, origin, em) => JSON.stringify(api.softHyphenTick(rect, origin, em));
 
-test('the mark is 0.28em wide', () => {
-  assert.equal(api.SHY_MARK_WIDTH, 0.28);
+test('the mark is 0.5em wide, an en space', () => {
+  assert.equal(api.SHY_MARK_WIDTH, 0.5);
 });
 
-test('mid-line: a zero-wide soft hyphen gets a 0.28em by 0.9em mark centred on it and on its line', () => {
+test('mid-line: a zero-wide soft hyphen gets a 0.5em mark centred on it, as tall as its box', () => {
   assert.equal(
-    tick({ left: 300, top: 220, width: 0, height: 36 }, { left: 100, top: 20 }, 30),
-    JSON.stringify({ left: 195.8, top: 204.5, width: 8.4, height: 27 }),
+    tick({ left: 300, top: 220, width: 0, height: 34 }, { left: 100, top: 20 }, 30),
+    JSON.stringify({ left: 192.5, top: 200, width: 15, height: 34 }),
   );
 });
 
-test('the mark keeps its centre on the break point at any type size', () => {
+test('the mark keeps its centre on the break point and its box\'s top and height at any type size', () => {
   for (const em of [12, 17, 20, 34]) {
-    const at = api.softHyphenTick({ left: 300, top: 220, width: 0, height: em * 1.2 }, { left: 100, top: 20 }, em);
+    const at = api.softHyphenTick({ left: 300, top: 220, width: 0, height: em * 1.13 }, { left: 100, top: 20 }, em);
     assert.ok(Math.abs(at.left + at.width / 2 - 200) < 1e-9);
-    assert.ok(Math.abs(at.width - em * 0.28) < 1e-9);
-    assert.ok(Math.abs(at.top + at.height / 2 - (200 + em * 0.6)) < 1e-9);
+    assert.ok(Math.abs(at.width - em * 0.5) < 1e-9);
+    assert.equal(at.top, 200);
+    assert.ok(Math.abs(at.height - em * 1.13) < 1e-9);
   }
 });
 
 test('at a line break: the mark is centred on the box\'s left edge, where the word breaks', () => {
   assert.equal(
-    tick({ left: 640, top: 420, width: 0, height: 36 }, { left: 100, top: 20 }, 30),
-    JSON.stringify({ left: 535.8, top: 404.5, width: 8.4, height: 27 }),
+    tick({ left: 640, top: 420, width: 0, height: 34 }, { left: 100, top: 20 }, 30),
+    JSON.stringify({ left: 532.5, top: 400, width: 15, height: 34 }),
   );
 });
 

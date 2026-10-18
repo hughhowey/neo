@@ -16546,11 +16546,11 @@ function nonBreakingRuns(text) {
 // Soft hyphens (U+00AD) show too while the marks are on: the places a long
 // word (Donau|dampf|schiff|fahrt) may be broken by a reader that doesn't
 // hyphenate on its own. Mid-line a soft hyphen is zero wide, so a highlight
-// has nothing to paint; it gets a narrow tinted patch with a darker line
-// down its middle instead (as LibreOffice shades one), told apart from the
-// gray box by its shape, not its colour. Where the line does break there,
-// the mark still stands before the hyphen the browser draws, so a soft
-// hyphen at a line's end reads differently from a typed one.
+// has nothing to paint; it gets a patch of the same light gray instead, an
+// en space wide and laid over the letters either side, like a space the
+// word could open at. Where the line does break there, the patch still
+// stands before the hyphen the browser draws, so a soft hyphen at a line's
+// end reads differently from a typed one.
 const SOFT_HYPHEN = '\u00ad';
 function softHyphenOffsets(text) {
   const out = [];
@@ -16560,20 +16560,21 @@ function softHyphenOffsets(text) {
 // Where a soft hyphen's mark goes on its sheet: from the box the browser
 // gives the character and the sheet's corner. The box is zero wide, mid-line
 // and at a break alike (the hyphen drawn there lies outside it), so its left
-// edge is the break point whichever way the line runs. The mark is 0.28em
-// wide, centred on that point and reaching a little over the letters either
-// side, so the line keeps its length; 0.9em tall, centred on the line of
-// type. No box (the text isn't laid out) means no mark.
-const SHY_MARK_WIDTH = 0.28;
+// edge is the break point whichever way the line runs. The mark is 0.5em
+// wide (an en space), centred on that point and laid over the letters
+// either side, so the line keeps its length. Its top and height are the
+// box's own, the same the gray highlight paints for a no-break space beside
+// it, from above the letters to below the baseline. No box (the text isn't
+// laid out) means no mark.
+const SHY_MARK_WIDTH = 0.5;
 function softHyphenTick(rect, origin, em) {
   if (!rect || !(rect.height > 0)) return null;
   const width = em * SHY_MARK_WIDTH;
-  const height = em * 0.9;
   return {
     left: rect.left - origin.left - width / 2,
-    top: rect.top - origin.top + (rect.height - height) / 2,
+    top: rect.top - origin.top,
     width,
-    height,
+    height: rect.height,
   };
 }
 
