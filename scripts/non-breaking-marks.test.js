@@ -12,7 +12,7 @@ const from = app.indexOf('// ---- non-breaking marks:');
 const to = app.indexOf('// ---- end of non-breaking marks ----');
 const context = vm.createContext({});
 vm.runInContext(app.slice(from, to), context);
-vm.runInContext('this.api = { NB_CHARS, nonBreakingRuns, SOFT_HYPHEN, softHyphenOffsets, softHyphenTick };', context);
+vm.runInContext('this.api = { NB_CHARS, nonBreakingRuns, SOFT_HYPHEN, softHyphenOffsets, softHyphenTick, SHY_MARK_WIDTH };', context);
 const api = context.api;
 
 // the runs come out of another realm, so they are compared as JSON
@@ -51,7 +51,7 @@ test('runs keep their order and do not merge across different characters', () =>
 });
 
 // soft hyphens: found by offset, kept out of the gray runs, and each given a
-// tick at its left edge
+// mark centred on its left edge
 
 const offsets = (text) => JSON.stringify(api.softHyphenOffsets(text));
 
@@ -80,21 +80,35 @@ test('soft hyphens are not non-breaking runs, and the runs still show beside the
 
 const tick = (rect, origin, em) => JSON.stringify(api.softHyphenTick(rect, origin, em));
 
-test('mid-line: a zero-wide soft hyphen gets a 0.9em tick centred on its line', () => {
+test('the mark is 0.5em wide, an en space', () => {
+  assert.equal(api.SHY_MARK_WIDTH, 0.5);
+});
+
+test('mid-line: a zero-wide soft hyphen gets a 0.5em mark centred on it, as tall as its box', () => {
   assert.equal(
-    tick({ left: 300, top: 220, width: 0, height: 24 }, { left: 100, top: 20 }, 20),
-    JSON.stringify({ left: 200, top: 203, height: 18 }),
+    tick({ left: 300, top: 220, width: 0, height: 34 }, { left: 100, top: 20 }, 30),
+    JSON.stringify({ left: 192.5, top: 200, width: 15, height: 34 }),
   );
 });
 
-test('at a line break: the tick stands at the drawn hyphen\'s left edge', () => {
+test('the mark keeps its centre on the break point and its box\'s top and height at any type size', () => {
+  for (const em of [12, 17, 20, 34]) {
+    const at = api.softHyphenTick({ left: 300, top: 220, width: 0, height: em * 1.13 }, { left: 100, top: 20 }, em);
+    assert.ok(Math.abs(at.left + at.width / 2 - 200) < 1e-9);
+    assert.ok(Math.abs(at.width - em * 0.5) < 1e-9);
+    assert.equal(at.top, 200);
+    assert.ok(Math.abs(at.height - em * 1.13) < 1e-9);
+  }
+});
+
+test('at a line break: the mark is centred on the box\'s left edge, where the word breaks', () => {
   assert.equal(
-    tick({ left: 640, top: 420, width: 7, height: 24 }, { left: 100, top: 20 }, 20),
-    JSON.stringify({ left: 540, top: 403, height: 18 }),
+    tick({ left: 640, top: 420, width: 0, height: 34 }, { left: 100, top: 20 }, 30),
+    JSON.stringify({ left: 532.5, top: 400, width: 15, height: 34 }),
   );
 });
 
-test('no box, or a box with no height, draws no tick', () => {
+test('no box, or a box with no height, draws no mark', () => {
   assert.equal(api.softHyphenTick(null, { left: 0, top: 0 }, 17), null);
   assert.equal(api.softHyphenTick({ left: 5, top: 5, width: 0, height: 0 }, { left: 0, top: 0 }, 17), null);
 });

@@ -703,18 +703,17 @@ body.night #aux-editor * { color: inherit; }
 ::highlight(neo-speak) { background: rgba(201, 168, 106, 0.28); }
 /* Non-Breaking Marks (Format menu): the spaces and hyphens a wrap must not
    break at — U+00A0, U+202F and U+2011 — in one unobtrusive light gray */
-::highlight(neo-nb-mark) { background: rgba(127, 127, 127, 0.25); }
-/* ...and a soft hyphen (U+00AD), zero wide mid-line, as a thin upright tick:
-   told from the gray box by its shape. Drawn in a layer of its own on the
-   sheet, outside the text (app.js, drawSoftHyphenTicks) */
+/* ...and a soft hyphen (U+00AD), zero wide mid-line, as a patch of the same
+   gray an en space wide, centred where the word may break and laid over the
+   letters either side so the line keeps its length. Drawn in a layer of its
+   own on the sheet, outside the text (app.js, drawSoftHyphenTicks, which
+   sets each one's place and size, as tall as a no-break space's box) */
+::highlight(neo-nb-mark), .shy-ticks span { background: rgba(127, 127, 127, 0.25); }
 .shy-ticks {
   position: absolute; inset: 0; z-index: 1;
   pointer-events: none; user-select: none; -webkit-user-select: none;
 }
-.shy-ticks span {
-  position: absolute; width: 1.5px; margin-left: -0.75px; border-radius: 1px;
-  background: color-mix(in srgb, var(--ink) 45%, var(--paper));
-}
+.shy-ticks span { position: absolute; }
 body.focus-mode .shy-ticks { opacity: 0.6; }
 
 /* Each page of the book is its own sheet of paper */
