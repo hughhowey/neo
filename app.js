@@ -3860,10 +3860,15 @@ function handleEnter(e, body, chId) {
   if (prev) {
     e.preventDefault();
     snapshotStructure('section break', { rejoin: enterRun >= 2 });
-    block.removeAttribute('style'); // (see above: a break carries nothing over)
+    // the line under the break is set as the one it was made in, the way
+    // Enter carries a paragraph's alignment (a third Enter takes it on into
+    // the next chapter); the break itself carries nothing (see above)
+    const align = block.style.textAlign;
+    block.removeAttribute('style');
     block.className = 'scene-break';
     block.textContent = '***';
     const np = document.createElement('p');
+    if (align) np.style.textAlign = align;
     np.innerHTML = '<br>';
     block.after(np);
     const range = document.createRange();
@@ -5405,10 +5410,43 @@ document.addEventListener('keydown', (e) => {
   window.neo.fullscreenToggle();
 });
 
+// ---- carried alignment rules: a new chapter opens set as the story is (#426) ----
+// The alignment most of a chapter's prose is set in: '' for left (NEO's
+// default), null for a chapter with no prose yet. Breaks, outline ghosts,
+// poetry, flush lines, script lines and empty lines don't count. A tie goes
+// to the later paragraph.
+function chapterAlign(html) {
+  const count = {};
+  let best = null;
+  for (const m of String(html || '').matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/g)) {
+    const cls = (/\bclass="([^"]*)"/.exec(m[1]) || [])[1] || '';
+    if (/(^|\s)(scene-break|ghost|poetry|flush|sp-[\w-]+)(\s|$)/.test(cls)) continue;
+    if (!m[2].replace(/<[^>]*>|&nbsp;|\s/g, '')) continue;
+    let a = (/text-align:\s*([a-z]+)/.exec(m[1]) || [])[1] || '';
+    if (!['center', 'right', 'justify'].includes(a)) a = '';
+    count[a] = (count[a] || 0) + 1;
+    if (best === null || count[a] >= count[best]) best = a;
+  }
+  return best;
+}
+// A new chapter's empty first line, set the way the nearest story with
+// words in it is: the chapters before it first, then the ones after (a new
+// first chapter). Pages such as a dedication or a part are passed over.
+function newChapterHtml(order, at, htmlOf, story) {
+  for (const c of [...order.slice(0, at).reverse(), ...order.slice(at)]) {
+    const a = story(c) ? chapterAlign(htmlOf(c)) : null;
+    if (a !== null) return a ? `<p style="text-align: ${a};"><br></p>` : '<p><br></p>';
+  }
+  return '<p><br></p>';
+}
+// ---- end of carried alignment rules ----
+
 function createChapterAt(idx) {
   const chId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  // (from the order as it stands, before the new chapter joins it)
+  const first = isScript() ? '<p><br></p>' : newChapterHtml(book.chapterOrder, idx, (c) => chapterHTML[c], (c) => isStory(c));
   book.chapterOrder.splice(idx, 0, chId);
-  chapterHTML[chId] = '<p><br></p>';
+  chapterHTML[chId] = first;
   persistChapter(chId);
   saveMeta();
   renderChapters();

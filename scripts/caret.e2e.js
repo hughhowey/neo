@@ -187,6 +187,59 @@ test('⌘Z puts a break removed from its own line back', async () => {
   assert.deepEqual(back, ['Gulls over the slips.', 'scene-break', '***', 'Mara counted the boats.']);
 });
 
+// A justified story stays justified past a break and into the next chapter,
+// as it does past an ordinary Enter (#426). The *** itself stays centered.
+const lastLines = (n) => js(`(() => {
+  const bodies = document.querySelectorAll('.chapter-body');
+  return [...bodies[bodies.length - 1].children].slice(-${n}).map((p) => [p.className, getComputedStyle(p).textAlign, p.textContent]);
+})()`);
+
+test('Enter twice after justified text: the line under the *** is justified too', async () => {
+  await js(`(() => {
+    const bodies = document.querySelectorAll('.chapter-body');
+    const body = bodies[bodies.length - 1];
+    body.focus();
+    const r = document.createRange();
+    r.selectNodeContents(body);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    applyAlign('justify');
+    r.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  })()`);
+  await tick(200);
+  await enter();
+  await enter();
+  await press('A', 'A');
+  const [above, brk, below] = await lastLines(3);
+  assert.equal(above[1], 'justify');
+  assert.deepEqual(brk, ['scene-break', 'center', '***']);
+  assert.deepEqual(below, ['', 'justify', 'A']);
+});
+
+test('Enter three times after justified text: the new chapter opens justified', async () => {
+  const chapters = await js(`book.chapterOrder.length`);
+  await enter();
+  await enter();
+  await enter();
+  assert.equal(await js(`book.chapterOrder.length`), chapters + 1);
+  await press('B', 'B');
+  assert.deepEqual(await lastLines(1), [['', 'justify', 'B']]);
+});
+
+test('a chapter made from the menu or the + opens set as the chapter before it', async () => {
+  for (const make of ['newChapter()', `document.getElementById('nav-add').click()`]) {
+    const before = await js(`book.chapterOrder.slice()`);
+    await js(make);
+    await tick(300);
+    const made = (await js(`book.chapterOrder.slice()`)).filter((c) => !before.includes(c));
+    assert.equal(made.length, 1, make);
+    const first = await js(`(() => { const p = document.querySelector('.chapter[data-id="${made[0]}"] .chapter-body p'); return [getComputedStyle(p).textAlign, p.textContent]; })()`);
+    assert.deepEqual(first, ['justify', ''], make);
+  }
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
