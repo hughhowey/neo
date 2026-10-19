@@ -5397,9 +5397,17 @@ document.addEventListener('keydown', (e) => {
   window.neo.fullscreenEscape();
 });
 
-// ⌘Enter (Ctrl+Enter): toggle fullscreen from anywhere
+// ---- full screen keys: ⌘Enter (Ctrl+Enter) everywhere, and F11 off the Mac,
+// where most programs use it (on a Mac, F11 shows the desktop)
+function isFullScreenKey(e, mac) {
+  if (e.key === 'F11') return !mac && !e.repeat && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
+  return e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey;
+}
+// ---- end of full screen keys ----
+
+// toggle fullscreen from anywhere
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+  if (!isFullScreenKey(e, IS_MAC)) return;
   if (document.querySelector('.modal-backdrop:not([hidden])')) return;
   e.preventDefault();
   window.neo.fullscreenToggle();
@@ -15308,7 +15316,7 @@ function bookShortcutSections() {
       [K('⌘E', 'Ctrl+E'), tk('Email a draft to yourself')]
     ] },
     { title: tk('View & window'), rows: [
-      [[K('⌘⇧F', 'Ctrl+Shift+F'), K('⌘Enter', 'Ctrl+Enter')], tk('Toggle full screen')],
+      [[K('⌘⇧F', 'Ctrl+Shift+F'), K('⌘Enter', 'Ctrl+Enter'), ...(IS_MAC ? [] : ['F11'])], tk('Toggle full screen')],
       [K('⌘⇧T', 'Ctrl+Shift+T'), tk('Toggle typewriter scrolling')],
       ...(more ? [[K('⌘⇧O', 'Ctrl+Shift+O'), tk('Cycle focus mode'), tk('Off → paragraph → sentence → off.')]] : []),
       [IS_MAC ? '⌥⌘↓' : ['Ctrl+Alt+↓', 'Ctrl+Page Down'], tk('Go to the next chapter')],
