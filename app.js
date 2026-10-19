@@ -2844,6 +2844,21 @@ document.addEventListener('drop', () => { setTimeout(() => { dragFromInside = fa
 let lastRealKeyAt = 0;
 if (IS_POCKET) document.addEventListener('keydown', (e) => { if (e.keyCode !== 229 && e.key !== 'Unidentified') lastRealKeyAt = Date.now(); }, true);
 
+// ---- typing style rules: what ⌘B, ⌘I, ⌘U and ⌘⇧S leave at the caret (#430) ----
+// Turned on or off with nothing selected, they style only the letters typed
+// next, and the engine forgets that as soon as the selection is set again,
+// even to the same place. move sets it; whatever it undid is turned back,
+// and the commands that had to be run again are returned.
+const TYPING_STYLES = ['bold', 'italic', 'underline', 'strikeThrough'];
+function keepTypingStyle(doc, move) {
+  const was = TYPING_STYLES.map((cmd) => doc.queryCommandState(cmd));
+  move();
+  const back = TYPING_STYLES.filter((cmd, i) => doc.queryCommandState(cmd) !== was[i]);
+  for (const cmd of back) doc.execCommand(cmd);
+  return back;
+}
+// ---- end of typing style rules ----
+
 function wireChapterBody(body, chId) {
   body.addEventListener('focus', () => { currentChapterId = chId; updateCounters(); highlightNav(); });
 
@@ -2858,7 +2873,11 @@ function wireChapterBody(body, chId) {
       if (composing || document.activeElement !== body) return;
       const sel = window.getSelection();
       if (!sel.rangeCount || !sel.isCollapsed || !body.contains(sel.anchorNode)) return;
-      sel.collapse(sel.anchorNode, sel.anchorOffset);
+      // setting the caret again also drops what ⌘I or ⌘B just turned on or
+      // off for the next letters, so they come back with it (#430)
+      const sc = $('#paper-scroll');
+      const keep = sc.scrollTop;
+      if (keepTypingStyle(document, () => sel.collapse(sel.anchorNode, sel.anchorOffset)).length) sc.scrollTop = keep;
     }, 1000);
   };
   body.addEventListener('input', () => {
