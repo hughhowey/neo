@@ -18,6 +18,7 @@
     "test:manuscript": "electron scripts/manuscript.e2e.js",
     "test:pages": "electron scripts/pages.e2e.js",
     "test:simple": "electron scripts/simple.e2e.js",
+    "test:find": "electron scripts/find.e2e.js",
     "test": "node --test \"scripts/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"scripts/*.test.js\"",
     "lint": "oxlint",

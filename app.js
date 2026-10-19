@@ -13805,24 +13805,83 @@ function searchRoots() {
   return [$('#aux-editor')];
 }
 
+// ---- find's matching: a paragraph is read as one string, so a phrase that
+// runs into italic or bold, or a word an import split across runs, is found
+// even though its letters sit in several text nodes
+
+// lower case of the same length, so an offset in it is an offset in s
+// ('İ' lowers to two characters and is left as it is)
+function lowerSameLength(s) {
+  const l = s.toLowerCase();
+  if (l.length === s.length) return l;
+  let out = '';
+  for (const c of s) { const lc = c.toLowerCase(); out += lc.length === c.length ? lc : c; }
+  return out;
+}
+
+// every place q appears in texts read end to end, any case, as
+// { from: [node, offset], to: [node, offset] } with to's offset exclusive
+function matchSpans(texts, q) {
+  const found = [];
+  if (!q || !texts.length) return found;
+  const ql = lowerSameLength(q);
+  const all = lowerSameLength(texts.join(''));
+  const starts = [];
+  let at = 0;
+  for (const t of texts) { starts.push(at); at += t.length; }
+  // the node holding the character at i
+  const nodeAt = (i) => {
+    let n = 0;
+    while (n + 1 < starts.length && starts[n + 1] <= i) n++;
+    return n;
+  };
+  let pos = 0;
+  while ((pos = all.indexOf(ql, pos)) !== -1) {
+    const a = nodeAt(pos);
+    const b = nodeAt(pos + q.length - 1);
+    found.push({ from: [a, pos - starts[a]], to: [b, pos + q.length - starts[b]] });
+    pos += q.length;
+  }
+  return found;
+}
+// ---- end of find's matching ----
+
+// a run ends at a paragraph's edge, and around a footnote or placeholder
+// flag (contenteditable="false"), so a Replace never deletes one
+const FIND_BLOCKS = 'p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, [contenteditable="false"]';
+
+// a root's text nodes, cut into the runs one match may cross: a run ends at
+// a paragraph's edge or a line break, never at an <em> or a <strong>
+function textRuns(root) {
+  const runs = [];
+  let run = null;
+  let block = null;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeType !== Node.TEXT_NODE) {
+      if (node.tagName === 'BR') run = null;
+      continue;
+    }
+    const b = node.parentElement.closest(FIND_BLOCKS);
+    if (!run || b !== block) { run = []; runs.push(run); block = b; }
+    run.push(node);
+  }
+  return runs;
+}
+
 // every place q appears in the tab, in reading order, any case
 function findRanges(q) {
   const found = [];
   if (!q) return found;
-  const ql = q.toLowerCase();
   for (const body of searchRoots()) {
     if (!body) continue;
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const tl = node.textContent.toLowerCase();
-      let pos = 0;
-      while ((pos = tl.indexOf(ql, pos)) !== -1) {
+    for (const run of textRuns(body)) {
+      for (const m of matchSpans(run.map((n) => n.textContent), q)) {
         const range = document.createRange();
-        range.setStart(node, pos);
-        range.setEnd(node, pos + q.length);
+        range.setStart(run[m.from[0]], m.from[1]);
+        range.setEnd(run[m.to[0]], m.to[1]);
         found.push(range);
-        pos += q.length;
       }
     }
   }
@@ -13862,6 +13921,23 @@ function freshSearchIfStale() {
   if (searchState.query !== $('#search-input').value || searchState.tab !== currentTab) runSearch();
 }
 
+// put rep where a match was. A match across formatting takes the formatting
+// of its first letter, and an <em> or <strong> it leaves empty goes with it.
+function replaceRange(range, rep) {
+  const { startContainer: a, startOffset: from, endContainer: b, endOffset: to } = range;
+  if (a === b) { a.replaceData(from, to - from, rep); return; }
+  const top = range.commonAncestorContainer;
+  range.deleteContents();
+  a.insertData(from, rep);
+  let el = b.parentElement;
+  if (!b.data) b.remove();
+  while (el && el !== top && !el.textContent && !el.querySelector('br, img')) {
+    const up = el.parentElement;
+    el.remove();
+    el = up;
+  }
+}
+
 function replaceCurrent() {
   if (currentTab !== 'manuscript') return;
   freshSearchIfStale();
@@ -13877,8 +13953,7 @@ function replaceCurrent() {
     chapter = m.range.startContainer.parentElement.closest('.chapter');
     snapshotStructure('replace');
     breakRun++; // the engine never saw this change: ⌘Z goes to NEO's undo
-    m.range.deleteContents();
-    if (rep) m.range.insertNode(document.createTextNode(rep));
+    replaceRange(m.range, rep);
   } catch {
     runSearch();
     return;
@@ -13895,23 +13970,16 @@ function replaceAllMatches() {
   if (!q || currentTab !== 'manuscript') return;
   snapshotStructure('replace all');
   const rep = $('#replace-input').value;
-  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-  let n = 0;
+  // the matches Find shows, last first, so a replacement never moves one still to come
+  const ranges = findRanges(q).reverse();
+  const touched = new Set();
+  for (const range of ranges) {
+    touched.add(range.startContainer.parentElement.closest('.chapter').dataset.id);
+    replaceRange(range, rep);
+  }
+  const n = ranges.length;
   for (const chId of book.chapterOrder) {
-    const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
-    if (!body) continue;
-    const nodes = [];
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) nodes.push(node);
-    let touched = false;
-    for (const nd of nodes) {
-      if (nd.textContent.toLowerCase().includes(q.toLowerCase())) {
-        nd.textContent = nd.textContent.replace(re, () => { n++; return rep; });
-        touched = true;
-      }
-    }
-    if (touched) syncChapter(body, chId);
+    if (touched.has(chId)) syncChapter(document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`), chId);
   }
   if (n === 0) undoStack.pop(); // nothing changed, nothing to undo
   else breakRun++; // ⌘Z from inside the text reaches this undo too
