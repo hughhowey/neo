@@ -69,3 +69,55 @@ test('marked: the words a snapshot has that the chapter no longer does', () => {
   assert.equal(gone[3], null, 'an empty line is never marked');
   assert.deepEqual(plain(wordsGone(['a b c'], ['a b c d e'])), [null]);
 });
+
+// #448: the snapshot on the page and the list belong to the open book
+const between = (a, b) => app.slice(app.indexOf(a), app.indexOf(b, app.indexOf(a)));
+function snapPane() {
+  const el = (html) => ({ hidden: false, innerHTML: html });
+  const els = { '#snap-view': el('<section class="snap-chapter">…</section>'), '#snap-list': el('<button class="snap-item">9:13 AM</button>') };
+  const highlights = new Map([['neo-snap-gone', {}]]);
+  const CSS = { highlights };
+  const ctx = vm.createContext({ $: (sel) => els[sel] || null, CSS, window: { CSS } });
+  vm.runInContext('let snapShown = { name: "20261009T121407Z-k-3-84210-x7q2" }; let snapCache = { bookId: "book-one", snaps: [] };\n' +
+    between('// the snapshot on the page goes, and its marks with it', 'function snapList() {') +
+    'this.api = { hideSnapshot, forgetSnapshots, state: () => ({ snapShown, snapCache }) };', ctx);
+  return { ...ctx.api, els, highlights };
+}
+
+test('another tab hides the snapshot on the page; the list stays for the book', () => {
+  const pane = snapPane();
+  pane.hideSnapshot();
+  assert.equal(pane.state().snapShown, null);
+  assert.equal(pane.els['#snap-view'].hidden, true);
+  assert.equal(pane.els['#snap-view'].innerHTML, '');
+  assert.equal(pane.highlights.has('neo-snap-gone'), false);
+  assert.match(pane.els['#snap-list'].innerHTML, /snap-item/);
+  assert.equal(pane.state().snapCache.bookId, 'book-one');
+});
+
+test('a book that closes takes its snapshots along: page, list and cache', () => {
+  const pane = snapPane();
+  pane.forgetSnapshots();
+  assert.equal(pane.state().snapShown, null);
+  assert.equal(pane.state().snapCache, null);
+  assert.equal(pane.els['#snap-view'].hidden, true);
+  assert.equal(pane.els['#snap-view'].innerHTML, '');
+  assert.equal(pane.els['#snap-list'].innerHTML, '');
+  assert.equal(pane.highlights.has('neo-snap-gone'), false);
+  // openBook and backToShelf both do it
+  for (const fn of ['async function openBook(', 'async function backToShelf(']) {
+    assert.match(between(fn, '\n}\n'), /forgetSnapshots\(\)/, fn);
+  }
+});
+
+test('the footnote lists pass over a snapshot\'s page: opening another book doesn\'t stop there', () => {
+  // a snapshot's chapters are .chapter-body too, but sit in #snap-view, not in a .chapter
+  const snapBody = { isConnected: true, closest: () => null, querySelectorAll: () => [{ dataset: { note: 'a note' } }] };
+  let removed = false;
+  const chapter = { querySelector: () => ({ remove: () => { removed = true; } }) };
+  const pageBody = { isConnected: true, closest: (sel) => (sel === '.chapter' ? chapter : null), querySelectorAll: () => [] };
+  const ctx = vm.createContext({ document: { querySelectorAll: () => [snapBody, pageBody] } });
+  vm.runInContext(between('function renderFootnoteList(', '// a marker deleted with Backspace or Delete') + 'this.renderAllFootnoteLists = renderAllFootnoteLists;', ctx);
+  assert.doesNotThrow(() => ctx.renderAllFootnoteLists());
+  assert.equal(removed, true, 'the manuscript\'s chapter after it is still seen to (its stale list goes)');
+});

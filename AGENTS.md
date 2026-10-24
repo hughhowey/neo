@@ -113,6 +113,7 @@ Export → Paperback for KDP… (also on the shelf's right-click Export) writes 
 - Kinds: `k` ⌘S, kept until deleted; `d` start of a day and `r` just before a restore, which go after 30 days (`snapsToThin`). A snapshot that goes first copies its chapter files into the next one that lacks them, so later snapshots still read whole.
 - The Darlings tab's right-hand pane lists them (and stays open there); picking one shows the book as it was in `#snap-view`, read-only, words gone since marked with the CSS Highlight API (`wordsGone`). Restore This Chapter and Restore Whole Book take an `r` snapshot and a `snapshotStructure` first, so ⌘Z undoes them. A passage can be set aside as a darling from the right-click menu. Pocket takes snapshots but has no list yet.
 - The daily backup zip leaves `snapshots/` out. `scripts/snapshots.test.js` covers the names, the fingerprint, thinning, where a chapter's text is and the marks.
+- The snapshot on the page and the list belong to the open book: `openBook` and `backToShelf` clear both (`forgetSnapshots`), another tab only the page (`hideSnapshot`). A snapshot's chapters are `.chapter-body` too, inside `#snap-view` rather than a `.chapter`, so code that walks every `.chapter-body` must pass over them.
 
 ## Per device
 

@@ -2521,8 +2521,7 @@ async function openBook(bookId) {
   tabPlaces = {}; // a fresh book starts with fresh places
   book = meta;
   showWindowTitle();
-  snapShown = null;
-  snapCache = null;
+  forgetSnapshots();
   sideCardsKey = '';
   currentChapterId = null; // never carry a chapter reference across books
   undoStack = []; redoStack = [];
@@ -7366,7 +7365,10 @@ function queueFootnoteList(body) {
 }
 function renderFootnoteList(body) {
   if (!body || !body.isConnected) return;
+  // only the manuscript's chapters: a snapshot's page (#snap-view) is a
+  // .chapter-body too, and has no notes list (#448)
   const chapter = body.closest('.chapter');
+  if (!chapter) return;
   const marks = [...body.querySelectorAll('.fn')];
   let list = chapter.querySelector(':scope > .fn-list');
   if (!marks.length) { if (list) list.remove(); return; }
@@ -8720,9 +8722,7 @@ function switchTab(name) {
   // the outline's cards, their List/Cards switch and their hint belong to the Outline alone
   for (const id of ['#outline-board', '#outline-views', '#outline-board-hint']) { const el = $(id); if (el) el.hidden = true; }
 
-  snapShown = null;
-  if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-snap-gone');
-  if ($('#snap-view')) { $('#snap-view').hidden = true; $('#snap-view').innerHTML = ''; }
+  hideSnapshot();
   if (name === 'darlings') {
     $('#aux-title').textContent = t('Darlings');
     dList.hidden = false;
@@ -12661,6 +12661,21 @@ function snapWhy(kind) {
 
 // ---- the list: the right-hand pane, while Darlings is up ----
 let snapShown = null; // the snapshot on the page, or null for the darlings
+// the snapshot on the page goes, and its marks with it
+function hideSnapshot() {
+  snapShown = null;
+  if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-snap-gone');
+  const v = $('#snap-view');
+  if (v) { v.hidden = true; v.innerHTML = ''; }
+}
+// a book that closes takes its snapshots along: the one on the page and
+// the list, so the next book never shows them (#448)
+function forgetSnapshots() {
+  hideSnapshot();
+  snapCache = null;
+  const list = $('#snap-list');
+  if (list) list.innerHTML = '';
+}
 function snapList() {
   let list = $('#snap-list');
   if (list) return list;
@@ -12787,10 +12802,7 @@ async function snapToDarling(range, text) {
 }
 
 function showDarlingsAgain() {
-  snapShown = null;
-  if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-snap-gone');
-  const v = $('#snap-view');
-  if (v) { v.hidden = true; v.innerHTML = ''; }
+  hideSnapshot();
   if (currentTab !== 'darlings') return;
   $('#aux-title').textContent = t('Darlings');
   $('#darlings-list').hidden = false;
@@ -13281,8 +13293,7 @@ async function backToShelf() {
   tabPlaces = {};
   book = null;
   showWindowTitle();
-  snapShown = null;
-  snapCache = null;
+  forgetSnapshots();
   sideCardsKey = '';
   if ($('#side-cards')) $('#side-cards').innerHTML = '';
   currentChapterId = null;
