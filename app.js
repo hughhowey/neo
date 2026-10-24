@@ -14994,8 +14994,11 @@ function statsChartSvg() {
 // One key per provider. The brief and the painting always come from the
 // same provider, so a writer only ever needs one account.
 const COVER_PROVIDERS = {
-  openai: { name: 'OpenAI', keyHint: 'sk-…', where: tk('platform.openai.com → API keys'), text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: tk('a few cents a picture') }
+  openai: { name: 'OpenAI', keyHint: 'sk-…', where: tk('platform.openai.com → API keys'), text: 'gpt-5-mini', image: 'gpt-image-1-mini', quality: true, cost: tk('a few cents a picture') },
+  google: { name: 'Google', keyHint: 'AIza…', where: tk('aistudio.google.com → Get API key'), text: 'gemini-3.8-flash', image: 'gemini-nano-banana-2.1', quality: false, cost: tk('a few cents a picture') },
+  xai: { name: 'xAI', keyHint: 'xai-…', where: tk('console.x.ai → API keys'), text: 'grok-4.7', image: 'grok-imagine-image-2.0', quality: true, cost: tk('a few cents a picture') }
 };
+
 // shown in the window, so translated when read
 const providerWhere = (p) => t(p.where);
 const providerCost = (p) => t(p.cost);
@@ -15014,9 +15017,9 @@ function openCoverArt() {
   bd.innerHTML = `
     <div class="modal" style="width:540px">
       <h2 style="font-size:17px">${t('Cover art')}</h2>
-      <p>${t('Every book gets a cover on the shelf: an abstract with the title set in type. With an OpenAI key, NEO can also read a story once it passes {n} words and paint a cover from the text. Paintings stay on your shelf — exports never include them.', { n: PAINT_AT })}</p>
+      <p>${t('Every book gets a cover on the shelf: an abstract with the title set in type. With an API key from OpenAI, Google or xAI, NEO can also read a story once it passes {n} words and paint a cover from the text. Paintings stay on your shelf — exports never include them.', { n: PAINT_AT })}</p>
       <div class="stats-row">
-        <select id="ca-provider" hidden>${provOptions}</select>
+        <label>${t('Provider')} <select id="ca-provider">${provOptions}</select></label>
         <label class="st-check"><input id="ca-auto" type="checkbox"${cs.auto === false ? '' : ' checked'}/> ${t('paint at {n} words', { n: PAINT_AT })}</label>
       </div>
       <div class="stats-row st-covers">
