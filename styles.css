@@ -2033,20 +2033,29 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 .sp-geom > p.sp-transition { text-align: right; }
 
 /* a new page: the rest of the last page, its foot, the gap, the next page's
-   head with its number (page one has none) */
-.sp-geom > p[data-pg] { margin-top: calc((var(--fill, 0) + 12) * 1em + var(--sp-gap)) !important; }
+   head with its number. Page one has its number in the head it already has
+   (no gap above the first line). data-fill is the blank foot of the page
+   before, so only a page that follows another gets the gap. */
+.sp-geom > p[data-pg][data-fill] { margin-top: calc((var(--fill, 0) + 12) * 1em + var(--sp-gap)) !important; }
 .sp-geom > p[data-pg]::before {
   content: attr(data-pg) '.';
   position: absolute; z-index: 1; pointer-events: none;
   left: calc(-9em - var(--ind) - 40px); width: calc(51em + 80px);
-  top: calc(-6em - var(--sp-gap)); height: calc(6em + var(--sp-gap));
-  box-sizing: border-box; padding: calc(var(--sp-gap) + 2.5em) calc(5.7em + 40px) 0 0;
+  box-sizing: border-box;
   text-align: right; text-transform: none; font-weight: 400; font-style: normal; text-decoration: none;
   color: var(--ink);
+}
+.sp-geom > p[data-pg][data-fill]::before {
+  top: calc(-6em - var(--sp-gap)); height: calc(6em + var(--sp-gap));
+  padding: calc(var(--sp-gap) + 2.5em) calc(5.7em + 40px) 0 0;
   /* the room's color across the gap; the pages' edges shaded on the paper's width only */
   background:
     linear-gradient(to bottom, rgba(0,0,0,0.22), transparent 10px, transparent calc(var(--sp-gap) - 10px), rgba(0,0,0,0.22) var(--sp-gap), transparent var(--sp-gap)) 40px 0 / calc(100% - 80px) 100% no-repeat,
     linear-gradient(to bottom, var(--bg) var(--sp-gap), transparent var(--sp-gap)) 0 0 / 100% 100% no-repeat;
+}
+.sp-geom > p[data-pg]:not([data-fill])::before {
+  top: -6em; height: 6em;
+  padding: 2.5em calc(5.7em + 40px) 0 0;
 }
 /* (CONT'D) when a voice comes back after action, and the gray suggestion
    at the caret. Neither is typed or saved: the exports write CONT'D out. */
@@ -2097,15 +2106,19 @@ body.night #paper.script #chapters { box-shadow: 0 4px 30px rgba(0,0,0,0.7); }
 .sp-narrow > p.sp-paren { margin-left: 4.5em; margin-right: 3em; --ind: 4.5em; }
 .sp-narrow > p.sp-dialogue { margin-left: 2.5em; margin-right: 2em; --ind: 2.5em; }
 .sp-narrow > p.sp-transition { text-align: right; }
-.sp-narrow > p[data-pg] { margin-top: 2.6em !important; }
+.sp-narrow > p[data-pg][data-fill] { margin-top: 2.6em !important; }
 .sp-narrow > p[data-pg]::before {
   content: attr(data-pg) '.';
   position: absolute; pointer-events: none;
-  left: calc(-18px - var(--ind)); width: var(--sp-fullw, 100vw); top: -1.9em;
-  box-sizing: border-box; padding: 2px 18px 0 0; border-top: 1px dashed color-mix(in srgb, var(--ink) 25%, var(--paper));
+  left: calc(-18px - var(--ind)); width: var(--sp-fullw, 100vw);
+  box-sizing: border-box; padding: 2px 18px 0 0;
   text-align: right; line-height: 1.2; text-transform: none; font-weight: 400; font-style: normal;
   color: color-mix(in srgb, var(--ink) 50%, var(--paper));
 }
+.sp-narrow > p[data-pg][data-fill]::before {
+  top: -1.9em; border-top: 1px dashed color-mix(in srgb, var(--ink) 25%, var(--paper));
+}
+.sp-narrow > p[data-pg]:not([data-fill])::before { top: -1.4em; }
 #paper.script.narrow #title-page {
   width: auto; height: auto; min-height: 60vh; padding: 48px 18px; display: flex; flex-direction: column;
   justify-content: center; gap: 1.3em; line-height: 1.3;
