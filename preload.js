@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('neo', {
   setSecret: (name, value) => ipcRenderer.invoke('secret:set', name, value),
   hasSecret: (name) => ipcRenderer.invoke('secret:has', name),
   importFiles: (paths) => ipcRenderer.invoke('import:files', paths),
+  scanScrivener: () => ipcRenderer.invoke('scrivener:scan'),
+  extractScrivener: (scrivPath, plan) => ipcRenderer.invoke('scrivener:extract', scrivPath, plan),
   pathForFile: (file) => webUtils.getPathForFile(file),
   fullscreenEscape: () => ipcRenderer.invoke('fullscreen:escape'),
   fullscreenToggle: () => ipcRenderer.invoke('fullscreen:toggle'),
