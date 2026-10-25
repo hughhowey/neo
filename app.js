@@ -753,6 +753,7 @@ async function loadLibrary() {
   if (untouched.length) await writeLibrary(library);
   await decideMoreFeatures();
   if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
+  if (window.neo.versionTrackingState) window.neo.versionTrackingState(!!library.versionTracking);
   if (!library.firstRunDone) {
     showFirstRun();
   }
@@ -12561,9 +12562,35 @@ function takeSnapshot(kind, htmlOf = (c) => chapterHTML[c] || '', { ifNoneToday 
   snapChain = p;
   return p;
 }
+// Chapters (and book.json) on disk before a kept or restore snapshot, so the
+// version-history commit that follows matches what was snapshotted.
+async function flushManuscriptToDisk() {
+  if (!book || shelfExport) return;
+  const writes = [];
+  for (const chId of book.chapterOrder) {
+    if (chapterHTML[chId] !== undefined && chapterHTML[chId] !== savedHTML[chId]) {
+      writes.push(persistChapter(chId));
+    }
+  }
+  clearTimeout(saveTimers.meta);
+  if (metaSig(book) !== savedMetaSig) writes.push(saveMeta());
+  await Promise.all(writes);
+}
+
 async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
   if (!book || !snapsCan()) return null;
   const bookId = book.id;
+  // ⌘S and pre-restore: flush first so git sees the same words as the snapshot.
+  // Daily snapshots use savedHTML on purpose (the day as it stood) — no flush.
+  let diskReady = true;
+  if (kind === SNAP_KEPT || kind === 'r') {
+    try {
+      await flushManuscriptToDisk();
+    } catch (err) {
+      diskReady = false;
+      window.neo.logError('snapshot flush: ' + ((err && err.message) || err));
+    }
+  }
   const order = [...book.chapterOrder];
   const titles = { ...(book.chapterTitles || {}) };
   const kinds = { ...(book.chapterKinds || {}) };
@@ -12612,6 +12639,8 @@ async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
     snaps.splice(i, 1);
   }
   renderSnapList();
+  // Version history: a new snapshot is the hook for a git commit of this book.
+  if (diskReady && window.neo.historyCheckpoint) window.neo.historyCheckpoint(bookId, kind);
   return { snap, same: false };
 }
 
@@ -17938,6 +17967,38 @@ window.neo.onMenu(async (msg) => {
     library.writingStyle = msg.value;
     await writeLibrary(library);
     if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
+  }
+  if (msg.type === 'versionTracking') {
+    if (library.versionTracking) {
+      library.versionTracking = false;
+      await writeLibrary(library);
+      if (window.neo.versionTrackingState) window.neo.versionTrackingState(false);
+      toast(t('Version history off'));
+    } else {
+      // refuse to enable when git or identity is missing; warn on cloud-synced libraries
+      let prep = { ok: true, syncWarn: false };
+      try {
+        if (window.neo.versionTrackingPrepare) prep = await window.neo.versionTrackingPrepare();
+      } catch (err) {
+        console.error(err);
+        toast(t('Version history could not start.'));
+        return;
+      }
+      if (!prep || !prep.ok) {
+        const why = prep && prep.reason;
+        if (why === 'no-git') toast(t('Version history needs Git on this computer.'));
+        else if (why === 'no-identity') toast(t('Version history needs a git name and email set first.'));
+        else toast(t('Version history could not start.'));
+        return;
+      }
+      library.versionTracking = true;
+      await writeLibrary(library);
+      if (window.neo.versionTrackingState) window.neo.versionTrackingState(true);
+      toast(t('Version history on'));
+      if (prep.syncWarn) {
+        toast(t('Version history uses a git folder in each book. Cloud sync can corrupt it.'));
+      }
+    }
   }
   if (msg.type === 'coverArt') openCoverArt();
   // a script's lines sit where they print: no alignment, poetry or flush

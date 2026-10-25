@@ -6,6 +6,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 
 ## Rules that override convenience
 
+- **Never delete a developer's data.** While an agent works in this repo, do not remove, empty, trash, overwrite, or `rm -rf` the real NEO Library, any book folder under it, `userData` (`settings.json`, `secrets.json`), or the writer's manuscripts. Inspect and read when asked. Tests use a temporary library only (`fs.mkdtempSync` under `os.tmpdir()`), never `~/Documents/NEO Library` or another path the developer pointed File → Library Folder… at. If cleanup is needed, ask first and only touch paths you created in that session.
 - Nothing interrupts a writer mid-sentence. No popups, no squiggles, no notifications while typing. Spellcheck is off until the writer asks for a pass.
 - Controls stay hidden until hover or keyboard focus.
 - Words are never discarded. Deleting text, unbinding a shelf, or losing a trash operation must leave the words recoverable (Darlings, a sibling chapter, or the system trash). `book:delete` uses `shell.trashItem`. If trash fails, leave the folder and show it.
@@ -218,6 +219,7 @@ npm run test:coverage      # node --test --experimental-test-coverage scripts/*.
 npm run lint               # oxlint, Electron's standard-style JavaScript rules
 npm run test:spellcheck    # node --test scripts/spellcheck.test.js
 npm run test:dashes        # node --test scripts/dashes.test.js
+npm run test:load          # node scripts/benchmark-save.js — save latency, then a 30s load. Optional seconds: npm run test:load -- 60
 npm run bundle             # Hugh: brings in the newest .bundle from ~/Downloads and pushes main
 npm run try                # Hugh: opens the newest .bundle's NEO on a copy of the library, pushes nothing (-- fresh: an empty library)
 npm run release            # Hugh: next version (x.y.9 → x.(y+1).0), commit, push, tag (npm run release -- 2.0.0 for another)
@@ -240,3 +242,4 @@ Hugh pushes and releases himself and isn't a git user. Hand him work as a git bu
 - A new way to remove text needs a recovery path and a sentence in the UI that says where the words went.
 - Export formats are assembled in `app.js` and written by `export:save` in `main.js`. EPUB is a zip built in memory. PDF is printed from temporary HTML.
 - Errors in the main process are appended to `neo-errors.log` via `logError`. Renderer failures go through `window.neo.logError`. Do not swallow a save failure; `persistChapter` rolls `savedHTML` back so the next flush retries.
+- Version history (opt-in) commits a book when a snapshot writes something new. Saves never call git. An enclosing repo is reused (`git rev-parse --show-toplevel`, add limited to that book); otherwise `git init` in the book. `$HOME` and the drive root are refused. The trailer is `Neo-Version`, not `Co-authored-by`. `snapshots/` stays out of the book's git; the daily backup skips `.git`.

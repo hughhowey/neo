@@ -77,6 +77,7 @@ async function backup({ libraryDir, target, keep, fileLimitMs = FILE_LIMIT_MS })
       if (rel === '' && !(name.startsWith('book-') || name.startsWith('library.json') || name === '_catalog.txt')) continue;
       // a book's snapshots stay out: they're a history of their own
       if (name === 'snapshots' && rel.startsWith('book-') && !rel.includes('/')) continue;
+      if (name === '.git') continue; // a book's history stays out of the zip, the way Backups and Exports do
       if (name === '.DS_Store' || /^\..+\.icloud$/.test(name)) continue; // Finder litter; iCloud's stand-in for a file
       const full = path.join(dir, name);
       const relPath = rel ? rel + '/' + name : name;

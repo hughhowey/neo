@@ -9,6 +9,7 @@
     "start": "electron .",
     "test:spellcheck": "node --test scripts/spellcheck.test.js",
     "test:dashes": "node --test scripts/dashes.test.js",
+    "test:load": "node scripts/benchmark-save.js",
     "test:words": "electron scripts/words.e2e.js",
     "test:tabs": "electron scripts/tabs.e2e.js",
     "test:notes": "electron scripts/notes.e2e.js",

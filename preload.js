@@ -64,6 +64,11 @@ contextBridge.exposeInMainWorld('neo', {
   // that opens next can offer Page Break Here
   scriptContext: (st) => ipcRenderer.sendSync('script:context', st),
   typewriterState: (st) => ipcRenderer.send('typewriter:state', st),
+  versionTrackingState: (on) => ipcRenderer.send('versionTracking:state', on),
+  // before turning Version History on: git + identity (and a sync warning)
+  versionTrackingPrepare: () => ipcRenderer.invoke('versionTracking:prepare'),
+  // after a new snapshot: ask main to commit this book's version history
+  historyCheckpoint: (bookId, kind) => ipcRenderer.send('history:checkpoint', bookId, kind),
   nbspMarksState: (on) => ipcRenderer.send('nbspmarks:state', on),
   pagesState: (st) => ipcRenderer.send('pages:state', st),
   pageWidthState: (v) => ipcRenderer.send('pagewidth:state', v),

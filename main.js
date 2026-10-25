@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { Buffer } = require('buffer');
+const { execFile } = require('child_process');
 
 // Every disk request from the page passes through here: a write the system
 // refuses (see reportBlockedWrite) is explained to the writer, then the error
@@ -1664,7 +1665,7 @@ ipcMain.handle('email:draft', async (_e, { to, subject, body, html, defaultName,
       activate
     end tell`;
   return new Promise((resolve) => {
-    require('child_process').execFile('osascript', ['-e', script], (err) => {
+    execFile('osascript', ['-e', script], (err) => {
       if (err) {
         // Mail not available — at least reveal the snapshot we saved
         shell.showItemInFolder(file);
@@ -2070,7 +2071,8 @@ ipcMain.handle('import:pick', async (_e, opts) => {
 const ERROR_LOG = () => path.join(LIBRARY_DIR, 'neo-errors.log');
 
 function logError(source, err) {
-  const line = `[${new Date().toISOString()}] [${source}] ${err && err.stack ? err.stack : String(err)}\n`;
+  const text = err && err.stack ? err.stack : String(err);
+  const line = `[${new Date().toISOString()}] [${source}] ${text}\n`;
   try {
     ensureLibrary();
     fs.appendFileSync(ERROR_LOG(), line);
@@ -2079,6 +2081,13 @@ function logError(source, err) {
     // app folder takes the line instead
     try { fs.appendFileSync(path.join(app.getPath('userData'), 'neo-errors.log'), line); } catch { /* never let logging crash the app */ }
   }
+  // Version history also prints to the terminal when running from npm start.
+  if (source === 'history') console.error('[history]', text);
+}
+
+// Version history observability for the terminal (npm start). Not a library file.
+function logHistory(message) {
+  console.log('[history]', message);
 }
 
 process.on('uncaughtException', (err) => logError('main', err));
@@ -2512,6 +2521,379 @@ ipcMain.on('view:state', (e, st) => {
   viewState = next;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// File → Version History. The tick follows the window. Commits run when a
+// snapshot is taken (one book) or when tracking is turned on (every book).
+// Saves never call git. The pass itself reads library.json, so a tick alone
+// never runs it.
+let versionTrackingState = false;
+let versionTrackingKnown = false;
+let historyRunning = false;
+let historySoon = null;
+// one hung git must not leave historyRunning true forever
+let HISTORY_GIT_TIMEOUT_MS = 60 * 1000;
+
+// snapshots/ is NEO's own history; leave it out of the book's git.
+const HISTORY_IGNORE = ['*.tmp', '*.bak', '.DS_Store', 'snapshots'];
+
+function historyHooksPath() {
+  // an empty directory, so a hook that arrived with a synced book cannot
+  // stall the pass. The writer's own git config is left untouched.
+  const dir = path.join(app.getPath('userData'), 'neo-git-hooks');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function runGit(cwd, args) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, {
+      cwd,
+      env: Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0' }),
+      windowsHide: true,
+      timeout: HISTORY_GIT_TIMEOUT_MS,
+      killSignal: 'SIGKILL'
+    }, (err, stdout, stderr) => {
+      if (err) {
+        if (stdout) err.stdout = stdout;
+        if (stderr) err.stderr = stderr;
+        reject(err);
+        return;
+      }
+      resolve({ stdout: stdout || '', stderr: stderr || '' });
+    });
+  });
+}
+
+// Empty string when the key is unset (git exits 1). ENOENT still throws.
+// Cwd is only where git runs; config is global. Prefer the library when it
+// exists so a missing folder is not mistaken for a missing git binary.
+async function gitConfigGet(key) {
+  const cwd = (LIBRARY_DIR && fs.existsSync(LIBRARY_DIR)) ? LIBRARY_DIR : os.tmpdir();
+  try {
+    return String((await runGit(cwd, ['config', '--get', key])).stdout || '').trim();
+  } catch (err) {
+    if (err && err.code === 'ENOENT') throw err;
+    return '';
+  }
+}
+
+// Writer's git identity, or a coded error: ENOENT (no git) / NEO_GIT_IDENTITY.
+async function requireGitIdentity() {
+  let name = '';
+  let email = '';
+  try {
+    name = await gitConfigGet('user.name');
+    email = await gitConfigGet('user.email');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') throw err;
+    throw err;
+  }
+  if (!name || !email) {
+    const err = new Error('git identity missing');
+    err.code = 'NEO_GIT_IDENTITY';
+    throw err;
+  }
+  return { name, email };
+}
+
+async function logGitIdentity() {
+  try {
+    const name = await gitConfigGet('user.name');
+    const email = await gitConfigGet('user.email');
+    logHistory('git identity name=' + JSON.stringify(name) + ' email=' + JSON.stringify(email));
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      logHistory('git not found');
+      return;
+    }
+    logError('history', err);
+  }
+}
+
+// Cloud sync + .git is a known corruption risk. Path only — no network.
+function libraryLooksSynced() {
+  const p = String(LIBRARY_DIR || '').toLowerCase().replace(/\\/g, '/');
+  if (!p) return false;
+  if (p.includes('/mobile documents/') || p.includes('/icloud')) return true;
+  if (p.includes('/dropbox') || p.includes('/onedrive') || p.includes('/one drive')) return true;
+  if (p.includes('/google drive') || p.includes('/googledrive')) return true;
+  return false;
+}
+
+// The four lines, added only when missing. A file that already has them
+// is history of its own and is not rewritten.
+function ensureHistoryGitignore(dir) {
+  const file = path.join(dir, '.gitignore');
+  let text = null;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      logError('history', err);
+      return false;
+    }
+  }
+  const have = text == null ? [] : text.split(/\r?\n/);
+  const missing = HISTORY_IGNORE.filter((line) => !have.includes(line));
+  if (text != null && !missing.length) return true;
+  const body = text == null
+    ? HISTORY_IGNORE.join('\n') + '\n'
+    : (text.endsWith('\n') || text === '' ? text : text + '\n') + missing.join('\n') + '\n';
+  try {
+    fs.writeFileSync(file, body);
+    return true;
+  } catch (err) {
+    logError('history', err);
+    return false;
+  }
+}
+
+function countHistoryBooks() {
+  let books = 0;
+  let names;
+  try { names = fs.readdirSync(LIBRARY_DIR); } catch { return 0; }
+  for (const name of names) {
+    if (!name.startsWith('book-')) continue;
+    const dir = path.join(LIBRARY_DIR, name);
+    let st;
+    try { st = fs.statSync(dir); } catch { continue; }
+    if (!st.isDirectory()) continue;
+    if (!fs.existsSync(path.join(dir, 'book.json'))) continue;
+    books++;
+  }
+  return books;
+}
+
+function logHistoryEnabled() {
+  logHistory(
+    'version control enabled' +
+    ' version=' + app.getVersion() +
+    ' books=' + countHistoryBooks() +
+    ' library=' + LIBRARY_DIR
+  );
+}
+
+// Snapshot kinds from the window (k / d / r). A full pass (turn tracking on)
+// has no kind and keeps the plain subject. The book title is appended when
+// known so a library-wide repo's log names which book changed.
+function historyCommitSubject(kind, title) {
+  let base = 'Version history';
+  if (kind === 'k') base = 'Version history: taken by you';
+  else if (kind === 'd') base = 'Version history: start of the day';
+  else if (kind === 'r') base = 'Version history: before a restore';
+  const t = title && String(title).trim().replace(/[\r\n]+/g, ' ');
+  return t ? base + ' — ' + t : base;
+}
+
+function pathIsInside(parent, child) {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel === '' || (!rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel));
+}
+
+// Accidental repos at $HOME or the drive root must not swallow every book.
+function historyToplevelUnsafe(top) {
+  const resolved = path.resolve(top);
+  if (resolved === path.parse(resolved).root) return true;
+  try {
+    if (resolved === path.resolve(os.homedir())) return true;
+  } catch { /* homedir unavailable */ }
+  return false;
+}
+
+// Prefer an enclosing repository (library / world wiki). Otherwise one .git
+// per book. Pathspec limits add/status to that book when cwd is above it.
+async function resolveHistoryRepo(bookDir) {
+  let top = '';
+  try {
+    top = String((await runGit(bookDir, ['rev-parse', '--show-toplevel'])).stdout || '').trim();
+  } catch (err) {
+    if (err && err.code === 'ENOENT') throw err;
+  }
+  if (top && pathIsInside(top, bookDir) && !historyToplevelUnsafe(top)) {
+    const rel = path.relative(path.resolve(top), path.resolve(bookDir));
+    const pathspec = rel === '' ? null : rel.split(path.sep).join('/');
+    return { cwd: path.resolve(top), pathspec };
+  }
+  if (!fs.existsSync(path.join(bookDir, '.git'))) await runGit(bookDir, ['init']);
+  return { cwd: bookDir, pathspec: null };
+}
+
+async function commitBookHistory(dir, kind) {
+  // identity before init: no empty .git left behind when commits cannot run
+  await requireGitIdentity();
+  const { cwd, pathspec } = await resolveHistoryRepo(dir);
+  if (!ensureHistoryGitignore(dir)) return;
+  const statusArgs = ['status', '--porcelain'];
+  if (pathspec) statusArgs.push('--', pathspec);
+  const status = await runGit(cwd, statusArgs);
+  if (!String(status.stdout || '').trim()) return;
+  await runGit(cwd, pathspec ? ['add', '-A', '--', pathspec] : ['add', '-A']);
+  // Author from the writer's git config. Neo-Version names the app without
+  // GitHub treating NEO as a manuscript co-author (Co-authored-by).
+  // useConfigOnly: no guessed gord@host author when the writer has no git identity.
+  let title = '';
+  try {
+    const meta = readJSON(path.join(dir, 'book.json'), {});
+    if (meta && meta.title) title = String(meta.title);
+  } catch { /* title is for the subject and the log line */ }
+  const subject = historyCommitSubject(kind, title);
+  await runGit(cwd, [
+    '-c', 'user.useConfigOnly=true',
+    '-c', 'commit.gpgsign=false',
+    '-c', 'core.hooksPath=' + historyHooksPath(),
+    'commit',
+    '-m', subject,
+    '-m', 'Neo-Version: ' + app.getVersion()
+  ]);
+  let commit = '';
+  try {
+    commit = String((await runGit(cwd, ['rev-parse', '--short', 'HEAD'])).stdout || '').trim();
+  } catch (err) {
+    logError('history', err);
+  }
+  logHistory(
+    'checkpoint saved' +
+    ' book=' + path.basename(dir) +
+    (title ? ' title=' + JSON.stringify(title) : '') +
+    (kind ? ' kind=' + kind : '') +
+    (cwd !== dir ? ' repo=' + cwd : '') +
+    (commit ? ' commit=' + commit : '')
+  );
+}
+
+// One pass over every book. A second call while this is still walking does
+// nothing. Used when tracking is turned on; snapshots call checkpointBook.
+async function commitHistories() {
+  if (historyRunning) return;
+  historyRunning = true;
+  try {
+    const lib = readJSON(LIBRARY_FILE, {});
+    if (!lib || lib.versionTracking !== true) return;
+    try {
+      await requireGitIdentity();
+    } catch (err) {
+      logError('history', err);
+      return;
+    }
+    let names;
+    try {
+      names = fs.readdirSync(LIBRARY_DIR);
+    } catch (err) {
+      logError('history', err);
+      return;
+    }
+    let gitMissing = false;
+    for (const name of names) {
+      if (gitMissing) break;
+      if (!name.startsWith('book-')) continue;
+      const dir = path.join(LIBRARY_DIR, name);
+      let st;
+      try { st = fs.statSync(dir); } catch { continue; }
+      if (!st.isDirectory()) continue;
+      if (!fs.existsSync(path.join(dir, 'book.json'))) continue;
+      try {
+        await commitBookHistory(dir);
+      } catch (err) {
+        if (err && err.code === 'ENOENT') {
+          logError('history', err);
+          gitMissing = true;
+          break;
+        }
+        logError('history', new Error(name + ': ' + (err && err.stack ? err.stack : err)));
+      }
+    }
+  } finally {
+    historyRunning = false;
+  }
+}
+
+function runHistoryPass() {
+  commitHistories().catch((err) => logError('history', err));
+}
+
+// After a new snapshot: commit that book only. If a pass is already running,
+// fold into a full pass so the book is not skipped (kind is lost in that rare case).
+async function checkpointBook(bookId, kind) {
+  if (historyRunning) {
+    scheduleHistorySoon();
+    return;
+  }
+  historyRunning = true;
+  try {
+    const lib = readJSON(LIBRARY_FILE, {});
+    if (!lib || lib.versionTracking !== true) return;
+    let dir;
+    try { dir = bookDir(bookId); } catch { return; }
+    if (!fs.existsSync(path.join(dir, 'book.json'))) return;
+    try {
+      await commitBookHistory(dir, kind);
+    } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'NEO_GIT_IDENTITY')) {
+        logError('history', err);
+        return;
+      }
+      logError('history', new Error(String(bookId) + ': ' + (err && err.stack ? err.stack : err)));
+    }
+  } finally {
+    historyRunning = false;
+  }
+}
+
+function startHistorySchedule() {
+  // identity once at launch; commits wait for a snapshot (or turning tracking on)
+  logGitIdentity().catch((err) => logError('history', err));
+}
+
+function scheduleHistorySoon() {
+  if (historySoon) clearTimeout(historySoon);
+  historySoon = setTimeout(() => {
+    historySoon = null;
+    runHistoryPass();
+  }, 1000);
+}
+
+// Before File → Version History turns on: git present, identity set.
+// Sync warning is advisory — the writer can still enable.
+ipcMain.handle('versionTracking:prepare', async () => {
+  try {
+    await requireGitIdentity();
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      logHistory('git not found');
+      return { ok: false, reason: 'no-git' };
+    }
+    if (err && err.code === 'NEO_GIT_IDENTITY') {
+      logHistory('git identity missing');
+      return { ok: false, reason: 'no-identity' };
+    }
+    logError('history', err);
+    return { ok: false, reason: 'failed' };
+  }
+  return { ok: true, syncWarn: libraryLooksSynced() };
+});
+
+// The window reports the stored preference when the library loads, and
+// again when the writer uses the checkbox. The first report only ticks
+// the menu. Turning it on after that schedules a pass; this handler
+// does not run git itself.
+ipcMain.on('versionTracking:state', (_e, on) => {
+  on = !!on;
+  const turnedOn = versionTrackingKnown && on && !versionTrackingState;
+  versionTrackingKnown = true;
+  if (on === versionTrackingState) return;
+  versionTrackingState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+  try {
+    if (on) logHistoryEnabled();
+    else logHistory('version control disabled');
+  } catch (err) { logError('history', err); }
+  if (turnedOn) scheduleHistorySoon();
+});
+
+// From the window after a snapshot that wrote something new.
+ipcMain.on('history:checkpoint', (_e, bookId, kind) => {
+  checkpointBook(bookId, kind).catch((err) => logError('history', err));
+});
+
 // File → New Books Open To: the pantser/plotter choice, kept in library.json
 let writingStyle = 'pantser';
 ipcMain.on('style:state', (_e, style) => {
@@ -2647,6 +3029,12 @@ function buildMenu() {
             { label: t('Blank Page'), type: 'radio', checked: writingStyle !== 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'pantser' }) },
             { label: t('Outline First'), type: 'radio', checked: writingStyle === 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'plotter' }) }
           ]
+        },
+        {
+          label: t('Version History'),
+          type: 'checkbox',
+          checked: versionTrackingState,
+          click: () => sendToWindow({ type: 'versionTracking' })
         },
         { type: 'separator' },
         {
@@ -3351,6 +3739,7 @@ app.whenReady().then(() => {
     // the day's backup waits until NEO is up and the writer is writing (it
     // used to start at launch, beside everything the window was waiting on)
     setTimeout(() => { dailyBackup().catch((err) => logError('backup', err)); }, 2 * 60 * 1000).unref?.();
+    try { startHistorySchedule(); } catch (err) { logError('history', err); }
     // NEO left open for days still makes each day's backup (and retries one
     // that failed); an existing day's zip makes this a no-op
     setInterval(() => { dailyBackup().catch(() => {}); }, 60 * 60 * 1000).unref?.();
