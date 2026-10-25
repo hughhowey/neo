@@ -2468,6 +2468,20 @@ ipcMain.on('pagewidth:state', (_e, v) => {
   pageWidthState = v;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// macOS only: hold a letter for the accent picker (View → Press and Hold for
+// Accents). Kept in settings.json; absent means on.
+function pressAndHoldOn() {
+  return process.platform === 'darwin' && readSettings().pressAndHold !== false;
+}
+ipcMain.on('pressHold:get', (e) => { e.returnValue = pressAndHoldOn(); });
+function setPressAndHold(on) {
+  try { writeSettings({ ...readSettings(), pressAndHold: on }); } catch (err) { logError('settings', err); }
+  try {
+    require('electron').systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', on);
+  } catch (err) { logError('prefs', err); }
+  sendToWindow({ type: 'pressHold', value: on });
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+}
 // View → Vim Keys shows whether they're on
 let vimState = false;
 ipcMain.on('vim:state', (_e, on) => {
@@ -2894,6 +2908,13 @@ function buildMenu() {
           checked: vimState,
           click: () => sendToWindow({ type: 'vim' })
         },
+        ...(isMac ? [{
+          more: true,
+          label: t('Press and hold for accents'),
+          type: 'checkbox',
+          checked: pressAndHoldOn(),
+          click: (item) => setPressAndHold(item.checked)
+        }] : []),
         { type: 'separator' },
         {
           label: t('Page'),
@@ -3320,13 +3341,13 @@ app.whenReady().then(() => {
       logError('paths', err);
     }
 
-    // macOS press-and-hold accent picker can open invisibly inside Chromium
-    // and re-emit swallowed keys as phantom repeated letters. Within NEO,
-    // held keys simply repeat — which is what writers expect anyway.
+    // macOS press-and-hold: hold a letter for the accent picker. On by
+    // default; View → Press and hold for accents turns it off, and then held
+    // keys simply repeat (the picker once re-emitted keys as phantom letters).
     if (process.platform === 'darwin') {
       try {
         const { systemPreferences } = require('electron');
-        systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', false);
+        systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', pressAndHoldOn());
         // macOS injects its own items into any menu named "Edit" —
         // these two official switches remove the ones writers can't use here
         systemPreferences.setUserDefault('NSDisabledDictationMenuItem', 'boolean', true);

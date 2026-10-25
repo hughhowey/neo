@@ -4613,8 +4613,40 @@ function replaceBefore(n, text) {
 // abbreviation; the same rules as capitalSlips) and, in English, "i" on its
 // own. ⌘Z (Ctrl+Z) right after keeps the lowercase. Poetry is left alone.
 let capJustSet = null; // the capital just set, for ⌘Z
+// macOS press-and-hold (View → Press and hold for accents): the held letter
+// must reach the system untouched, so a sentence's first letter is typed as it
+// is and capitalised at the next key, whether it stayed or the picker made é.
+let pressHoldOn = false;
+try { pressHoldOn = !!(window.neo && window.neo.pressHold && window.neo.pressHold()); } catch (_) { /* not on a Mac */ }
+let capPending = null; // { block, at } a letter waiting for its capital
+function capPendingResolve(body) {
+  const p = capPending;
+  capPending = null;
+  if (!p || !p.block.isConnected || !body.contains(p.block)) return;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!p.block.contains(range.startContainer)) return;
+  const pre = document.createRange();
+  pre.setStart(p.block, 0);
+  pre.setEnd(range.startContainer, range.startOffset);
+  const caret = pre.toString().length;
+  if (caret <= p.at) return;
+  selectChars(p.block, p.at, p.at + 1);
+  const was = window.getSelection().toString();
+  const to = was.toLocaleUpperCase(writingLanguage());
+  if (was && to !== was && was !== was.toLocaleUpperCase(writingLanguage()) && /\p{L}/u.test(was)) {
+    document.execCommand('insertText', false, to);
+    capJustSet = { block: p.block, at: p.at, was, to, key: '' };
+  }
+  selectChars(p.block, caret, caret);
+}
 function autoCapKey(e, body) {
   if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing || e.keyCode === 229) return;
+  if (pressHoldOn) {
+    if (e.repeat) return;
+    if (capPending && !MODIFIER_KEYS.has(e.key)) capPendingResolve(body);
+  }
   if (e.key.length !== 1 || !body.matches('.chapter-body')) return;
   const sel = window.getSelection();
   if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return;
@@ -4635,6 +4667,7 @@ function autoCapKey(e, body) {
       starts = !CAPS_ABBREV.has(word.toLowerCase()) && !/^\p{L}$/u.test(word);
     }
     if (!starts) return;
+    if (pressHoldOn) { capPending = { block, at: before.length }; return; }
     e.preventDefault();
     const to = e.key.toLocaleUpperCase(lang);
     document.execCommand('insertText', false, to);
@@ -17928,6 +17961,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'pageWidth') setPageWidth(msg.value);
   if (msg.type === 'twoPageView') toggleTwoPage();
   if (msg.type === 'vim') toggleVim();
+  if (msg.type === 'pressHold') pressHoldOn = !!msg.value;
   if (msg.type === 'focus') setFocus(msg.value);
   if (msg.type === 'focusCycle') cycleFocus();
   if (msg.type === 'import') importBooks();

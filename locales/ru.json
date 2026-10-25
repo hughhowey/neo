@@ -718,6 +718,7 @@
   "Export Chapter…": "Экспортировать главу…",
   "Restart Chapter Numbers at Each Part": "Нумеровать главы заново в каждой части",
   "Vim Keys": "Клавиши Vim",
+  "Press and hold for accents": "Удерживать для ввода ударений и диакритики",
   "Vim keys on — Esc to move, i to write": "Клавиши Vim включены — Esc, чтобы перемещаться, i, чтобы писать",
   "Vim keys off": "Клавиши Vim выключены",
   "Vim keys": "Клавиши Vim",
