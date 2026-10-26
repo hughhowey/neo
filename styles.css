@@ -2297,7 +2297,9 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 }
 #notes-up:hover, #notes-up:focus-visible { color: var(--accent); }
 #editor-view:not(.notes-tab) #notes-up, #editor-view:not(.notes-tab) #notes-outline { display: none; }
-#aux-paper.notes-chapter #aux-title { margin-bottom: 18px; }
+/* only on the Notes tab: the class stays on the page after it, and the
+   Outline's List/Cards switch is set 30px up into the heading's 40px (#455) */
+#editor-view.notes-tab #aux-paper.notes-chapter #aux-title { margin-bottom: 18px; }
 #notes-outline {
   max-width: 34em; margin: 0 auto 40px; text-align: center; color: #8a8a8a;
   font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
