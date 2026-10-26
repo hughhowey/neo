@@ -14739,6 +14739,38 @@ document.addEventListener('keydown', (e) => {
 }, true);
 document.addEventListener('mousedown', () => { typewriterByKeyboard = false; }, true);
 
+// ---- typewriter rules: where the page goes as the writer types ----
+// The writing height is 45% of the window, with a band of about three lines
+// around it. The page's new scrollTop for a caret at caretTop, or null while
+// the caret is inside the band.
+function typewriterScrollTarget(scrollTop, caretTop, windowHeight, lineHeight) {
+  const diff = caretTop - windowHeight * 0.45;
+  return Math.abs(diff) <= lineHeight * 1.5 ? null : scrollTop + diff;
+}
+// A letter typed, Chromium scrolls its caret into view on its own. In the
+// Pages view it measures a line that a page break carried to the next page
+// at the top of its paragraph, back on the page before, and scrolls up to
+// that while the caret sits in plain view; the typewriter then glided the
+// page back, and every letter at the top of a page bobbed it (#453). NEO
+// keeps the caret in sight itself, so a scroll like that goes back. Given
+// the scrollTop when the letter went in (was) and now, where the typewriter
+// is gliding (glide, or null), the caret's top and bottom in the window as
+// they were at `was`, and the scroller's top and bottom: the scrollTop to
+// put back, or null to leave it.
+function strayCaretScroll({ was, now, glide, caretTop, caretBottom, viewTop, viewBottom }) {
+  if (now === was) return null;
+  // the typewriter's own glide, on its way
+  if (glide !== null && Math.sign(now - was) === Math.sign(glide - was) && Math.abs(now - was) <= Math.abs(glide - was) + 1) return null;
+  // a caret that was out of sight, even in part, is Chromium's to bring in
+  if (caretTop < viewTop || caretBottom > viewBottom) return null;
+  return was;
+}
+// ---- end of typewriter rules ----
+
+// where the typewriter is gliding the page, until it gets there
+let typewriterGlide = null;
+$('#paper-scroll').addEventListener('scrollend', () => { typewriterGlide = null; });
+
 document.addEventListener('selectionchange', () => {
   if (!typewriterEnabled || !book || currentTab !== 'manuscript' || !typewriterByKeyboard) return;
   const sel = window.getSelection();
@@ -14751,12 +14783,35 @@ document.addEventListener('selectionchange', () => {
       let rect = sel.getRangeAt(0).getBoundingClientRect();
       if (!rect || (rect.top === 0 && rect.height === 0)) rect = el.getBoundingClientRect();
       const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 30;
-      const diff = rect.top - window.innerHeight * 0.45;
-      // a band of about three lines around the writing height
-      if (Math.abs(diff) <= lineHeight * 1.5) return;
       const scroller = $('#paper-scroll');
-      scroller.scrollTo({ top: scroller.scrollTop + diff, behavior: scrollBehavior() });
+      const top = typewriterScrollTarget(scroller.scrollTop, rect.top, window.innerHeight, lineHeight);
+      if (top === null) return;
+      typewriterGlide = top;
+      scroller.scrollTo({ top, behavior: scrollBehavior() });
     } catch { /* selection mid-mutation; skip this frame */ }
+  });
+});
+
+// Chromium's scroll comes after the input event, inside the same keystroke,
+// so the page is checked in the next frame, before it is painted. (On the
+// window, so NEO's own input handlers, revealCaret among them, have run.)
+window.addEventListener('input', (e) => {
+  if (!pagesOn() || currentTab !== 'manuscript') return;
+  if (!e.target.closest || !e.target.closest('.chapter-body')) return;
+  const sc = $('#paper-scroll');
+  const was = sc.scrollTop;
+  requestAnimationFrame(() => {
+    const now = sc.scrollTop;
+    if (now === was) return;
+    const rect = caretRect();
+    if (!rect) return;
+    const box = sc.getBoundingClientRect();
+    const back = strayCaretScroll({
+      was, now, glide: typewriterGlide,
+      caretTop: rect.top + now - was, caretBottom: rect.bottom + now - was,
+      viewTop: box.top, viewBottom: box.bottom
+    });
+    if (back !== null) sc.scrollTop = back;
   });
 });
 
