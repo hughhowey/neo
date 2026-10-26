@@ -936,6 +936,9 @@ body.bright .spell-menu button { color: #eee; }
   background: #f6e3b8; border-bottom: 2px solid var(--red);
   padding: 0 3px; border-radius: 2px; cursor: pointer;
 }
+/* the night page's ink is light, and the flag took it: white on the yellow.
+   It keeps the dark ink the gold buttons use instead (#454) */
+body.night .ph-mark { color: #191919; }
 
 /* --- The pages a book carries, in the manuscript, set as they'll print --- */
 .chapter.bookpage { display: flex; flex-direction: column; }
