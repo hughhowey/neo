@@ -226,6 +226,56 @@ test('a click in a page\'s margin puts the caret in that page\'s text', async ()
   assert.ok(caret[0] >= hit.top - 40 && caret[1] <= hit.bottom + 40, `the caret is at ${caret}, not on the second page (${hit.top}–${hit.bottom})`);
 });
 
+test('with typewriter scrolling, letters typed at the top of a page leave the page still (#453)', async () => {
+  // a long paragraph across the first page break, starting well up the first
+  // page, and the caret a few letters into its line at the top of the
+  // second page, held at the writing height
+  const setup = await js(`(() => {
+    if (twoPageEnabled) toggleTwoPage();
+    if (!typewriterEnabled) toggleTypewriter();
+    const body = document.querySelector('.chapter-body');
+    const top2 = () => [...body.getClientRects()][1].top;
+    const foot1 = [...body.getClientRects()][0].bottom;
+    const across = [...body.children].filter((p) => p.getClientRects()[0].top < foot1 - 350).pop();
+    across.textContent = 'She had done it since she was small, standing at the end of the pier with her coat buttoned to the chin. '.repeat(10);
+    const line = top2();
+    const w = document.createTreeWalker(across, NodeFilter.SHOW_TEXT);
+    const text = w.nextNode();
+    let at = 0;
+    while (at < text.length) { const r = document.createRange(); r.setStart(text, at); r.setEnd(text, at + 1); if (r.getBoundingClientRect().top >= line - 2) break; at++; }
+    body.focus();
+    const r = document.createRange(); r.setStart(text, at + 4); r.collapse(true);
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    const sc = document.getElementById('paper-scroll');
+    sc.scrollTop += r.getBoundingClientRect().top - window.innerHeight * 0.45;
+    // what each frame paints: a ResizeObserver runs after the frame's
+    // animation callbacks and before its paint
+    window.__painted = [];
+    const probe = window.__probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;left:0;top:0;height:1px;width:1px;visibility:hidden;pointer-events:none';
+    document.body.append(probe);
+    new ResizeObserver(() => window.__painted.push(Math.round(sc.scrollTop))).observe(probe);
+    let k = 0;
+    (function frame() { if (!probe.isConnected) return; probe.style.width = (1 + (k++ % 2)) + 'px'; requestAnimationFrame(frame); })();
+    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top };
+  })()`);
+  assert.equal(setup.split, 2, 'the paragraph runs across the page break');
+  assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret');
+  await tick(600);
+  const start = await js(`Math.round(document.getElementById('paper-scroll').scrollTop)`);
+  await js(`window.__painted = []`);
+  for (const ch of 'harbor') {
+    wc.sendInputEvent({ type: 'keyDown', keyCode: ch });
+    wc.sendInputEvent({ type: 'char', keyCode: ch });
+    wc.sendInputEvent({ type: 'keyUp', keyCode: ch });
+    await tick(250);
+  }
+  const painted = await js(`window.__painted`);
+  await js(`window.__probe.remove(); toggleTypewriter()`);
+  assert.ok(painted.length > 10, 'frames were painted');
+  assert.deepEqual([...new Set(painted)], [start], `the page moved: ${[...new Set(painted)].join(' ')}`);
+});
+
 /* ---------- runner ---------- */
 
 async function main() {
