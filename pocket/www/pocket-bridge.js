@@ -152,20 +152,13 @@
     await writeText(path, JSON.stringify(data, null, 2));
   }
 
-  // the same rule as main.js chapterDiverged: the disk copy differs from
-  // what this device last knew, holds words, and has a word the new text lacks
+  // the same rule as main.js chapterDiverged: the disk copy is not exactly
+  // what this device last knew, is not already the new text, and holds
+  // words. Formatting, order and deletions are conflicts too.
   function chapterDiverged(cur, expected, html) {
     if (cur === expected || cur === html) return false;
-    const bag = (h) => {
-      const m = new Map();
-      for (const w of String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').split(/\s+/)) if (w) m.set(w, (m.get(w) || 0) + 1);
-      return m;
-    };
-    const there = bag(cur);
-    if (!there.size) return false;
-    const here = bag(html);
-    for (const [w, n] of there) if (n > (here.get(w) || 0)) return true;
-    return false;
+    const words = String(cur || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+    return words !== '';
   }
 
   const bookDir = (bookId) => p(bookId);
