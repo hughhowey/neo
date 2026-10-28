@@ -12467,6 +12467,30 @@ function snapsToThin(snaps, now) {
   const newest = snaps.reduce((a, s) => (!a || s.at > a.at ? s : a), null);
   return snaps.filter((s) => s !== newest && s.kind !== SNAP_KEPT && now - s.at > SNAP_KEEP_DAYS * 86400000).map((s) => s.name);
 }
+// Hands each thinned snapshot's chapters on to the next one, then removes it.
+// A chapter the next snapshot lacks is read from the old one (a read that
+// fails throws; an empty chapter is '' and goes on as ''), written, and read
+// back to match before anything is removed. A next snapshot that already has
+// a chapter keeps its own version, which is what readers see from there on.
+// Any failure stops the pass with the source still in place, so the next
+// snapshot tries again.
+async function thinSnapshots(neo, bookId, snaps, now) {
+  for (const gone of snapsToThin(snaps, now)) {
+    const i = snaps.findIndex((s) => s.name === gone);
+    const next = snaps[i + 1];
+    if (i < 0 || !next) continue;
+    for (const f of snaps[i].files) {
+      if (!f.endsWith('.html') || next.files.has(f)) continue;
+      const text = await neo.snapshotRead(bookId, snaps[i].name, f);
+      if ((await neo.snapshotWrite(bookId, next.name, f, text)) === false) { next.files.add(f); continue; } // already there: its own
+      const copy = await neo.snapshotRead(bookId, next.name, f);
+      if (copy !== text) throw new Error(`snapshot thinning: ${f} did not copy to ${next.name} intact`);
+      next.files.add(f);
+    }
+    await neo.snapshotRemove(bookId, gone);
+    snaps.splice(i, 1);
+  }
+}
 // where a chapter's text at snapshots[i] is: the newest snapshot at or
 // before it holding the file (snapshots oldest first, each with `files`)
 function snapHolder(snaps, i, chId) {
@@ -12597,19 +12621,12 @@ async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
   snap.files = new Set([...changed.map((c) => c + '.html'), 'snapshot.json']);
   snap.meta = meta;
   snaps.push(snap);
-  // NEO's own old ones go, each handing its chapters on to the next first
-  for (const gone of snapsToThin(snaps, now)) {
-    const i = snaps.findIndex((s) => s.name === gone);
-    const next = snaps[i + 1];
-    if (i < 0 || !next) continue;
-    for (const f of snaps[i].files) {
-      if (!f.endsWith('.html') || next.files.has(f)) continue;
-      const text = await window.neo.snapshotRead(bookId, snaps[i].name, f);
-      await window.neo.snapshotWrite(bookId, next.name, f, text);
-      next.files.add(f);
-    }
-    await window.neo.snapshotRemove(bookId, gone);
-    snaps.splice(i, 1);
+  // NEO's own old ones go, each handing its chapters on to the next first. A
+  // failure leaves them where they are; the next snapshot tries again.
+  try {
+    await thinSnapshots(window.neo, bookId, snaps, now);
+  } catch (err) {
+    logSnap(err);
   }
   renderSnapList();
   return { snap, same: false };

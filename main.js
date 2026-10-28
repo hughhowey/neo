@@ -900,11 +900,13 @@ ipcMain.handle('snapshot:list', (_e, bookId) => {
   }
   return out;
 });
+// A file that can't be read throws (missing, no permission, still in iCloud):
+// only a chapter that is really empty reads as ''. Thinning relies on telling
+// them apart, so it never carries an empty stand-in forward.
 ipcMain.handle('snapshot:read', (_e, bookId, name, file) => {
-  let fp;
-  try { fp = snapshotFile(bookId, name, file); } catch { return ''; }
-  const read = () => { try { return fs.readFileSync(fp, 'utf8'); } catch { return ''; } };
-  return afterLocal([fp], read, () => '');
+  const fp = snapshotFile(bookId, name, file);
+  const read = () => fs.readFileSync(fp, 'utf8');
+  return afterLocal([fp], read, () => { throw cloudError(fp); });
 });
 ipcMain.handle('snapshot:write', (_e, bookId, name, file, text) => {
   const target = snapshotFile(bookId, name, file);
