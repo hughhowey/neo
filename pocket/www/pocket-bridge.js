@@ -371,12 +371,16 @@
       }
       return out;
     },
+    // throws when the file can't be read: only an empty chapter reads as ''
+    // (the desktop's rule; thinning depends on it)
     snapshotRead: async (bookId, name, file) => {
       await fetchCloud(p(bookId, 'snapshots', name, file));
-      try { return await readText(p(bookId, 'snapshots', name, file)); } catch { return ''; }
+      return readText(p(bookId, 'snapshots', name, file));
     },
+    // written once, as on the desktop: false when the file is already there
     snapshotWrite: async (bookId, name, file, text) => {
       await ensureDir(p(bookId, 'snapshots', name));
+      try { await FS().stat(at(p(bookId, 'snapshots', name, file))); return false; } catch { /* free */ }
       await writeText(p(bookId, 'snapshots', name, file), text);
       return true;
     },
