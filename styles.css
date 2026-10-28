@@ -2229,9 +2229,10 @@ body.light .snap-ch:hover { color: #1c1a17; }
 .snap-chapter.same .snap-tag { color: color-mix(in srgb, var(--ink) 45%, var(--paper)); }
 .snap-chapter.same .snap-body { opacity: 0.55; }
 .snap-body { user-select: text; cursor: text; }
-.snap-body p.snap-gone { background: rgba(192, 57, 43, 0.14); box-shadow: -6px 0 0 rgba(192, 57, 43, 0.14), 6px 0 0 rgba(192, 57, 43, 0.14); }
-::highlight(neo-snap-gone) { background-color: rgba(192, 57, 43, 0.24); }
-
+.snap-body p.snap-gone { background: rgba(192, 57, 43, 0.14); box-shadow: -6px 0 0 rgba(192, 57, 43, 0.14), 6px 0 0 rgba(192, 57, 43, 0.14); text-decoration: underline 2px #c0392b; text-decoration-skip-ink: none; }
+::highlight(neo-snap-gone) { background-color: rgba(192, 57, 43, 0.24); text-decoration: underline 2px #c0392b; text-decoration-skip-ink: none; }
+body.night .snap-body p.snap-gone { background: rgba(224, 112, 95, 0.3); box-shadow: -6px 0 0 rgba(224, 112, 95, 0.3), 6px 0 0 rgba(224, 112, 95, 0.3); text-decoration-color: #e0705f; }
+body.night ::highlight(neo-snap-gone) { background-color: rgba(224, 112, 95, 0.4); text-decoration-color: #e0705f; }
 /* the Outline's cards for where the caret is, atop the right-hand pane (#340) */
 #side-cards { display: flex; flex-direction: column; gap: 10px; padding: 0 12px; }
 #side-cards:not(:empty) { margin-bottom: 22px; }
