@@ -17360,7 +17360,7 @@ p.attr { font-style: normal; font-size: 0.85em; letter-spacing: 0.05em; margin-t
 .part .pl { display: block; }
 .part .pt { display: block; margin-top: 0.8em; font-size: 1.6em; letter-spacing: 0; text-transform: none; }
 .opener h1 { margin: 0; font-size: 1.8em; letter-spacing: 0.02em; text-transform: none; }
-.opener .sub { text-indent: 0; margin-top: 0.6em; font-style: italic; }
+.opener .sub { text-align: center; text-indent: 0; margin-top: 0.6em; font-style: italic; }
 .opener .byline { margin: 3em 0 0; }
 nav#toc ol { list-style: none; padding-left: 0; }
 nav#toc ol ol { padding-left: 1.5em; }
