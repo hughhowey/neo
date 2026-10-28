@@ -8084,7 +8084,7 @@ const notesPageOk = (page) => page === 'book' || (!!book && book.chapterOrder.in
 // what a page holds: the text waiting to be saved, else the file
 function readNotesPage(bookId, page) {
   const pending = auxPending[bookId + '/' + notesKind(page)];
-  return pending ? Promise.resolve(pending.html) : window.neo.readAux(bookId, notesKind(page));
+  return pending ? Promise.resolve(pending.html) : auxRead(bookId, notesKind(page));
 }
 const htmlText = (html) => {
   const d = document.createElement('template');
@@ -8752,7 +8752,7 @@ function switchTab(name) {
     auxEditor.dataset.book = '';
     auxEditor.dataset.ph = notesPage === 'book' ? '' : t('Notes for this chapter');
     const pending = auxPending[bookId + '/' + kind];
-    (pending ? Promise.resolve(pending.html) : window.neo.readAux(bookId, kind)).then((html) => {
+    (pending ? Promise.resolve(pending.html) : auxRead(bookId, kind)).then((html) => {
       if (load !== auxLoad || !book || book.id !== bookId || currentTab !== name || notesKind(notesPage) !== kind) return;
       auxEditor.innerHTML = html || '';
       auxEditor.dataset.kind = kind;
@@ -11844,6 +11844,23 @@ function scheduleAuxSave() {
 // the next flush, and is what the page shows if the writer comes back to it
 // before then (not the older file).
 const auxPending = {};
+// The disk text each page was last read or written as (by book and page): the
+// base a save is checked against, as chapter:write checks its own. A refresh
+// compares with it too. auxSeq counts the writes, so a read that was out
+// while one landed does not set the base back to older text.
+const auxBase = {};
+const auxSeq = {};
+// one page's saves go to the disk one at a time, each with the base the one
+// before it left; a newer text waiting behind an older one is never sent first
+const auxQueue = {};
+function auxRead(bookId, kind) {
+  const key = bookId + '/' + kind;
+  const seq = auxSeq[key] || 0;
+  return window.neo.readAux(bookId, kind).then((html) => {
+    if ((auxSeq[key] || 0) === seq) auxBase[key] = html;
+    return html;
+  });
+}
 function flushAux() {
   const ed = $('#aux-editor');
   if (auxDirty && ed.dataset.kind && ed.dataset.book) {
@@ -11855,13 +11872,39 @@ function flushAux() {
     const job = auxPending[key];
     if (job.inFlight) continue;
     job.inFlight = true;
-    Promise.resolve().then(() => window.neo.writeAux(job.bookId, job.kind, job.html)).then(() => {
-      if (auxPending[key] === job) delete auxPending[key];
-    }, (err) => {
+    const run = (auxQueue[key] || Promise.resolve()).then(() => saveAuxJob(key, job));
+    auxQueue[key] = run.catch(() => {});
+    run.catch((err) => {
       job.inFlight = false;
       window.neo.logError('notes save: ' + (err && err.message || err));
     });
   }
+}
+function saveAuxJob(key, job) {
+  return window.neo.writeAux(job.bookId, job.kind, job.html, auxBase[key]).then((r) => {
+    auxBase[key] = job.html;
+    auxSeq[key] = (auxSeq[key] || 0) + 1;
+    if (auxPending[key] === job) delete auxPending[key];
+    // another device's words for this page were in the way: they are kept beside it
+    if (r && r.kept) toast(t('This page also changed on another device. That version is kept beside it as {file}.', { file: r.kept }), 8000);
+  });
+}
+// An open notes or outline page that nothing has been typed on since it was
+// read takes what another device saved. A page with words waiting keeps them;
+// its save keeps the other device's version (see aux:write).
+async function refreshOpenAux() {
+  const ed = $('#aux-editor');
+  const bookId = ed.dataset.book;
+  const kind = ed.dataset.kind;
+  if (!bookId || !kind || !book || book.id !== bookId) return;
+  const key = bookId + '/' + kind;
+  if (auxDirty || auxPending[key] || auxBase[key] === undefined) return;
+  const seq = auxSeq[key] || 0;
+  const html = await window.neo.readAux(bookId, kind);
+  if (ed.dataset.book !== bookId || ed.dataset.kind !== kind || auxDirty || auxPending[key]) return;
+  if ((auxSeq[key] || 0) !== seq || html === auxBase[key]) return;
+  auxBase[key] = html;
+  ed.innerHTML = html;
 }
 
 // The same promise for the JSON beside a book (comments, Darlings): the
@@ -13045,6 +13088,7 @@ async function refreshFromDisk() {
   if (refreshing || shelfExport) return;
   refreshing = true;
   bookMetaCache.clear(); // whatever another device wrote, the next redraw reads
+  refreshOpenAux().catch((err) => window.neo.logError('notes refresh: ' + (err && err.message || err)));
   try {
     if (!book) {
       if (library && !$('#bookshelf-view').hidden) {

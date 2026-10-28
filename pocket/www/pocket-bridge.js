@@ -152,20 +152,32 @@
     await writeText(path, JSON.stringify(data, null, 2));
   }
 
-  // the same rule as main.js chapterDiverged: the disk copy differs from
-  // what this device last knew, holds words, and has a word the new text lacks
+  // null when the file isn't there; an existing file that can't be read throws
+  // (an empty read taken for an empty page would be saved over it)
+  async function readAuxText(path) {
+    try { return await readText(path); } catch (err) {
+      try { await FS().stat(at(path)); } catch { return null; }
+      throw err;
+    }
+  }
+  // the displaced disk text goes to <page>.bak, or .bak2 … when that holds other words
+  async function keepAuxBackup(file, text) {
+    for (let n = 1; n < 1000; n++) {
+      const bak = file + (n === 1 ? '.bak' : '.bak' + n);
+      const have = await readAuxText(bak);
+      if (have === text) return bak;
+      if (have === null) { await writeText(bak, text); return bak; }
+    }
+    throw new Error('too many kept copies of ' + file);
+  }
+
+  // the same rule as main.js chapterDiverged: the disk copy is not exactly
+  // what this device last knew, is not already the new text, and holds
+  // words. Formatting, order and deletions are conflicts too.
   function chapterDiverged(cur, expected, html) {
     if (cur === expected || cur === html) return false;
-    const bag = (h) => {
-      const m = new Map();
-      for (const w of String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').split(/\s+/)) if (w) m.set(w, (m.get(w) || 0) + 1);
-      return m;
-    };
-    const there = bag(cur);
-    if (!there.size) return false;
-    const here = bag(html);
-    for (const [w, n] of there) if (n > (here.get(w) || 0)) return true;
-    return false;
+    const words = String(cur || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+    return words !== '';
   }
 
   const bookDir = (bookId) => p(bookId);
@@ -387,10 +399,22 @@
 
     /* ---------- notes / outline / json sidecars ---------- */
     readAux: async (bookId, name) => {
-      try { return await readText(p(bookId, name + '.html')); } catch { /* the spare, below */ }
+      const cur = await readAuxText(p(bookId, name + '.html'));
+      if (cur !== null) return cur;
       try { return await readText(p(bookId, name + '.html.tmp')); } catch { return ''; }
     },
-    writeAux: async (bookId, name, html) => { await writeText(p(bookId, name + '.html'), html); return true; },
+    // the same revision contract as main.js aux:write: a stale save keeps the
+    // disk's words as a .bak beside the page first, and says so
+    writeAux: async (bookId, name, html, expected) => {
+      const file = p(bookId, name + '.html');
+      let kept = null;
+      if (typeof expected === 'string') {
+        const cur = await readAuxText(file);
+        if (cur !== null && chapterDiverged(cur, expected, html)) kept = await keepAuxBackup(file, cur);
+      }
+      await writeText(file, html);
+      return kept ? { kept: kept.split('/').pop() } : true;
+    },
     readJSON: (bookId, name, fallback) => readJSONFile(p(bookId, name + '.json'), fallback),
     writeJSON: async (bookId, name, data) => { await writeJSONFile(p(bookId, name + '.json'), data); return true; },
 
