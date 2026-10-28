@@ -17366,8 +17366,8 @@ nav#toc ol { list-style: none; padding-left: 0; }
 nav#toc ol ol { padding-left: 1.5em; }
 .titlepage { text-align: center; margin-top: 30%; }
 .titlepage h2 { font-size: 2em; margin: 0; }
-.titlepage .sub { font-style: italic; }
-.titlepage .auth { margin-top: 4em; letter-spacing: 0.3em; text-transform: uppercase; }
+.titlepage .sub { text-align: center; text-indent: 0; font-style: italic; }
+.titlepage .auth { text-align: center; text-indent: 0; margin-top: 4em; letter-spacing: 0.3em; text-transform: uppercase; }
 .coverimg { text-align: center; margin: 0; padding: 0; }
 .coverimg img { max-width: 100%; max-height: 100%; }` },
     { path: 'OEBPS/cover.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
