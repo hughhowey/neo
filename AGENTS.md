@@ -72,7 +72,7 @@ Brighter Interface is two settings: `library.uiBright` while writing (and on the
 
 ## Screenplays
 
-A book whose `book.json` says `"format": "screenplay"` is a script. Right-click (long-press) a shelf's + for New Script. The SCREENPLAYS section of `app.js` holds the feature; `scripts/screenplay.test.js` tests its rules.
+A book whose `book.json` says `"format": "screenplay"` is a script. With Show More Features on, hovering the shelf's + (or focusing it from the keyboard) splits it into Book and Script. A screen with no hover still uses a long-press. Simple NEO and Pocket keep a single + that starts a book. The SCREENPLAYS section of `app.js` holds the feature; `scripts/screenplay.test.js` tests its rules. `scripts/blank-tile.test.js` tests which + the shelf shows.
 
 - The whole script is one chapter, so selection and the arrow keys run through every scene. Scenes are found by their headings.
 - Each line is a `<p>` whose class is its element: `sp-heading`, `sp-character`, `sp-paren`, `sp-dialogue`, `sp-transition`, `sp-shot`. Action has no class.

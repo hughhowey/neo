@@ -423,9 +423,51 @@ button { font: inherit; cursor: pointer; }
 .new-book {
   border: 1px dashed #4a4a4a; color: #4a4a4a;
   align-items: center; justify-content: center; font-size: 34px; font-weight: 200;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255,255,255,0.02); user-select: none;
 }
-.new-book:hover { color: var(--accent); border-color: var(--accent); }
+.new-book:hover,
+.new-book.nb-split:focus-within { color: var(--accent); border-color: var(--accent); }
+
+/* Hover (or keyboard focus) with Show More Features: the top stays a book,
+   Script takes the bottom third. At rest the Script control is there for
+   the keyboard and lets clicks through, so the whole face still starts a book. */
+.new-book.nb-split { align-items: stretch; justify-content: stretch; }
+.new-book.nb-split .nb-book,
+.new-book.nb-split .nb-script {
+  appearance: none; background: none; border: 0; margin: 0; padding: 0;
+  color: inherit; font: inherit; cursor: pointer; border-radius: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.new-book.nb-split .nb-book {
+  flex: 1; flex-direction: column; min-height: 0; width: 100%;
+}
+.new-book.nb-split .nb-plus { font-size: 34px; font-weight: 200; line-height: 1; }
+.new-book.nb-split .nb-name {
+  font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
+  line-height: 1; max-height: 0; opacity: 0; overflow: hidden;
+}
+.new-book.nb-split .nb-script {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 50px; z-index: 1;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
+  line-height: 1.15; text-align: center; padding: 0 6px;
+  border-top: 1px dashed currentColor;
+  opacity: 0; pointer-events: none;
+}
+.new-book.nb-split:hover .nb-book,
+.new-book.nb-split:focus-within .nb-book { padding-bottom: 50px; }
+.new-book.nb-split:hover .nb-name,
+.new-book.nb-split:focus-within .nb-name { max-height: 16px; margin-top: 8px; opacity: 1; }
+.new-book.nb-split:hover .nb-script,
+.new-book.nb-split:focus-within .nb-script { opacity: 1; pointer-events: auto; }
+/* The book button's padding sits under Script. Clip the wash to the top,
+   or a hover on Book tints the Script band through it. */
+.new-book.nb-split .nb-book:hover {
+  background: rgba(201, 168, 106, 0.08);
+  background-clip: content-box;
+}
+.new-book.nb-split .nb-script:hover { background: rgba(201, 168, 106, 0.08); }
+.new-book.nb-split .nb-book:focus-visible,
+.new-book.nb-split .nb-script:focus-visible { outline-offset: -3px; }
 
 .book.dragging { opacity: 0.4; }
 
@@ -1752,7 +1794,8 @@ body.light .shelf-books.drag-over { background: rgba(124,93,38,0.06); }
 body.light .book { box-shadow: inset 3px 0 6px -3px rgba(0,0,0,0.35), 2px 3px 8px rgba(0,0,0,0.22); }
 body.light .book.bound-cover { box-shadow: inset 4px 0 8px -3px rgba(0,0,0,0.4), 3px 6px 16px rgba(0,0,0,0.28); }
 body.light .new-book { border-color: #bdb7ac; color: #a59f94; background: rgba(0,0,0,0.015); }
-body.light .new-book:hover { color: var(--accent); border-color: var(--accent); }
+body.light .new-book:hover,
+body.light .new-book.nb-split:focus-within { color: var(--accent); border-color: var(--accent); }
 body.light .book.page-tile { background: #fdfbf6; color: #6f675b; box-shadow: 0 0 0 1px rgba(0,0,0,0.07), 1px 2px 6px rgba(0,0,0,0.16); }
 body.light .book.page-tile.kind-part { background: #f5f0e4; }
 body.light .ghost-page { border-color: rgba(0,0,0,0.24); color: rgba(0,0,0,0.45); }
@@ -1976,7 +2019,7 @@ html[lang^="el"] .book.cv-cinzel .b-title {
   background: var(--bg); box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
 }
 body.light .book.script-tile { background: #fffefb; box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 1px 2px 6px rgba(0,0,0,0.18); }
-/* the + of a shelf, right-clicked: a book or a script */
+/* the shelf's +, hovered: Book above, Script along the bottom (app.js) */
 
 /* --- the page --- */
 #editor-view.script-mode #paper-scroll { container-type: inline-size; overflow-x: hidden; }
