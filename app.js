@@ -1125,25 +1125,56 @@ async function renderShelves() {
       } else renderShelves();
     });
 
-    // the blank page — click to begin
+    // the blank page — click to begin. With Show More Features on, hovering
+    // (or landing on it from the keyboard) divides it: Book above, Script
+    // along the bottom. A screen with no hover keeps the long-press menu.
+    // Simple NEO and a bound shelf stay a single +.
     const blank = document.createElement('div');
     blank.className = 'new-book';
-    blank.textContent = '+';
-    blank.title = t('Start a new book');
-    blank.onclick = () => createBookOnShelf(shelf);
-    pressable(blank, t('Start a new book'));
-    // right-click (a long press on a phone): a book or a script
-    if (!isBound(shelf)) {
-      blank.addEventListener('contextmenu', async (e) => {
-        e.preventDefault();
-        if (!moreOn()) return; // scripts are behind Show More Features
-        const pick = await popMenu(e.clientX, e.clientY, [
-          { label: t('New Book'), value: 'book' },
-          { label: t('New Script'), value: 'script' }
-        ], { from: blank });
-        if (pick === 'book') createBookOnShelf(shelf);
-        else if (pick === 'script') createScriptOnShelf(shelf);
-      });
+    const tileKind = blankTileKind(isBound(shelf), moreOn(), !NO_HOVER);
+    if (tileKind === 'split') {
+      blank.classList.add('nb-split');
+      const bookBtn = document.createElement('button');
+      bookBtn.type = 'button';
+      bookBtn.className = 'nb-book';
+      bookBtn.title = t('Start a new book');
+      bookBtn.setAttribute('aria-label', t('Start a new book'));
+      const plus = document.createElement('span');
+      plus.className = 'nb-plus';
+      plus.setAttribute('aria-hidden', 'true');
+      plus.textContent = '+';
+      const bookName = document.createElement('span');
+      bookName.className = 'nb-name';
+      bookName.textContent = t('Book');
+      bookBtn.append(plus, bookName);
+      bookBtn.onclick = () => createBookOnShelf(shelf);
+      const scriptBtn = document.createElement('button');
+      scriptBtn.type = 'button';
+      scriptBtn.className = 'nb-script';
+      scriptBtn.textContent = t('Script');
+      scriptBtn.title = t('New Script');
+      scriptBtn.setAttribute('aria-label', t('New Script'));
+      scriptBtn.onclick = () => createScriptOnShelf(shelf);
+      blank.append(bookBtn, scriptBtn);
+      blank.addEventListener('contextmenu', (e) => e.preventDefault());
+    } else {
+      blank.textContent = '+';
+      blank.title = t('Start a new book');
+      blank.onclick = () => createBookOnShelf(shelf);
+      pressable(blank, t('Start a new book'));
+      if (tileKind === 'menu') {
+        blank.addEventListener('contextmenu', async (e) => {
+          e.preventDefault();
+          const pick = await popMenu(e.clientX, e.clientY, [
+            { label: t('New Book'), value: 'book' },
+            { label: t('New Script'), value: 'script' }
+          ], { from: blank });
+          if (pick === 'book') createBookOnShelf(shelf);
+          else if (pick === 'script') createScriptOnShelf(shelf);
+        });
+      } else if (!isBound(shelf)) {
+        blank.addEventListener('contextmenu', (e) => e.preventDefault());
+      }
     }
 
     if (isBound(shelf)) {
@@ -1227,6 +1258,17 @@ const PAGE_TAIL = ['epilogue', ...PAGE_BACK];
 const PAGE_KINDS = [...PAGE_LEAD, 'part', ...PAGE_TAIL];
 const isPageMeta = (m) => !!(m && PAGE_KINDS.includes(m.kind));
 const isBound = (shelf) => !!(shelf && shelf.binding && shelf.binding.bound);
+
+// ---- blank tile ----
+// What the shelf's + is. Scripts are behind Show More Features, and a bound
+// shelf never starts one. A pointer that can hover gets Book and Script on
+// the tile; a screen with no hover gets the long-press menu; otherwise the
+// + only starts a book.
+function blankTileKind(bound, more, hover) {
+  if (bound || !more) return 'plain';
+  return hover ? 'split' : 'menu';
+}
+// ---- end of blank tile ----
 const shelfOf = (bookId) => library.shelves.find((s) => s.bookIds.includes(bookId));
 
 function pageKindName(kind) {
@@ -5546,8 +5588,8 @@ function focusChapter(chId) {
 /* ================================================================== */
 /*  SCREENPLAYS                                                        */
 /*  A script is a book whose book.json says "format": "screenplay".    */
-/*  It lives on the shelves like any book (right-click a shelf's + for */
-/*  New Script) and is set as it prints: Courier Prime on letter       */
+/*  It lives on the shelves like any book (hover a shelf's + and choose */
+/*  Script) and is set as it prints: Courier Prime on letter           */
 /*  paper. The whole script is one chapter, one typing area, so a      */
 /*  selection and the arrow keys run straight through the scenes; the  */
 /*  scenes are found by their headings. Each line is a paragraph of    */
@@ -18208,7 +18250,7 @@ const REGIONS = [
 const regionKey = (e) => e.key === 'F6' || (e.key === 'Tab' && e.ctrlKey && !e.metaKey && !e.altKey);
 // On the shelf: the books, then the header (author, Import, + Shelf).
 const SHELF_REGIONS = [
-  { box: () => $('#shelves'), enter: () => { const b = $('#shelves .book') || $('#shelves .new-book'); if (b) b.focus(); } },
+  { box: () => $('#shelves'), enter: () => { const b = $('#shelves .book') || $('#shelves .nb-book') || $('#shelves .new-book'); if (b) b.focus(); } },
   { box: () => $('#shelf-header'), enter: () => $('#author-chip').focus() }
 ];
 document.addEventListener('keydown', (e) => {
@@ -18300,6 +18342,9 @@ async function setMoreFeatures(on) {
   await writeLibrary(library);
   reportMore();
   applyLook();
+  // the shelf's + is built for whichever side the switch is on, so a toggle
+  // while the shelf is up has to draw it again
+  if (!$('#bookshelf-view').hidden) await renderShelves();
   if (book && !$('#editor-view').hidden) {
     if (currentTab === 'manuscript') queueSideCards();
     else switchTab(currentTab); // the Outline's view, the Notes pages, the right-hand pane
