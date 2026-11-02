@@ -3153,7 +3153,9 @@ let updaterReady = false;    // an update is downloaded and waiting
 // where the background download stands, so the window can pick it up mid-way
 const upd = { state: 'idle', version: '', percent: 0, transferred: 0, total: 0, message: '' };
 function getUpdater() {
-  if (updater || !app.isPackaged) return updater;
+  // (electron-builder's portable launcher sets PORTABLE_EXECUTABLE_FILE: there
+  // the updater would install the setup program on quit, #479)
+  if (updater || !app.isPackaged || process.env.PORTABLE_EXECUTABLE_FILE) return updater;
   const { autoUpdater } = require('electron-updater');
   autoUpdater.logger = null;
   autoUpdater.autoDownload = true;       // found it? fetch it — nobody should have to ask
