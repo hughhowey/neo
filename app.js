@@ -4557,6 +4557,7 @@ document.addEventListener('keydown', (e) => {
 let dashJustSet = null; // the dash just set, for ⌘Z
 function dialogueDashKey(e, body) {
   if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing || e.keyCode === 229) return;
+  if (body.classList.contains('script-body')) return; // a script keeps the hyphens it is typed with (#460)
   const key = e.key === 'Enter' ? '' : e.key;
   if (key.length > 1) return;
   const sel = window.getSelection();
@@ -4688,19 +4689,22 @@ function smartKeys(e, body) {
 
   if (markdownEmphasis(e, body, range)) return;
   // German sets its dash as an en dash – like this –, so there -- makes
-  // one, and a third hyphen the em dash (#286)
+  // one, and a third hyphen the em dash (#286). A script keeps -- and ...
+  // as typed: that is how a screenplay writes a dash and a trailing off
+  // (and how Final Draft and Fountain read them, #460)
   const german = writingLanguage().toLowerCase().startsWith('de');
-  if (e.key === '-' && prevChars(1) === '-') {
+  const script = body.classList.contains('script-body');
+  if (!script && e.key === '-' && prevChars(1) === '-') {
     e.preventDefault();
     replaceBefore(1, german ? '–' : '—');
     return;
   }
-  if (german && e.key === '-' && prevChars(1) === '–') {
+  if (!script && german && e.key === '-' && prevChars(1) === '–') {
     e.preventDefault();
     replaceBefore(1, '—');
     return;
   }
-  if (e.key === '.' && prevChars(2) === '..') {
+  if (!script && e.key === '.' && prevChars(2) === '..') {
     e.preventDefault();
     replaceBefore(2, '…'); // …
     return;
