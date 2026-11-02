@@ -14868,7 +14868,6 @@ let viewStateSent = '';
 // the writer turns it down). The shelf goes with writing.
 const brightAside = () => !!book && !$('#editor-view').hidden && currentTab !== 'manuscript';
 function brightNow() {
-  if (!moreOn()) return brightAside() || SYSTEM_CONTRAST.matches; // the defaults
   if (brightAside()) return library.uiBrightAside === undefined ? true : !!library.uiBrightAside;
   return library.uiBright === undefined ? SYSTEM_CONTRAST.matches : !!library.uiBright;
 }
@@ -18337,7 +18336,6 @@ function usesMoreFeatures(lib) {
     (!!lib.pageWidth && lib.pageWidth !== 'regular') ||
     (lib.uiZoom !== undefined && snapZoom(lib.uiZoom) !== 1) ||
     (!!lib.focus && lib.focus !== 'off') ||
-    lib.uiBright !== undefined || lib.uiBrightAside === false ||
     !!lib.markdownOff || !!lib.exportCustomChapterTitles ||
     (!!lib.spellLanguage && lang(lib.spellLanguage) !== lang(NeoI18n.getLocale()));
 }

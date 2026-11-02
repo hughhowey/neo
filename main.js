@@ -2907,7 +2907,6 @@ function buildMenu() {
           ]
         },
         {
-          more: true,
           label: t('Brighter Interface'),
           type: 'checkbox',
           checked: viewState.uiBright,

@@ -228,6 +228,7 @@
         seg(t('Text size'), [[-1, t('Smaller')], [0, t('Reset')], [1, t('Larger')]], null, (v) => ({ type: 'fontSize', value: v })) +
         (script ? '' : seg(t('Drop cap'), [['literary', t('Literary')], ['fantasy', t('Fantasy')], ['scifi', t('Sci-Fi')], ['none', t('Off')]], fonts.dropcap || 'literary', (v) => ({ type: 'dropCap', value: v }))) +
         seg(t('Page'), [['night', t('Night')], ['paper', t('Paper')], ['light', t('Light')]], lib.pageTheme || 'night', (v) => ({ type: 'pageTheme', value: v })) +
+        tick(t('Brighter Interface'), document.body.classList.contains('bright'), { type: 'uiBright' }) +
         tick(t('Typewriter scrolling'), st.typewriter, { type: 'typewriter' }) +
         // (the dictionary is the desktop's choice, which comes along in library.json)
         tick(t('Spellcheck'), typeof spellOn !== 'undefined' && spellOn, { type: 'spellcheck' }) +

@@ -65,11 +65,11 @@ const menu = (template, name) => template.find((m) => m.label === name).submenu;
 const MORE = ['Plain Text (.txt)', 'Markdown (.md)', 'Web Page (.html)', 'Manuscript Format…', 'Chapter Titles Only',
   'Cover Art…', 'New Books Open To', 'Import Chapters…', 'Reshelve a Book…', 'Spellcheck Language', 'Other Font…',
   'Align Paragraph', 'Show Pages', 'Two Pages Side by Side', 'Page Width', 'Non-Breaking Marks', 'Poetry Paragraph',
-  'Markdown Emphasis', 'Focus Mode', 'Vim Keys', 'Brighter Interface', 'Language'];
+  'Markdown Emphasis', 'Focus Mode', 'Vim Keys', 'Interface Size', 'Language'];
 const SIMPLE = ['PDF (.pdf)', 'Word (.docx)', 'EPUB (.epub)', 'Paperback for KDP…', 'Email Draft to Myself', 'Email Settings…',
   'Take Snapshot', 'Goals…', 'Import Manuscripts…', 'Library Folder…', 'Show More Features', 'Find & Replace', 'Spellcheck Pass',
   'Body Font', 'Drop Cap Style', 'Larger Text', 'Typewriter Scrolling', 'Flush Paragraph', 'Keyboard Shortcuts…',
-  'Full Screen', 'Page'];
+  'Full Screen', 'Page', 'Paper', 'Light', 'Brighter Interface'];
 
 describe('the menu bar, simple and with Show More Features', () => {
   for (const platform of ['darwin', 'win32', 'linux']) {
@@ -174,7 +174,6 @@ describe('a library from before Show More Features', () => {
     ['the pages view', { pagedView: true }],
     ['a wider page', { pageWidth: 'wide' }],
     ['a larger interface', { uiZoom: 1.3 }],
-    ['brighter interface chosen', { uiBright: false }],
     ['markdown emphasis turned off', { markdownOff: true }],
     ['spellcheck in another language', { spellLanguage: 'fr' }]
   ]) {
@@ -186,6 +185,14 @@ describe('a library from before Show More Features', () => {
       assert.ok(ctx.log.includes('menu true'));
     });
   }
+
+  test('a brighter interface is simple NEO\'s own choice, no sign of more', async () => {
+    for (const lib of [{ uiBright: true }, { uiBright: false }, { uiBrightAside: false }]) {
+      const ctx = room({ firstRunDone: true, shelves: [shelf([])], ...lib });
+      await ctx.decideMoreFeatures();
+      assert.equal(ctx.library.moreFeatures, false, JSON.stringify(lib));
+    }
+  });
 
   test('English spellcheck under an English interface is no sign of more', async () => {
     const ctx = room({ firstRunDone: true, shelves: [shelf([])], spellLanguage: 'en-GB', uiZoom: 1, pageWidth: 'regular', focus: 'off' });
@@ -205,5 +212,42 @@ describe('a library from before Show More Features', () => {
     await ctx.decideMoreFeatures();
     assert.equal(ctx.library.moreFeatures, undefined);
     assert.deepEqual([...ctx.log], ['menu false']);
+  });
+});
+
+// ---- Brighter Interface: the writer's choice holds in simple NEO too ----
+const brightFrom = app.indexOf('const brightAside = ');
+const brightTo = app.indexOf('function applyBright()');
+assert.ok(brightFrom > 0 && brightTo > brightFrom, 'the brightness code is where the test expects it');
+
+function brightness(library, { writing = true, system = false } = {}) {
+  const ctx = vm.createContext({
+    library,
+    book: {},
+    currentTab: writing ? 'manuscript' : 'outline',
+    $: () => ({ hidden: false }),
+    SYSTEM_CONTRAST: { matches: system },
+    // simple NEO: nothing here may ask for the switch
+    moreOn: () => { throw new Error('brightness asked for Show More Features'); }
+  });
+  vm.runInContext(app.slice(brightFrom, brightTo) + '\nthis.brightNow = brightNow;', ctx);
+  return ctx.brightNow();
+}
+
+describe('Brighter Interface in simple NEO', () => {
+  test('what the writer chose while writing is kept', () => {
+    assert.equal(brightness({ moreFeatures: false, uiBright: true }), true);
+    assert.equal(brightness({ moreFeatures: false, uiBright: false }, { system: true }), false);
+  });
+
+  test('left alone it follows the system while writing, and is bright on the other tabs', () => {
+    assert.equal(brightness({ moreFeatures: false }), false);
+    assert.equal(brightness({ moreFeatures: false }, { system: true }), true);
+    assert.equal(brightness({ moreFeatures: false }, { writing: false }), true);
+  });
+
+  test('the other tabs have their own choice', () => {
+    assert.equal(brightness({ moreFeatures: false, uiBrightAside: false, uiBright: true }, { writing: false }), false);
+    assert.equal(brightness({ moreFeatures: false, uiBrightAside: false, uiBright: true }), true);
   });
 });
