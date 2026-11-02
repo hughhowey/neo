@@ -201,18 +201,30 @@ async function chooseLibraryFolder() {
 // ransomware protection) refuses new files in Documents to apps it doesn't
 // know, and NEO is one. A small file written and removed tells.
 let lastFolderError = null;
+// A folder in Dropbox or one an antivirus watches can hold a file for a
+// moment as it is made: the test file is tried again a few times, and once
+// it was written, failing to delete it is no reason to say the folder can't
+// be saved in (#474).
+const PROBE_TRIES = 3;
+const PROBE_RETRY = ['EBUSY', 'EPERM', 'EACCES', 'EAGAIN'];
 function folderWritable(dir) {
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const probe = path.join(dir, '.neo-write-test');
-    fs.writeFileSync(probe, 'ok');
-    fs.unlinkSync(probe);
-    lastFolderError = null;
-    return true;
-  } catch (err) {
-    lastFolderError = err;
-    logError('library folder not writable: ' + dir, err);
-    return false;
+  const probe = path.join(dir, '.neo-write-test');
+  for (let n = 1; ; n++) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(probe, 'ok');
+      try { fs.unlinkSync(probe); } catch { /* it is only a test file: the next one writes over it */ }
+      lastFolderError = null;
+      return true;
+    } catch (err) {
+      if (n < PROBE_TRIES && PROBE_RETRY.includes(err.code)) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150 * n);
+        continue;
+      }
+      lastFolderError = err;
+      logError('library folder not writable: ' + dir, err);
+      return false;
+    }
   }
 }
 const isBlockedWrite = (err) => !!err && ['EPERM', 'EACCES', 'EROFS'].includes(err.code);
