@@ -10,10 +10,11 @@ plain files as the desktop, no accounts.
   via Syncthing.
 - **iOS:** files live in the app's own folder. With iCloud Drive on, that's
   iCloud Drive → NEO Pocket → NEO Library (still local files; Apple carries
-  changes in the background), and desktop NEO can point at the same folder
-  with File → Library Folder…. With iCloud Drive off, it's On My iPad → NEO
-  Pocket. Nothing is required on the desktop side: NEO stays local unless
-  the writer chooses that folder.
+  changes in the background). On a Mac signed in to the same iCloud, File →
+  Library Folder… then offers Use iCloud Drive: one click moves the desktop's
+  books into that folder, beside the iPad's, and restarts there. With iCloud
+  Drive off, it's On My iPad → NEO Pocket. Nothing is required on the desktop
+  side: NEO stays local unless the writer chooses that folder.
 
 ## Building
 
