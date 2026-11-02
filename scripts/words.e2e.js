@@ -479,6 +479,57 @@ test('a chapter made a part, and back, adds nothing to today', async () => {
   assert.equal(await text('goal-counter'), '0 today');
 });
 
+// Words that move from one chapter to another are neither written nor cut:
+// a chapter split in two, a card dropped on another chapter, a card made a
+// chapter (#471). They leave one chapter a moment before they reach the
+// other, and today never goes below zero, so they came back as new writing.
+test('words moved between chapters add nothing to today', async () => {
+  const lines = (n, w) => Array.from({ length: n }, (_, i) => ({ text: many(100, w + i) }));
+  const id = await shelvedBook('Moves', [{ title: 'One', paras: lines(40, 'rain') }, { title: 'Two', paras: [{ text: many(300, 'sea') }] }]);
+  await open(id);
+  assert.equal(await text('goal-counter'), '0 today');
+  await caretAtEnd();
+  await type(' gulls');
+  const total = await js('bookWordCount()');
+  assert.equal(await text('goal-counter'), '1 today');
+  // split the first chapter at its twentieth paragraph (what three Enters do)
+  await js(`(() => {
+    const chId = book.chapterOrder[0];
+    const body = document.querySelector('.chapter[data-id="' + chId + '"] .chapter-body');
+    const block = body.children[20];
+    const sel = getSelection();
+    const r = document.createRange();
+    r.setStart(block, 0);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    splitChapterAt(body, chId, block, sel, null);
+  })()`);
+  await tick(500);
+  assert.equal(await js('book.chapterOrder.length'), 3);
+  assert.equal(await js('bookWordCount()'), total);
+  assert.equal(await text('goal-counter'), '1 today');
+  // a card of the first chapter dropped on the last, and another made a chapter
+  await js(`(() => {
+    const [first, , last] = book.chapterOrder;
+    const body = document.querySelector('.chapter[data-id="' + first + '"] .chapter-body');
+    body.insertBefore(Object.assign(document.createElement('p'), { className: 'scene-break', textContent: '***' }), body.children[10]);
+    syncChapter(body, first);
+    moveSection(first, 1, { ch: last, before: null });
+  })()`);
+  await tick(500);
+  assert.equal(await js('bookWordCount()'), total);
+  assert.equal(await text('goal-counter'), '1 today');
+  await js(`sectionToChapter(book.chapterOrder[2], 1)`);
+  await tick(500);
+  assert.equal(await js('bookWordCount()'), total);
+  assert.equal(await text('goal-counter'), '1 today');
+  // and what is written after still counts
+  await caretAtEnd();
+  await type(' wheel');
+  assert.equal(await text('goal-counter'), '2 today');
+});
+
 /* ---------- runner ---------- */
 
 async function main() {

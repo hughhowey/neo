@@ -3721,6 +3721,7 @@ function splitChapterAt(body, chId, block, sel, was) {
     block = next;
   }
   while (blank(block.previousElementSibling) && block.previousElementSibling.previousElementSibling) block.previousElementSibling.remove();
+  const settle = holdDay();
   const parts = [];
   let n = block;
   while (n) {
@@ -3736,6 +3737,7 @@ function splitChapterAt(body, chId, block, sel, was) {
   chapterHTML[newId] = parts.join('') || '<p><br></p>';
   persistChapter(newId);
   renderChapters();
+  settle();
   focusChapterStart(newId);
   resetNativeUndo();
   // the writer's line stays where it was in the window, the new chapter's
@@ -10423,6 +10425,7 @@ function moveSection(fromCh, segIdx, to) {
   if (target === seg) return;
   if (fromCh === to.ch && (to.before === segIdx + 1 || (to.before == null && segIdx === fromSegs.length - 1))) return;
   snapshotStructure('card moved');
+  const settle = holdDay();
   liftSegment(fromBody, seg);
   setSegmentDown(toBody, seg.ps, seg.brk, target);
   if (seg.id && fromCh !== to.ch) {
@@ -10446,6 +10449,7 @@ function moveSection(fromCh, segIdx, to) {
   repointStickies(seg.ps, to.ch);
   scheduleMetaSave();
   updateCounters();
+  settle();
 }
 
 function moveChapterCard(chId, index) {
@@ -10466,6 +10470,7 @@ function sectionToChapter(chId, segIdx) {
   const seg = chapterSegments(chId)[segIdx];
   if (!body || !seg) return;
   snapshotStructure('card to chapter');
+  const settle = holdDay();
   liftSegment(body, seg);
   syncChapter(body, chId);
   const note = seg.id ? sectionNote(chId, seg.id) : null;
@@ -10488,6 +10493,7 @@ function sectionToChapter(chId, segIdx) {
   renderChapters();
   renderStickies();
   updateCounters();
+  settle();
   if (currentTab === 'outline') renderOutline();
 }
 
@@ -12133,6 +12139,26 @@ function wordsFromDisk() {
   const total = bookWordCount();
   if (daySeen && daySeen.bookId === book.id && sprint && sprint.bookId === book.id) sprint.startCount += total - daySeen.total;
   daySeen = { bookId: book.id, total };
+}
+// Words moved from one chapter to another (a chapter split in two, a card
+// dropped on another chapter) are neither written nor cut. They leave one
+// chapter a moment before they reach the other, and today never goes below
+// zero, so counted as they happen they would come back as new writing (#471).
+// Call this before the move; the function it returns, once the words have
+// settled, puts the day back as it was.
+function holdDay() {
+  const today = todayStr();
+  const day = book.dailyCounts && book.dailyCounts[today] ? { ...book.dailyCounts[today] } : null;
+  const total = bookWordCount();
+  const run = sprint && sprint.bookId === book.id ? { sprint, start: sprint.startCount } : null; // a sprint's count dips the same way
+  return () => {
+    if (!book || bookWordCount() !== total) return; // words really were written or cut
+    book.dailyCounts = book.dailyCounts || {};
+    book.dailyCounts[today] = day || { start: total, end: total };
+    daySeen = { bookId: book.id, total };
+    if (run && sprint === run.sprint) sprint.startCount = run.start;
+    updateCounters();
+  };
 }
 function trackDailyWords(total) {
   book.dailyCounts = book.dailyCounts || {};
