@@ -7858,7 +7858,12 @@ function renderContentsLists() {
       const li = document.createElement('li');
       li.className = `t-${e.type} lv${e.level}`;
       li.textContent = e.label;
-      li.onclick = () => focusChapterStart(e.chId);
+      // a line takes you to its page: the caret at its start, and the page in view
+      li.onclick = () => {
+        focusChapterStart(e.chId);
+        const sec = document.querySelector(`.chapter[data-id="${e.chId}"]`);
+        if (sec) sec.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      };
       list.appendChild(li);
     }
   }
