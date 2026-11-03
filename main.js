@@ -295,6 +295,105 @@ async function moveLibraryAndClose(win, from, to) {
   return true;
 }
 
+// NEO Pocket on the App Store
+const POCKET_STORE_URL = 'https://apps.apple.com/app/id6816721843';
+
+// This library into NEO Pocket's folder in iCloud Drive: the books move there
+// (when there are any) and NEO restarts in it. File → Library Folder…, the
+// question NEO asks once, Help → NEO for iPad and iPhone… and the welcome
+// screen all come here.
+async function useCloudLibrary(win) {
+  const cloud = pocketCloudLibrary();
+  if (!cloud || path.resolve(cloud) === path.resolve(LIBRARY_DIR)) return false;
+  if (hasBooks(LIBRARY_DIR) && !(await moveLibraryAndClose(win, LIBRARY_DIR, cloud))) {
+    app.relaunch(); // the window closed for the move: open again where the books still are
+    app.exit(0);
+    return false;
+  }
+  const settings = readSettings();
+  settings.libraryDir = cloud;
+  writeSettings(settings);
+  app.relaunch();
+  app.exit(0);
+  return true;
+}
+
+// Once NEO Pocket has made its folder in iCloud Drive (an iPad or iPhone
+// signed in to this Mac's iCloud), NEO asks once whether this library should
+// go there too. Not Now is an answer: it never asks again on this Mac. The
+// same button waits in File → Library Folder… and Help → NEO for iPad and
+// iPhone…. A first run asks on its own welcome screen instead.
+let pocketAsking = false;
+async function askAboutPocket() {
+  if (pocketAsking) return;
+  const cloud = pocketCloudLibrary();
+  if (!cloud || path.resolve(cloud) === path.resolve(LIBRARY_DIR)) return;
+  const settings = readSettings();
+  if (settings.pocketAsked) return;
+  const lib = parseJSONFile(LIBRARY_FILE);
+  if (!lib || !lib.firstRunDone) return;
+  pocketAsking = true;
+  try {
+    settings.pocketAsked = true;
+    writeSettings(settings);
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+    const r = await dialog.showMessageBox(win, {
+      type: 'question',
+      message: t('Share this library with NEO Pocket?'),
+      detail: t('NEO Pocket’s folder is in iCloud Drive on this Mac. Use iCloud Drive to write in the same books on your iPad and iPhone. NEO moves your books there and restarts.'),
+      buttons: [t('Use iCloud Drive'), t('Not Now')],
+      defaultId: 0,
+      cancelId: 1
+    });
+    if (r.response === 0) await useCloudLibrary(win);
+  } finally {
+    pocketAsking = false;
+  }
+}
+
+// Help → NEO for iPad and iPhone…: what NEO Pocket is, where to get it, and
+// (on a Mac that has its folder) the same Use iCloud Drive button
+async function showPocketInfo() {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const cloud = pocketCloudLibrary();
+  const shared = !!cloud && path.resolve(cloud) === path.resolve(LIBRARY_DIR);
+  const offer = !!cloud && !shared;
+  const lines = [t('NEO Pocket is NEO for iPad and iPhone, free on the App Store.')];
+  if (process.platform === 'darwin') {
+    lines.push(shared
+      ? t('This library is in NEO Pocket’s folder in iCloud Drive, so your iPad and iPhone write in the same books.')
+      : offer
+        ? t('Use iCloud Drive to write in the same books on this Mac and on your iPad and iPhone. NEO moves your books there and restarts.')
+        : t('Open NEO Pocket once on your iPad or iPhone with iCloud Drive turned on, then come back here to share this library with it.'));
+  }
+  const choices = [...(offer ? ['cloud'] : []), 'store', 'ok'];
+  const label = { cloud: t('Use iCloud Drive'), store: t('Get NEO Pocket'), ok: t('OK') };
+  const r = await dialog.showMessageBox(win, {
+    type: 'info',
+    message: t('NEO for iPad and iPhone'),
+    detail: lines.join('\n\n'),
+    buttons: choices.map((c) => label[c]),
+    defaultId: 0,
+    cancelId: choices.length - 1
+  });
+  const choice = choices[r.response];
+  if (choice === 'store') {
+    const { shell } = require('electron');
+    await shell.openExternal(POCKET_STORE_URL);
+  } else if (choice === 'cloud') {
+    await useCloudLibrary(win);
+  }
+}
+
+// the welcome screen's own offer: a writer who started in NEO Pocket opens
+// its books here, setup and all
+ipcMain.handle('library:pocket', () => {
+  const cloud = pocketCloudLibrary();
+  const offer = !!cloud && path.resolve(cloud) !== path.resolve(LIBRARY_DIR);
+  return { offer, books: offer && hasBooks(cloud) };
+});
+ipcMain.handle('library:usePocket', async () => useCloudLibrary(BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]));
+
 async function chooseLibraryFolder() {
   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
   const defaultDir = path.join(app.getPath('documents'), 'NEO Library');
@@ -318,8 +417,8 @@ async function chooseLibraryFolder() {
   let next = null;
   let move = false;
   if (choice === 'cloud') {
-    next = cloud;
-    move = hasBooks(LIBRARY_DIR);
+    await useCloudLibrary(win);
+    return;
   } else if (choice === 'choose') {
     const r = await dialog.showOpenDialog(win, {
       title: t('Choose a folder for your NEO library'),
@@ -337,7 +436,7 @@ async function chooseLibraryFolder() {
   // a folder inside the library, or the library inside it, can't take a move;
   // nor can a library in iCloud Drive, whose books may still be up in iCloud
   const fromCloud = LIBRARY_DIR.includes(path.sep + 'Mobile Documents' + path.sep);
-  if (choice !== 'cloud' && !fromCloud && hasBooks(LIBRARY_DIR) && !insideFolder(next, LIBRARY_DIR) && !insideFolder(LIBRARY_DIR, next)) {
+  if (!fromCloud && hasBooks(LIBRARY_DIR) && !insideFolder(next, LIBRARY_DIR) && !insideFolder(LIBRARY_DIR, next)) {
     const trash = process.platform === 'win32' ? t('NEO moves your books from\n{from}\ninto\n{to}\nand puts the old folder in the Recycle Bin.', { from: LIBRARY_DIR, to: next })
       : t('NEO moves your books from\n{from}\ninto\n{to}\nand puts the old folder in the Trash.', { from: LIBRARY_DIR, to: next });
     const r = await dialog.showMessageBox(win, {
@@ -3133,6 +3232,10 @@ function buildMenu() {
           label: t('NEO Shortcuts'),
           click: () => sendToWindow({ type: 'help' })
         },
+        {
+          label: t('NEO for iPad and iPhone…'),
+          click: () => { showPocketInfo().catch((err) => logError('pocket info', err)); }
+        },
         { type: 'separator' },
         {
           label: t('About NEO'),
@@ -3527,6 +3630,9 @@ app.whenReady().then(() => {
     try { ensureLibrary(); } catch (err) { logError('library', err); }
     createWindow();
     try { announceLibraryFallback(); } catch (err) { logError('library notice', err); }
+    // NEO Pocket's folder may be here already, or arrive while NEO is open
+    setTimeout(() => { askAboutPocket().catch((err) => logError('pocket ask', err)); }, 2500).unref?.();
+    app.on('browser-window-focus', () => { askAboutPocket().catch((err) => logError('pocket ask', err)); });
     try { initSpell(); } catch (err) { logError('spell', err); }
     try { buildMenu(); } catch (err) { logError('menu', err); }
     // the day's backup waits until NEO is up and the writer is writing (it

@@ -762,6 +762,15 @@ async function loadLibrary() {
 function showFirstRun() {
   const fr = $('#firstrun');
   fr.hidden = false;
+  // a Mac where NEO Pocket already keeps books in iCloud Drive: open those
+  // instead of starting a new library (NEO restarts in that folder)
+  if (window.neo.pocketLibrary) {
+    window.neo.pocketLibrary().then((p) => {
+      if (!p || !p.offer) return;
+      $('#fr-pocket').hidden = false;
+      $('#fr-pocket-btn').onclick = () => { window.neo.usePocketLibrary(); };
+    }).catch(() => {});
+  }
   let picked = { body: Object.keys(BODY_FONTS)[0] || 'Georgia', dropcap: 'literary' };
 
   // Step 1: who are you, and how do you write?
