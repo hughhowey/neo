@@ -84,7 +84,7 @@ New books are automatically given cover art with a seeded abstract look (six art
 
 **Writing a screenplay**
 
-NEO writes scripts now! It's tucked away so it doesn't clutter things up for novelists: right-click the + on any shelf and choose **New Script**. (On a phone or tablet, press and hold the +) Your script lands on the shelf looking like a script, white card stock and brass brads.
+NEO writes scripts now! It's tucked away so it doesn't clutter things up for novelists: with Show More Features on, hover the + on any shelf and it splits into Book and Script. Your script lands on the shelf looking like a script, white card stock and brass brads.
 
 Type a title and hit Enter, same as a book. Then write. NEO works out what each line is:
 
