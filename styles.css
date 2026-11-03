@@ -635,6 +635,9 @@ body.light .print-modal select, body.light .print-modal textarea { background: #
 .fr-font:hover { border-color: #666; }
 .fr-font.sel { border-color: var(--accent); color: var(--accent); }
 .fr-font .fr-cap { font-size: 20px; margin-right: 7px; }
+/* a Mac that already has NEO Pocket's books in iCloud Drive */
+#fr-pocket { margin: 20px 0 0; font-size: 13px; color: var(--muted); }
+#fr-pocket .btn-quiet { display: block; color: var(--accent); font-size: 13px; padding: 4px 0; }
 .font-list {
   display: flex; flex-direction: column; gap: 6px;
   max-height: 50vh; overflow-y: auto; margin-top: 12px; padding-right: 10px;

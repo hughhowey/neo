@@ -134,3 +134,13 @@ describe('smart quotes: what already worked stays', () => {
     });
   }
 });
+
+// The book's marks are counted paragraph by paragraph: a » that ends one
+// paragraph, with a paragraph starting with a letter after it, is no opening
+// » (a Polish line typed under a French one kept its „…”)
+test('a » ending a paragraph is not counted as opening the next one', () => {
+  context.library = { spellLanguage: 'pl' };
+  const paras = [{ textContent: '«\u202fTrente-deux\u202f!\u202f»' }, { textContent: '' }, { textContent: 'Elise danced up the steps.' }];
+  const body = { closest: () => ({ children: paras, textContent: paras.map((p) => p.textContent).join('') }) };
+  assert.equal(bookQuotes(body).open, '„');
+});

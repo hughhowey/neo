@@ -470,6 +470,8 @@
     importPick: async () => [],
     pathForFile: () => null,
     checkForUpdate: async () => ({ error: true }),
+    pocketLibrary: async () => ({ offer: false }), // (this is NEO Pocket)
+    usePocketLibrary: async () => false,
     openRelease: async () => true,
     fullscreenEscape: async () => false,
     fullscreenToggle: async () => true,
