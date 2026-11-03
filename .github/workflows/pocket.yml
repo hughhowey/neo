@@ -35,7 +35,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pocket-build-${{ github.ref }}
@@ -44,8 +44,12 @@ concurrency:
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -58,8 +62,8 @@ jobs:
         id: ver
         run: |
           # versionCode must climb with every build or Android refuses the update.
-          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          if [[ "${{ github.ref }}" == refs/tags/pocket-v* ]]; then
+          echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/pocket-v* ]]; then
             echo "name=${GITHUB_REF_NAME#pocket-v}" >> "$GITHUB_OUTPUT"
           else
             echo "name=dev-$(date -u +%Y%m%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
