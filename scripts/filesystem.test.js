@@ -189,4 +189,106 @@ describe('filesystem', { concurrency: 1 }, () => {
       fs.rmSync(rootDir, { recursive: true, force: true });
     }
   });
+
+  // Chapter conflicts: a write whose `expected` is not the disk's current
+  // text is refused and the disk text handed back, whatever the change was.
+  // the handler's result comes from the vm context, so compare it without the realm check
+  const legacy = require('node:assert');
+  describe('chapter conflicts', () => {
+    const chapterFile = (dir, bookId, id) => path.join(dir, bookId, 'chapters', id + '.html');
+    // another device writes the file directly, as sync would
+    const remoteWrite = (dir, bookId, id, html) => fs.writeFileSync(chapterFile(dir, bookId, id), html);
+
+    test('the review repro: a stale save keeps the reordered, bold remote text', () => {
+      const dir = tempLibrary();
+      try {
+        const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+        main.call('chapter:write', book.id, 'c1', '<p>red blue</p>');
+        const remote = '<p><b>blue</b> red</p>';
+        remoteWrite(dir, book.id, 'c1', remote);
+        const r = main.call('chapter:write', book.id, 'c1', '<p>red blue green</p>', '<p>red blue</p>');
+        legacy.deepEqual(r, { conflict: remote });
+        assert.equal(fs.readFileSync(chapterFile(dir, book.id, 'c1'), 'utf8'), remote);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('formatting-only and reorder changes on disk are not overwritten', () => {
+      const dir = tempLibrary();
+      try {
+        const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+        const base = '<p>red blue</p>';
+        for (const remote of ['<p><i>red</i> blue</p>', '<p>blue red</p>']) {
+          main.call('chapter:write', book.id, 'c1', base);
+          remoteWrite(dir, book.id, 'c1', remote);
+          const r = main.call('chapter:write', book.id, 'c1', '<p>red blue green</p>', base);
+          legacy.deepEqual(r, { conflict: remote }, remote);
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('a remote deletion is not restored by a stale save that holds the surviving words', () => {
+      const dir = tempLibrary();
+      try {
+        const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+        const base = '<p>red blue green</p>';
+        main.call('chapter:write', book.id, 'c1', base);
+        // the other device deleted "green"; this device's stale save still has it
+        const remote = '<p>red blue</p>';
+        remoteWrite(dir, book.id, 'c1', remote);
+        const r = main.call('chapter:write', book.id, 'c1', base, base);
+        legacy.deepEqual(r, { conflict: remote });
+        assert.equal(fs.readFileSync(chapterFile(dir, book.id, 'c1'), 'utf8'), remote);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('repeated-word changes are a conflict too', () => {
+      const dir = tempLibrary();
+      try {
+        const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+        main.call('chapter:write', book.id, 'c1', '<p>red red blue</p>');
+        remoteWrite(dir, book.id, 'c1', '<p>red blue</p>');
+        const r = main.call('chapter:write', book.id, 'c1', '<p>red red blue red</p>', '<p>red red blue</p>');
+        legacy.deepEqual(r, { conflict: '<p>red blue</p>' });
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('an identical or retried write makes no twin', () => {
+      const dir = tempLibrary();
+      try {
+        const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+        const remote = '<p><b>blue</b> red</p>';
+        main.call('chapter:write', book.id, 'c1', '<p>red blue</p>');
+        remoteWrite(dir, book.id, 'c1', remote);
+        // identical: the disk already holds what is being written
+        assert.equal(main.call('chapter:write', book.id, 'c1', remote, '<p>red blue</p>'), true);
+        // retry after the window kept the disk text: expected is now that text
+        remoteWrite(dir, book.id, 'c1', remote);
+        legacy.deepEqual(main.call('chapter:write', book.id, 'c1', '<p>red blue green</p>', '<p>red blue</p>'), { conflict: remote });
+        assert.equal(main.call('chapter:write', book.id, 'c1', '<p>red blue green</p>', remote), true);
+        assert.equal(main.call('chapter:read', book.id, 'c1'), '<p>red blue green</p>');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('a disk chapter with no words is not a conflict', () => {
+      const dir = tempLibrary();
+      try {
+        const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+        main.call('chapter:write', book.id, 'c1', '<p><br></p>');
+        remoteWrite(dir, book.id, 'c1', '<p><br></p>');
+        assert.equal(main.call('chapter:write', book.id, 'c1', '<p>new</p>', '<p>old</p>'), true);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });
