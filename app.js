@@ -6377,11 +6377,11 @@ function scriptInput(body) {
   // line key can act on, and Return does nothing. Re-cover the page — wrap
   // what is there into one fresh line, the way a new script starts, and put
   // the caret back at its end
-  if (!p && !body.children.length) {
-    const stray = body.textContent;
+  // (bare text can come with a stray <br> or a bold run beside it: those
+  // move into the line too)
+  if (!p && !body.querySelector('p')) {
     const fresh = document.createElement('p');
-    if (stray) fresh.textContent = stray; else fresh.innerHTML = '<br>';
-    body.innerHTML = '';
+    if (body.textContent) { while (body.firstChild) fresh.appendChild(body.firstChild); } else { body.innerHTML = ''; fresh.innerHTML = '<br>'; }
     body.appendChild(fresh);
     const sel = window.getSelection();
     if (document.activeElement === body) {
