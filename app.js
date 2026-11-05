@@ -2688,6 +2688,18 @@ function renderChapters() {
     // a script's lines are set as they print (styles.css, SCREENPLAYS)
     if (isScript()) body.classList.add('script-body', $('#paper').classList.contains('narrow') ? 'sp-narrow' : 'sp-geom', 'no-cap');
     body.innerHTML = chapterHTML[chId] || '<p><br></p>';
+    // a script saved with its last line element deleted comes back from disk
+    // as bare text with no lines at all — Return and Tab do nothing on it and
+    // every restart keeps it that way. Wrap the stray text into one line
+    // again, as a heading when it reads like one (INT./EXT.), else as action,
+    // the way the same typing is set in a script that works
+    if (isScript() && !body.querySelector('p') && body.textContent.trim()) {
+      const line = document.createElement('p');
+      line.innerHTML = body.innerHTML;
+      body.innerHTML = '';
+      body.appendChild(line);
+      if (SP_HEAD_RE.test(line.textContent)) line.classList.add('sp-heading');
+    }
     markDialogueOpening(body);
     if (PAGE_PROMPTS[kind]) {
       body.dataset.ph = PAGE_PROMPTS[kind]();
@@ -6347,7 +6359,29 @@ function spTab(p, back, ghost) {
 // As the writer types: INT. or EXT. makes a heading, an opening "(" in a
 // speech makes a parenthetical
 function scriptInput(body) {
-  const p = caretBlock(body);
+  let p = caretBlock(body);
+  // the browser can leave the page with no lines at all (⌘A then Delete or
+  // ⌘X, or one more Backspace on the one empty line left deletes that element
+  // itself): anything typed after lands on the page as bare text, which no
+  // line key can act on, and Return does nothing. Re-cover the page — wrap
+  // what is there into one fresh line, the way a new script starts, and put
+  // the caret back at its end
+  if (!p && !body.children.length) {
+    const stray = body.textContent;
+    const fresh = document.createElement('p');
+    if (stray) fresh.textContent = stray; else fresh.innerHTML = '<br>';
+    body.innerHTML = '';
+    body.appendChild(fresh);
+    const sel = window.getSelection();
+    if (document.activeElement === body) {
+      const r = document.createRange();
+      r.selectNodeContents(fresh);
+      r.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    p = fresh;
+  }
   // the whole script cleared (⌘A, then Delete or ⌘X): the one line left
   // starts over as action, the way a new script does, not as whatever the
   // last line deleted was. Left as dialogue, "int." stayed dialogue and
