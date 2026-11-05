@@ -2470,6 +2470,10 @@ function createWindow() {
       spellcheck: true
     }
   });
+  if (process.platform === 'win32') {
+    win.on('query-session-end', holdUpdateForShutdown);
+    win.on('session-end', holdUpdateForShutdown);
+  }
   // a trial says so in the window bar
   if (TRY_DIR) win.on('page-title-updated', (e, title) => { e.preventDefault(); win.setTitle(title + ' (trial copy)'); });
   win.loadFile('index.html');
@@ -3463,6 +3467,15 @@ function getUpdater() {
   });
   updater = autoUpdater;
   return updater;
+}
+
+// Windows shutting down (or the writer signing out) quits NEO too, and an
+// update installed then is cut off halfway: the old NEO already removed, the
+// new one never in, and the next morning NEO is gone from the PC (#490). So
+// a quit that Windows started leaves the update waiting for the writer's own
+// next quit, or for Restart to update.
+function holdUpdateForShutdown() {
+  if (updater) updater.autoInstallOnAppQuit = false;
 }
 
 // one look at GitHub; if something newer is there, the download starts on

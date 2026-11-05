@@ -44,7 +44,7 @@ function build({ portable = false, packaged = true } = {}) {
     fetch: async () => ({ ok: true, json: async () => ({ tag_name: 'v9.9.9', html_url: 'https://github.com/hughhowey/neo/releases/tag/v9.9.9' }) })
   });
   vm.runInContext(source, context, { filename: path.join(root, 'main.js') });
-  return { seen, autoUpdater, getUpdater: () => vm.runInContext('getUpdater()', context), check: () => handlers.get('update:check')() };
+  return { seen, autoUpdater, getUpdater: () => vm.runInContext('getUpdater()', context), holdUpdateForShutdown: () => vm.runInContext('holdUpdateForShutdown()', context), check: () => handlers.get('update:check')() };
 }
 
 describe('the portable .exe does not update itself', () => {
@@ -66,6 +66,13 @@ describe('the portable .exe does not update itself', () => {
     assert.equal(pc.getUpdater(), pc.autoUpdater);
     assert.equal(pc.autoUpdater.autoInstallOnAppQuit, true);
     assert.equal((await pc.check()).canInstall, true);
+  });
+
+  test('Windows shutting down leaves a downloaded update for the next quit (#490)', () => {
+    const pc = build();
+    assert.equal(pc.getUpdater(), pc.autoUpdater);
+    pc.holdUpdateForShutdown();
+    assert.equal(pc.autoUpdater.autoInstallOnAppQuit, false);
   });
 
   test('`npm start` (not packaged) still has no updater', () => {
