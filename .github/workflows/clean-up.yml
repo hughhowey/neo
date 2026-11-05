@@ -1,0 +1,30 @@
+# Every build used to keep a spare copy of its installers on GitHub for 90
+# days ("artifacts"). The real ones live on the Releases page, so the spares
+# only filled the account's Actions storage. Builds now keep them for a day;
+# this deletes the ones already stored. It runs only when you press
+# "Run workflow" on the Actions tab. Releases are never touched.
+
+name: Clean up old build files
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stored build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq '.artifacts[].id')
+          n=0
+          for id in $ids; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" && n=$((n+1))
+          done
+          echo "Deleted $n stored build files."
+          caches=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/caches?per_page=100" --jq '.actions_caches[].id')
+          for id in $caches; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/caches/$id"; done

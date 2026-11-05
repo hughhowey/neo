@@ -79,6 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
+          retention-days: 1
           path: |
             dist/*.exe
             dist/latest.yml
@@ -133,6 +134,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mac-build
+          retention-days: 1
           path: |
             dist/*.dmg
             dist/*-mac.zip
@@ -165,6 +167,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
+          retention-days: 1
           path: |
             dist/*.AppImage
             dist/latest-linux*.yml
