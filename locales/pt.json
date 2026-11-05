@@ -480,6 +480,7 @@
   "That dictionary would not load": "Não foi possível carregar esse dicionário",
   "That doesn’t look like an API key ({name} keys look like {hint}) — not saved": "Isso não parece uma chave de API (as chaves da {name} são assim: {hint}): não foi salva",
   "That section has writing in it. Drag it to another chapter instead.": "Essa seção já tem texto. Arraste-a para outro capítulo.",
+  "The Book": "O livro",
   "The book folder goes to your system trash, so you can recover it.": "A pasta do livro vai para a lixeira do sistema, então você pode recuperá-la.",
   "The book is untouched. Its folder is highlighted so you can deal with it yourself.": "O livro está intacto. A pasta dele está destacada para você cuidar disso.",
   "The cover painted from the text.": "A capa pintada a partir do texto.",

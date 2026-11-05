@@ -661,6 +661,7 @@
   "That doesn’t look like an API key ({name} keys look like {hint}) — not saved": "Cela ne ressemble pas à une clé d’API (les clés {name} ressemblent à {hint}) : non enregistrée",
   "That section has a placeholder in it. Drag it to another chapter instead.": "Cette section contient un repère. Glissez-la plutôt vers un autre chapitre.",
   "That section has writing in it. Drag it to another chapter instead.": "Cette section contient déjà du texte. Glissez-la plutôt vers un autre chapitre.",
+  "The Book": "Le livre",
   "The book folder goes to your system trash, so you can recover it.": "Le dossier du livre part dans la corbeille du système, vous pourrez donc le récupérer.",
   "The book is untouched. Its folder is highlighted so you can deal with it yourself.": "Le livre est intact. Son dossier est mis en évidence pour que vous puissiez vous en occuper vous-même.",
   "The card’s words are in Darlings": "Les mots de la fiche sont dans le Chutier",

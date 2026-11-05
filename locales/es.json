@@ -739,6 +739,7 @@
   "That doesn’t look like an API key ({name} keys look like {hint}) — not saved": "Eso no parece una clave de API (las claves de {name} tienen este aspecto: {hint}): no se ha guardado",
   "That section has a placeholder in it. Drag it to another chapter instead.": "Esa sección contiene un marcador. Arrástrala a otro capítulo en su lugar.",
   "That section has writing in it. Drag it to another chapter instead.": "Esa sección ya tiene texto. Mejor arrástrala a otro capítulo.",
+  "The Book": "El libro",
   "The book folder goes to your system trash, so you can recover it.": "La carpeta del libro va a la papelera del sistema, así que podrás recuperarla.",
   "The book is untouched. Its folder is highlighted so you can deal with it yourself.": "El libro está intacto. Su carpeta aparece resaltada para que te ocupes tú.",
   "The card’s words are in Darlings": "El contenido de la ficha está en Descartes",
