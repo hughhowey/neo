@@ -13,7 +13,7 @@ const to = app.indexOf('// ---- end of screenplay rules ----');
 const context = vm.createContext({});
 vm.runInContext(app.slice(from, to), context);
 vm.runInContext(`this.api = { SP_HEAD_RE, SP_AFTER, SP_EMPTY, spLooksLikeCharacter, spLooksLikeTransition,
-  spParseHeading, spGhost, spContd, spPaginate, spEighths, spToFountain, spFromFountain, spFountainTitle,
+  spParseHeading, spGhost, spContd, spPaginate, spEighths, spPageLabel, spPageMark, spToFountain, spFromFountain, spFountainTitle,
   spRunsFromFountain, spFromFdx, spToFdx };`, context);
 const sp = context.api;
 const L = (type, text) => ({ type, text });
@@ -101,6 +101,11 @@ test('pages: 54 lines, a heading never alone at the foot, a speech kept with its
   assert.deepEqual(two.at.map((a) => a.before), [0, 1, 2, 1], 'two blank lines above a scene heading, none at the top');
   assert.equal(sp.spEighths(54), 8);
   assert.equal(sp.spEighths(7), 1);
+  assert.equal(sp.spPageLabel(1), '1.', 'page 1 is numbered like the rest');
+  assert.equal(sp.spPageLabel(2), '2.');
+  assert.equal(sp.spPageMark(0, false), true, 'the first line opens page 1');
+  assert.equal(sp.spPageMark(27, true), true);
+  assert.equal(sp.spPageMark(4, false), false, 'a line in the middle of a page has no number');
 });
 
 test('Fountain out: forced where Fountain would misread a line', () => {
