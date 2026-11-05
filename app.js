@@ -1141,11 +1141,12 @@ async function renderShelves() {
     blank.title = t('Start a new book');
     blank.onclick = () => createBookOnShelf(shelf);
     pressable(blank, t('Start a new book'));
-    // right-click (a long press on a phone): a book or a script
+    // right-click (a long press on a phone): a book or a script — in simple
+    // NEO and on Pocket too, so a writer who looks for scripts finds them
+    // where they'd look (#494, #504)
     if (!isBound(shelf)) {
       blank.addEventListener('contextmenu', async (e) => {
         e.preventDefault();
-        if (!moreOn()) return; // scripts are behind Show More Features
         const pick = await popMenu(e.clientX, e.clientY, [
           { label: t('New Book'), value: 'book' },
           { label: t('New Script'), value: 'script' }
