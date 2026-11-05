@@ -2298,10 +2298,13 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .ns-outline:empty::before { content: attr(data-ph); color: #666; font-style: italic; }
 /* the page: a chapter's names the chapter, with the way back up to the book's */
 #notes-up {
-  display: block; margin: -40px auto 22px; background: none; border: none; padding: 2px 6px;
-  font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; letter-spacing: 1px;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  margin: -40px auto 22px; background: none; border: none; padding: 2px 6px;
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; letter-spacing: 1px; text-align: center;
   color: var(--muted); cursor: pointer;
 }
+#notes-up.notes-up-right { flex-direction: row-reverse; }
+#notes-up.notes-up-right svg { transform: scaleX(-1); }
 #notes-up:hover, #notes-up:focus-visible { color: var(--accent); }
 #editor-view:not(.notes-tab) #notes-up, #editor-view:not(.notes-tab) #notes-outline { display: none; }
 /* only on the Notes tab: the class stays on the page after it, and the
