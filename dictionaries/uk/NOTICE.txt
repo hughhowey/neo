@@ -1,0 +1,23 @@
+Ukrainian spelling dictionary
+
+NEO distributes the dictionary and affix data of the Ukrainian
+spelling dictionary 6.7.5, built from the dict_uk project, as published
+by the LibreOffice project under the Mozilla Public License 1.1.
+NEO's MIT license does not replace the dictionary's.
+
+oxt package authors: Andriy Rysin, 2007-2017.
+Dictionary project: https://github.com/brown-uk/dict_uk
+The upstream notice is README_uk_UA.txt; the license is MPL-1.1.txt.
+
+Source availability
+
+index.aff and index.dic are LibreOffice's uk_UA/uk_UA.aff and
+uk_UA/uk_UA.dic, unchanged but for their names. They ship with every
+packaged app, beside this notice, in
+  app.asar.unpacked/node_modules/dictionary-uk/
+
+Upstream: https://github.com/LibreOffice/dictionaries/tree/master/uk_UA
+(commit 589a31b2c7e8a592270012e111a51a80d0176f6e, as of 2026-11-07)
+
+NEO's own spellcheck (WebAssembly Hunspell) never asked for these files
+in another form: Hunspell reads them as distributed.

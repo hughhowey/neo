@@ -1,0 +1,7 @@
+{
+  "name": "dictionary-uk",
+  "version": "6.7.5",
+  "description": "Ukrainian Hunspell dictionary (dict_uk), as shipped by LibreOffice",
+  "license": "MPL-1.1",
+  "files": ["index.aff", "index.dic", "README_uk_UA.txt", "NOTICE.txt", "MPL-1.1.txt"]
+}

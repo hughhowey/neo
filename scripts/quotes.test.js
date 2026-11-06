@@ -65,6 +65,7 @@ const styles = [
   ['it', '', `"Disse “ciao”"`, '«Disse “ciao”»'],
   ['pt-PT', '', `"Ele disse “olá”"`, '«Ele disse “olá”»'],
   ['ru', '', `"Он сказал „привет“"`, '«Он сказал „привет“»'],
+  ['uk', '', `"Він сказав „м'ясо“"`, '«Він сказав „м’ясо“»'],
   ['el', '', `"Είπε ‹γεια›"`, '«Είπε ‹γεια›»'],
   // „…” languages, «…» or »…« inside, typed by hand
   ['pl', '', `"Powiedział «cześć»"`, '„Powiedział «cześć»”'],

@@ -2087,6 +2087,7 @@ const CHAPTER_WORDS = new RegExp('^(' + [
   // on its own it is an English word, and "Capitol Hill was quiet." is prose
   'capitol(?=\\s+\\d)', 'capitolul', 'partea',
   'глава', 'пролог', 'эпилог', 'часть',                            // ru
+  'розділ', 'епілог', 'частина',                                   // uk (глава, пролог above)
   'κεφάλαιο', 'κεφαλαιο', 'πρόλογος', 'προλογος',
   'επίλογος', 'επιλογος', 'μέρος', 'μερος',
   'ραψωδία', 'ραψωδια',                                             // el
@@ -2558,6 +2559,7 @@ const SPELL_LANGUAGES = {
   'ro': { label: 'Română', pkg: 'dictionary-ro' },
   'hu': { label: 'Magyar', pkg: 'dictionary-hu' },
   'ru': { label: 'Русский', pkg: 'dictionary-ru' },
+  'uk': { label: 'Українська', pkg: 'dictionary-uk' },
   'sv': { label: 'Svenska', pkg: 'dictionary-sv' },
   'el': { label: 'Ελληνικά', pkg: 'dictionary-el' }
 };
