@@ -31,6 +31,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NeoBarsPlugin.class);
         registerPlugin(NeoPdfPlugin.class);
         super.onCreate(savedInstanceState);
+        pageLanguage = getResources().getConfiguration().getLocales().get(0).toLanguageTag();
         if (!hasFilesAccess()) {
             askedForFilesAccess = true;
             openFilesAccessSettings();
@@ -132,11 +133,22 @@ public class MainActivity extends BridgeActivity {
             && c.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO;
     }
 
-    // A keyboard connected or disconnected: tell the page
+    // The page picks its language once, when it loads
+    private String pageLanguage;
+
+    // A keyboard connected or disconnected: tell the page. NEO's language
+    // changed in Settings → Apps: load the page again in the new one (the
+    // page saved when it went to the background).
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (getBridge() == null) return;
+        String language = newConfig.getLocales().get(0).toLanguageTag();
+        if (!language.equals(pageLanguage)) {
+            pageLanguage = language;
+            getBridge().getWebView().reload();
+            return;
+        }
         getBridge().getWebView().evaluateJavascript(
             "window.pocketHardwareKeyboard && window.pocketHardwareKeyboard(" + hardwareKeyboard(newConfig) + ")", null);
     }
