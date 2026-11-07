@@ -11,6 +11,7 @@ NEO currently speaks:
 | `pt` | Português (Brasil) | complete, machine-assisted: native review welcome |
 | `pt-PT` | Português (Portugal) | regional differences only, machine-assisted |
 | `de` | Deutsch | complete, machine-assisted: native review welcome |
+| `de-CH` | Deutsch (Schweiz) | regional differences only (ss for ß, «…» quotes) |
 | `it` | Italiano | complete, machine-assisted: native review welcome |
 | `nl` | Nederlands | complete, machine-assisted: native review welcome |
 | `pl` | Polski | complete, machine-assisted: native review welcome |
