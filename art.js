@@ -8,9 +8,10 @@
 // never in the picture — the shelf sets those in real type on top (see
 // covers.js). Paintings live on the shelf only; exports never carry them.
 //
-// One provider, OpenAI. The provider is a pair of functions — writeBrief and
-// paint — behind a small interface, so another vendor would be two more
-// functions; for now one that works beats three that drift.
+// Three providers: OpenAI, xAI (OpenAI's dialect, so the same code) and
+// Google (Gemini). A provider is a pair of functions — writeBrief and paint —
+// behind a small interface; the brief and the painting always come from the
+// same one, so a writer needs one key.
 
 'use strict';
 
@@ -82,6 +83,14 @@ async function withModels(preferred, defaults, fn) {
 // OpenAI — and anything that speaks its dialect (xAI does)
 // ---------------------------------------------------------------------------
 
+// The file type from the bytes, not the request: providers don't always
+// send back the format they were asked for.
+function extOf(buffer) {
+  if (buffer[0] === 0x89 && buffer[1] === 0x50) return 'png';
+  if (buffer.slice(0, 4).toString() === 'RIFF' && buffer.slice(8, 12).toString() === 'WEBP') return 'webp';
+  return 'jpg';
+}
+
 // If every name on our list has been retired, ask the key what it can use:
 // the newest small GPT for the brief, the newest gpt-image for the painting.
 let openaiCatalog = null;
@@ -98,7 +107,7 @@ async function openaiModels(base, apiKey) {
   return openaiCatalog;
 }
 
-async function candidates(base, apiKey, preferred, defaults, kind) {
+async function candidates(base, apiKey, defaults, kind) {
   const list = [...defaults];
   try {
     const cat = await openaiModels(base, apiKey);
@@ -107,17 +116,20 @@ async function candidates(base, apiKey, preferred, defaults, kind) {
   return list;
 }
 
-function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, tokenParam }) {
+// discover: ask /models for newer names (OpenAI's naming only).
+// paintParams: the vendor's own size and quality fields for a portrait cover.
+function openaiStyle({ base, textModels, imageModels, imageExtras, paintParams, tokenParam, maxTokens, discover }) {
+  const models = async (apiKey, defaults, kind) => (discover ? candidates(base, apiKey, defaults, kind) : defaults);
   return {
     async writeBrief({ apiKey, text, model }) {
-      return withModels(model, await candidates(base, apiKey, model, textModels, 'text'), async (m) => {
+      return withModels(model, await models(apiKey, textModels, 'text'), async (m) => {
         const payload = {
           model: m,
           messages: [
             { role: 'system', content: BRIEF_SYSTEM },
             { role: 'user', content: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }
           ],
-          [tokenParam || 'max_completion_tokens']: 800
+          [tokenParam || 'max_completion_tokens']: maxTokens || 800
         };
         if (/^gpt-5|^o\d/.test(m)) payload.reasoning_effort = 'low';
         const body = await post(base + '/chat/completions', { Authorization: 'Bearer ' + apiKey }, payload);
@@ -127,13 +139,13 @@ function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, t
       });
     },
     async paint({ apiKey, brief, model, quality }) {
-      return withModels(model, await candidates(base, apiKey, model, imageModels, 'image'), async (m) => {
-        const payload = { model: m, prompt: brief + PAINT_SUFFIX, n: 1, ...imageExtras };
-        if (sizeParams) Object.assign(payload, { size: '1024x1536', quality: quality || 'medium' });
+      return withModels(model, await models(apiKey, imageModels, 'image'), async (m) => {
+        const payload = { model: m, prompt: brief + PAINT_SUFFIX, n: 1, ...imageExtras, ...paintParams(m, quality) };
         const body = await post(base + '/images/generations', { Authorization: 'Bearer ' + apiKey }, payload);
         const b64 = body.data && body.data[0] && body.data[0].b64_json;
         if (!b64) throw new Error('The image model returned no picture');
-        return { buffer: Buffer.from(b64, 'base64'), ext: 'jpg' };
+        const buffer = Buffer.from(b64, 'base64');
+        return { buffer, ext: extOf(buffer) };
       });
     }
   };
@@ -144,12 +156,78 @@ const openai = openaiStyle({
   textModels: ['gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini'],
   imageModels: ['gpt-image-1-mini', 'gpt-image-1'],
   imageExtras: { output_format: 'jpeg' },
-  sizeParams: true
+  paintParams: (_m, quality) => ({ size: '1024x1536', quality: quality || 'medium' }),
+  discover: true
+});
+
+// xAI takes an aspect ratio, not a size, and its quality scale is
+// low / medium / auto on grok-imagine-image-2.0 only. Grok reasons before it
+// answers and the reasoning counts against the cap, so the cap is roomier.
+const XAI_QUALITY = { low: 'low', medium: 'medium', high: 'auto' };
+const xai = openaiStyle({
+  base: 'https://api.x.ai/v1',
+  textModels: ['grok-4.7', 'grok-4.6', 'grok-4.5'],
+  imageModels: ['grok-imagine-image-2.0', 'grok-imagine-image'],
+  imageExtras: { response_format: 'b64_json' },
+  paintParams: (m, quality) => ({
+    aspect_ratio: '2:3',
+    ...(m === 'grok-imagine-image-2.0' ? { quality: XAI_QUALITY[quality] || 'medium' } : {})
+  }),
+  tokenParam: 'max_tokens',
+  maxTokens: 4000
+});
+
+// ---------------------------------------------------------------------------
+// Google — Gemini's generateContent, for the brief and (Nano Banana) the picture
+// ---------------------------------------------------------------------------
+
+function googleStyle({ base, textModels, imageModels }) {
+  const call = (m, apiKey, payload) => post(base + '/models/' + encodeURIComponent(m) + ':generateContent', { 'x-goog-api-key': apiKey }, payload);
+  const parts = (body) => {
+    const c = body && body.candidates && body.candidates[0];
+    if (!c && body && body.promptFeedback && body.promptFeedback.blockReason) {
+      throw new Error('Google declined the request (' + body.promptFeedback.blockReason + ')');
+    }
+    return (c && c.content && c.content.parts) || [];
+  };
+  return {
+    async writeBrief({ apiKey, text, model }) {
+      return withModels(model, textModels, async (m) => {
+        const body = await call(m, apiKey, {
+          systemInstruction: { parts: [{ text: BRIEF_SYSTEM }] },
+          contents: [{ role: 'user', parts: [{ text: 'MANUSCRIPT EXCERPT:\n\n' + excerpt(text) }] }],
+          // thinking counts against the cap, so leave room past the paragraph
+          generationConfig: { maxOutputTokens: 4000 }
+        });
+        const out = parts(body).filter((p) => !p.thought && p.text).map((p) => p.text).join('');
+        if (!out.trim()) throw new Error('The model returned an empty brief');
+        return out.trim();
+      });
+    },
+    async paint({ apiKey, brief, model }) {
+      return withModels(model, imageModels, async (m) => {
+        const body = await call(m, apiKey, {
+          contents: [{ role: 'user', parts: [{ text: brief + PAINT_SUFFIX }] }],
+          generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '2:3' } }
+        });
+        const img = parts(body).map((p) => p.inlineData || p.inline_data).find((d) => d && d.data);
+        if (!img) throw new Error('The image model returned no picture');
+        const buffer = Buffer.from(img.data, 'base64');
+        return { buffer, ext: extOf(buffer) };
+      });
+    }
+  };
+}
+
+const google = googleStyle({
+  base: 'https://generativelanguage.googleapis.com/v1beta',
+  textModels: ['gemini-3.8-flash', 'gemini-3.5-flash-lite'],
+  imageModels: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image']
 });
 
 // ---------------------------------------------------------------------------
 
-const PROVIDERS = { openai };
+const PROVIDERS = { openai, google, xai };
 
 // The whole job: text in, { buffer, ext, brief, textModel, imageModel } out.
 async function paintCover({ provider, apiKey, text, textModel, imageModel, quality }) {

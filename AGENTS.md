@@ -24,7 +24,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `app.js` | The whole UI, in banner-marked sections. Search for the banner before reading the file |
 | `styles.css` | All styling. Tokens are CSS variables at the top |
 | `covers.js` | Shelf covers in the window: seeded canvas art plus real title type. `window.NeoCovers` |
-| `art.js` | Painted covers in the main process. OpenAI only. Title and author are never sent to the image model |
+| `art.js` | Painted covers in the main process. OpenAI, Google (Gemini) or xAI, one key each. Title and author are never sent to the image model |
 | `i18n.js` | `t()` / `tk()`, shared by main and the window. English source text is the key |
 | `spell-worker.js` | Hunspell WASM, forked with `utilityProcess`. Messages: `load`, `check`, `suggest`, `add` |
 | `backup-worker.js` | The day's backup zip, forked with `utilityProcess` by `dailyBackup` so a file that won't come off iCloud never holds the main process |
