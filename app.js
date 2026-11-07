@@ -2532,6 +2532,7 @@ async function openBook(bookId) {
   book = meta;
   showWindowTitle();
   forgetSnapshots();
+  forgetSpelling();
   sideCardsKey = '';
   currentChapterId = null; // never carry a chapter reference across books
   undoStack = []; redoStack = [];
@@ -14569,6 +14570,14 @@ function scanSpellingHere() {
 function scheduleSpellRescan(key, el) {
   clearTimeout(saveTimers['sp-' + key]);
   saveTimers['sp-' + key] = setTimeout(() => { if (spellOn) spellScanEl(el, key); }, 600);
+}
+
+// A book opened again has new pages under the same chapter ids: they're
+// checked anew, not counted as checked with underlines on the old pages
+function forgetSpelling() {
+  spellScanned = new Set();
+  spellRanges = new Map();
+  capsRanges.clear();
 }
 
 function toggleSpellcheck() {
