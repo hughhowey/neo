@@ -12235,22 +12235,8 @@ function trackDailyWords(total) {
   if (!was || (seen !== undefined && total !== seen && now.start !== was.start)) scheduleMetaSave();
   if (sprint && sprint.bookId !== book.id) sprint = null; // a sprint belongs to the book it began in
   if (sprint && total < sprint.startCount) sprint.startCount = total;
-  const wordsToday = Math.max(0, book.dailyCounts[today].end - book.dailyCounts[today].start);
-  const gc = $('#goal-counter');
-  if (sprint && !sprint.done) {
-    const sprintWords = total - sprint.startCount;
-    setText(gc, `⚡ ${fmtNum(sprintWords)} / ${fmtNum(sprint.target)}`);
-    if (sprintWords >= sprint.target) {
-      sprint.done = true;
-      toast(t('Sprint complete — {n} words. Well earned.', { n: sprintWords }), 6000);
-    }
-  } else {
-    const goal = library.dailyGoal || 0;
-    setText(gc, goal
-      ? t('{n} / {goal} today', { n: wordsToday, goal })
-      : t('{n} today', { n: wordsToday }));
-    gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
-  }
+  renderGoalCounter();
+  if (sprint && !sprint.done && total - sprint.startCount >= sprint.target) endSprint('target');
 }
 
 // Pages, the way a manuscript counts them: 250 words to a page. The page
@@ -15101,8 +15087,100 @@ document.addEventListener('input', () => {
 /* ================================================================== */
 
 let sprint = null;
+let chartMode = 'daily';  // which view of the 30-day chart is showing (Daily | Sprints)
 
-function statsChartSvg() {
+// ---- sprint history rules:
+// What a finished sprint leaves behind (book.sprints), and what the Sprints
+// view of the chart draws from those records: for each day, the words of
+// every sprint that ran on it and the rest of the day written outside one.
+// Pure — scripts/sprints.test.js runs this block on its own.
+const SPRINT_CAP = 200;
+function pushSprint(list, rec) {
+  return [...(list || []), rec].sort((a, b) => a.start - b.start).slice(-SPRINT_CAP);
+}
+function sprintBars(days, sprints, daily) {
+  const byDay = new Map();
+  for (const s of sprints || []) {
+    if (!(Number(s.target) > 0)) continue; // old stopwatch records are not sprints
+    if (!byDay.has(s.day)) byDay.set(s.day, []);
+    byDay.get(s.day).push(s);
+  }
+  return days.map((d, i) => {
+    const segs = (byDay.get(d) || []).sort((a, b) => a.start - b.start).map((s) => Math.max(0, Number(s.words) || 0));
+    const sum = segs.reduce((a, b) => a + b, 0);
+    const day = Math.max(0, Number(daily && daily[i]) || 0);
+    return { segs, outside: Math.max(0, day - sum) };
+  });
+}
+// ---- end of sprint history rules ----
+
+// A sprint's countdown is UI-only; nothing here writes a file.
+function fmtClock(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
+// Every way a sprint finishes leaves one record in book.sprints. 'manual' ends
+// it and clears it; 'target' and 'time' mark it done (the Start button comes
+// back) — the split the sprint always had, now with a record either way.
+function endSprint(reason) {
+  if (!sprint) return;
+  const got = bookWordCount() - sprint.startCount;
+  const elapsed = Math.round((Date.now() - sprint.startTime) / 60000);
+  book.sprints = pushSprint(book.sprints, {
+    day: writingDay(new Date(sprint.startTime)), target: sprint.target, words: got,
+    start: sprint.startTime, end: Date.now(), ms: 0
+  });
+  scheduleMetaSave();
+  if (reason === 'manual') {
+    toast(t('Sprint ended — {n} words in {min} min', { n: got, min: elapsed }));
+    sprint = null;
+  } else if (reason === 'target') {
+    sprint.done = true;
+    toast(t('Sprint complete — {n} words. Well earned.', { n: got }), 6000);
+  } else {
+    sprint.done = true;
+    toast(t('Time’s up — {n} words.', { n: got }), 6000);
+  }
+  renderGoalCounter();
+}
+// The one line under the window's head: the sprint and its countdown while
+// one runs, today's goal otherwise.
+function renderGoalCounter() {
+  const gc = $('#goal-counter');
+  if (!gc || !book) return;
+  const total = bookWordCount();
+  if (sprint && !sprint.done) {
+    let text = `⚡ ${fmtNum(total - sprint.startCount)} / ${fmtNum(sprint.target)}`;
+    if (sprint.endAt) text += ` · ${fmtClock(sprint.endAt - Date.now())}`;
+    setText(gc, text);
+  } else {
+    const today = (book.dailyCounts || {})[todayStr()];
+    const wordsToday = today ? Math.max(0, today.end - today.start) : 0;
+    const goal = library.dailyGoal || 0;
+    setText(gc, goal
+      ? t('{n} / {goal} today', { n: wordsToday, goal })
+      : t('{n} today', { n: wordsToday }));
+    gc.classList.toggle('goal-met', goal > 0 && wordsToday >= goal);
+  }
+}
+// One interval, only while a timed sprint is active; it stops when the sprint ends.
+let tickId = null;
+const tickActive = () => sprint && !sprint.done && !!sprint.endAt;
+function ensureTick() {
+  if (tickId || !tickActive()) return;
+  tickId = setInterval(tick, 1000);
+}
+function tick() {
+  if (sprint && !sprint.done && sprint.endAt && Date.now() >= sprint.endAt) endSprint('time');
+  renderGoalCounter();
+  if (tickId && !tickActive()) { clearInterval(tickId); tickId = null; }
+}
+// A countdown keeps wall-clock time, so a throttled background window is
+// still on time when it comes back; tick on the way back to be sure.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+
+function statsChartSvg(mode = 'daily') {
   const W = 520, H = 200, PAD = 6;
   const days = [];
   for (let i = 29; i >= 0; i--) {
@@ -15125,10 +15203,31 @@ function statsChartSvg() {
   const maxD = Math.max(...daily, library.dailyGoal || 0, 1);
   const bw = (W - PAD * 2) / 30;
 
-  const bars = daily.map((v, i) => {
-    const h = Math.round((v / maxD) * (H * 0.45));
-    return `<rect x="${(PAD + i * bw).toFixed(1)}" y="${H - PAD - h}" width="${(bw - 2).toFixed(1)}" height="${h}" rx="1.5" fill="#3d5a4f"/>`;
-  }).join('');
+  const bars = mode === 'sprints'
+    ? sprintBars(days, book.sprints || [], daily).map((st, i) => {
+        const sum = st.segs.reduce((a, b) => a + b, 0);
+        // the day's own height, so the two views stay comparable; sprint words
+        // that outlived their day (words cut after) scale down into it
+        const h = Math.round((Math.min(sum + st.outside, daily[i] || 0) / maxD) * (H * 0.45));
+        if (h <= 0) return '';
+        const x = (PAD + i * bw).toFixed(1), w = (bw - 2).toFixed(1);
+        const outH = Math.round((st.outside / (sum + st.outside)) * h);
+        const rects = [];
+        let acc = 0;
+        st.segs.forEach((s, k) => {
+          const sh = sum > 0 ? Math.round((s / sum) * (h - outH)) : 0;
+          if (sh <= 0) return;
+          // two greens alternate so neighbouring sprints stay apart
+          rects.push(`<rect x="${x}" y="${H - PAD - acc - sh}" width="${w}" height="${sh}" rx="1.5" fill="${k % 2 ? '#5f8a73' : '#3d5a4f'}" data-day="${days[i]}" data-words="${s}" data-kind="sprint"/>`);
+          acc += sh;
+        });
+        if (outH > 0) rects.push(`<rect x="${x}" y="${H - PAD - h}" width="${w}" height="${outH}" rx="1.5" fill="#3d5a4f" fill-opacity="0.35" data-day="${days[i]}" data-words="${st.outside}" data-kind="outside"/>`);
+        return rects.join('');
+      }).join('')
+    : daily.map((v, i) => {
+        const h = Math.round((v / maxD) * (H * 0.45));
+        return `<rect x="${(PAD + i * bw).toFixed(1)}" y="${H - PAD - h}" width="${(bw - 2).toFixed(1)}" height="${h}" rx="1.5" fill="#3d5a4f" data-day="${days[i]}" data-words="${v}" data-kind="daily"/>`;
+      }).join('');
   const line = cumulative.map((v, i) => {
     const x = (PAD + i * bw + bw / 2).toFixed(1);
     const y = (H - PAD - (v / maxC) * (H - PAD * 2 - 20)).toFixed(1);
@@ -15137,14 +15236,18 @@ function statsChartSvg() {
   const goalLine = goal
     ? `<line x1="${PAD}" x2="${W - PAD}" y1="${(H - PAD - (goal / maxC) * (H - PAD * 2 - 20)).toFixed(1)}" y2="${(H - PAD - (goal / maxC) * (H - PAD * 2 - 20)).toFixed(1)}" stroke="#c9a86a" stroke-dasharray="5,4" stroke-width="1" opacity="0.7"/>`
     : '';
-  return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(t('Words written over the last 30 days')).replace(/"/g, '&quot;')}">
+  const label = mode === 'sprints' ? t('Sprint words over the last 30 days') : t('Words written over the last 30 days');
+  return `<svg id="stats-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(label).replace(/"/g, '&quot;')}">
     ${bars}
     <path d="${line}" fill="none" stroke="#c9a86a" stroke-width="2"/>
     ${goalLine}
   </svg>
   <div class="stats-legend">
     <span>${t('30 days ago')}</span>
-    <span class="sl-daily">▮ ${t('daily words')}</span>
+    ${mode === 'sprints'
+      ? `<span class="sl-daily">▮ ${t('sprint words')}</span>
+    <span class="sl-daily" style="opacity:.55">▮ ${t('outside sprints')}</span>`
+      : `<span class="sl-daily">▮ ${t('daily words')}</span>`}
     <span style="color:var(--accent)">— ${t('total')}${goal ? ' · - - ' + t('goal') : ''}</span>
     <span>${t('today')}</span>
   </div>`;
@@ -15283,7 +15386,12 @@ function openStats() {
         <div><div class="big">${fmtNum(wordsToday)}</div><div class="lbl">${t('today')}</div></div>
         <div><div class="big">${book.wordGoal ? Math.min(100, Math.round(total / book.wordGoal * 100)) + '%' : '—'}</div><div class="lbl">${t('of book goal')}</div></div>
       </div>
-      ${statsChartSvg()}` : ''}
+      ${moreOn() ? `
+      <div class="st-seg" role="group" aria-label="${t('Chart')}">
+        <button type="button" data-mode="daily" aria-pressed="${chartMode === 'daily'}"${chartMode === 'daily' ? ' class="on"' : ''}>${t('Daily')}</button>
+        <button type="button" data-mode="sprints" aria-pressed="${chartMode === 'sprints'}"${chartMode === 'sprints' ? ' class="on"' : ''}>${t('Sprints')}</button>
+      </div>` : ''}
+      <div id="stats-chart-wrap">${statsChartSvg(moreOn() ? chartMode : 'daily')}</div>` : ''}
       <div class="stats-row stats-goals" style="margin-top:${hasBook ? 18 : 6}px">
         <label>${t('Daily goal')} <input id="st-daily" type="number" min="0" value="${library.dailyGoal || ''}" placeholder="500"/></label>
         ${hasBook ? `<label>${t('Book goal')} <input id="st-book" type="number" min="0" value="${book.wordGoal || ''}" placeholder="80000"/></label>` : ''}
@@ -15297,8 +15405,9 @@ function openStats() {
       </div>
       ${hasBook ? `
       <div class="stats-row stats-goals">
-        <label>${t('Sprint')} <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/> ${t('words')}</label>
-        <button id="st-sprint-btn" class="btn-gold" style="align-self: center;">${sprint && !sprint.done ? t('End sprint') : t('Start sprint')}</button>
+        <label>${t('Sprint')} ${t('words')} <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/></label>
+        ${moreOn() ? `<label>${t('min')} <input id="st-min" type="number" min="0" max="999" value="${sprint && sprint.min ? sprint.min : ''}" placeholder="0"/></label>` : ''}
+        <button id="st-sprint-btn" class="btn-gold">${sprint && !sprint.done ? t('End sprint') : t('Start sprint')}</button>
       </div>` : ''}
       <div style="text-align:right;margin-top:14px">
         <button class="m-ok btn-gold">${t('Done')}</button>
@@ -15324,18 +15433,49 @@ function openStats() {
   bd.focus();
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
   if (hasBook) {
+    const chart = bd.querySelector('#stats-chart-wrap');
+    const tooltip = document.createElement('div');
+    tooltip.className = 'stats-chart-tooltip';
+    tooltip.hidden = true;
+    bd.appendChild(tooltip);
+    chart.addEventListener('pointermove', (e) => {
+      const bar = e.target.closest && e.target.closest('[data-words]');
+      if (!bar) { tooltip.hidden = true; return; }
+      let label = t('words');
+      if (bar.dataset.kind === 'sprint') label = t('sprint words');
+      if (bar.dataset.kind === 'outside') label = t('outside sprints');
+      tooltip.textContent = `${bar.dataset.day} · ${fmtNum(Number(bar.dataset.words))} ${label}`;
+      tooltip.hidden = false;
+      const box = tooltip.getBoundingClientRect();
+      const edge = 8, offset = 12;
+      tooltip.style.left = `${Math.max(edge, Math.min(e.clientX + offset, window.innerWidth - box.width - edge))}px`;
+      tooltip.style.top = `${Math.max(edge, Math.min(e.clientY + offset, window.innerHeight - box.height - edge))}px`;
+    });
+    chart.addEventListener('pointerleave', () => { tooltip.hidden = true; });
     bd.querySelector('#st-sprint-btn').onclick = () => {
       if (sprint && !sprint.done) {
-        const got = bookWordCount() - sprint.startCount;
-        toast(t('Sprint ended — {n} words in {min} min', { n: got, min: Math.round((Date.now() - sprint.startTime) / 60000) }));
-        sprint = null;
+        endSprint('manual');
       } else {
         const target = parseInt(bd.querySelector('#st-sprint').value, 10) || 500;
-        sprint = { target, startCount: bookWordCount(), startTime: Date.now(), done: false, bookId: book.id };
+        const minEl = bd.querySelector('#st-min');
+        const min = minEl ? parseInt(minEl.value, 10) || 0 : 0;
+        sprint = { target, startCount: bookWordCount(), startTime: Date.now(), endAt: min ? Date.now() + min * 60000 : null, min, done: false, bookId: book.id };
         toast(t('Sprint started — {n} words. Go.', { n: target }));
+        ensureTick();
       }
       close();
     };
+    bd.querySelectorAll('.st-seg button').forEach((b) => {
+      b.onclick = () => {
+        chartMode = b.dataset.mode;
+        bd.querySelector('#stats-chart-wrap').innerHTML = statsChartSvg(moreOn() ? chartMode : 'daily');
+        bd.querySelectorAll('.st-seg button').forEach((x) => {
+          const on = x.dataset.mode === chartMode;
+          x.classList.toggle('on', on);
+          x.setAttribute('aria-pressed', String(on));
+        });
+      };
+    });
   }
 }
 
