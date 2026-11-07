@@ -58,6 +58,66 @@ test('Swedish: accents, inflections, compounds, suggestions and dictionary chang
   assert.equal((await send({ type: 'check', words: ['författare'] })).result.författare, true);
 });
 
+test('Ukrainian: every apostrophe, ґ, hyphenated words and suggestions', async () => {
+  const send = spellWorker();
+  const dir = path.join(root, 'node_modules/dictionary-uk');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).license, 'MPL-1.1');
+  assert.equal((await send({ type: 'load', language: 'uk', dir })).ok, true);
+  const good = await send({ type: 'check', words: ["м'ясо", 'м’ясо', 'мʼясо', 'ґанок', 'будь-який'] });
+  for (const [word, ok] of Object.entries(good.result)) assert.equal(ok, true, word);
+  assert.equal((await send({ type: 'check', words: ['ластывка'] })).result.ластывка, false);
+  assert.ok((await send({ type: 'suggest', word: 'ластывка' })).result.includes('ластівка'));
+});
+
+test('a Ukrainian suggestion goes onto the page with a typographic apostrophe', async () => {
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'uk', dir: path.join(root, 'node_modules/dictionary-uk') })).ok, true);
+  const node = { data: 'Свіже мясо, а не ластывка.', nodeType: 3, isConnected: true };
+  const editor = { node, id: '', dataset: {}, closest: (selector) => selector === '.chapter' ? { dataset: { id: 'ch-test' } } : editor };
+  class TextRange {
+    setStart(n, offset) { this.node = n; this.start = offset; }
+    setEnd(_n, offset) { this.end = offset; }
+    toString() { return this.node.data.slice(this.start, this.end); }
+  }
+  let contextmenu, menu, selected, at;
+  const highlights = new Map();
+  const context = vm.createContext({
+    document: {
+      addEventListener: (name, callback) => { if (name === 'contextmenu') contextmenu = callback; },
+      createTreeWalker: () => { let n = node; return { nextNode: () => { const x = n; n = null; return x; } }; },
+      querySelector: () => editor,
+      createRange: () => new TextRange(),
+      caretRangeFromPoint: () => ({ startContainer: node, startOffset: at }),
+      execCommand: (_cmd, _ui, text) => { node.data = node.data.slice(0, selected.start) + text + node.data.slice(selected.end); }
+    },
+    Node: { TEXT_NODE: 3 }, NodeFilter: { SHOW_TEXT: 4 }, Range: TextRange, Highlight: Set, CSS: { highlights },
+    $: () => null, t: (text) => text, tk: (text) => text, toast() {},
+    captureMenu: (_x, _y, word, suggestions, actions) => { menu = { word, suggestions, actions }; },
+    window: {
+      getSelection: () => ({ removeAllRanges() {}, addRange: (r) => { selected = r; } }),
+      neo: {
+        spellCheckWords: async (words) => (await send({ type: 'check', words })).result,
+        spellSuggest: async (word) => (await send({ type: 'suggest', word })).result
+      }
+    }
+  });
+  const app = source('app.js');
+  vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
+  context.el = editor;
+  await vm.runInContext('spellOn = true; showSpellMenu = captureMenu; spellScanEl(el, "ch-test")', context);
+  assert.deepEqual([...highlights.get('neo-spell')].map((r) => r.toString()), ['мясо', 'ластывка']);
+  at = node.data.indexOf('мясо') + 1;
+  await contextmenu({ target: editor, clientX: 0, clientY: 0, preventDefault() {} });
+  assert.ok(menu.suggestions.includes("м'ясо"));
+  menu.actions.replace("м'ясо");
+  assert.equal(node.data, 'Свіже м’ясо, а не ластывка.');
+  at = node.data.indexOf('ластывка') + 1;
+  await contextmenu({ target: editor, clientX: 0, clientY: 0, preventDefault() {} });
+  assert.ok(menu.suggestions.includes('ластівка'));
+  menu.actions.replace('ластівка');
+  assert.equal(node.data, 'Свіже м’ясо, а не ластівка.');
+});
+
 function spellWorker() {
   let handle, reply;
   const context = vm.createContext({
