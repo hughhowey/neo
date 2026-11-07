@@ -775,6 +775,7 @@
       if (side && side.classList.contains('open')) { side.classList.remove('open'); return true; }
       const modal = document.querySelector('.modal-backdrop:not([hidden])');
       if (modal) { modal.hidden = true; return true; }
+      if (document.body.classList.contains('zen') && typeof setZen === 'function') { setZen(false); return true; }
       const editor = document.getElementById('editor-view');
       if (editor && !editor.hidden && typeof backToShelf === 'function') { backToShelf(); return true; }
     } catch (err) { console.error(err); }

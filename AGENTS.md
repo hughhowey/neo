@@ -50,7 +50,7 @@ NEO opens simple. File → Show More Features (`library.moreFeatures`) brings ba
 - A book's right-click in simple NEO is the larger cards (`optionModal`), with no cover menu: art is dragged onto the book; New cover and Remove cover art stand with the rest. Word goals are set in Goals, inside the book, never from the shelf.
 - The shortcuts window (`bookShortcutSections`) lists a key only when its feature is showing.
 - A library from before the switch is decided once (`decideMoreFeatures`): on when it uses something behind it, off otherwise (with one toast saying where things went).
-- Pocket (Android and iOS) is always simple and has no switch; its ⋯ sheet in `pocket/www/index.html` offers only simple NEO's choices.
+- Pocket (Android and iOS) is always simple and has no switch; its ⋯ sheet in `pocket/www/index.html` offers only simple NEO's choices. One exception: Zen mode, which Pocket offers in its ⋯ sheet and on a gesture (two fingers spread on the page go in, pinched together they come back).
 - A new feature goes behind the switch unless Hugh says it belongs in simple NEO. `scripts/simple-neo.test.js`, `npm run test:simple`.
 
 ## Outline cards

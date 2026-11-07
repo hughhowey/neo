@@ -957,5 +957,6 @@
   "Zen Mode": "Mode zen",
   "Zen mode": "Mode zen",
   "Zen mode. Esc or {keys} brings everything back": "Mode zen. Échap ou {keys} fait tout revenir",
-  "Full screen with only the words. Esc brings everything back.": "Plein écran, rien que les mots. Échap fait tout revenir."
+  "Full screen with only the words. Esc brings everything back.": "Plein écran, rien que les mots. Échap fait tout revenir.",
+  "Zen mode. Pinch the page to bring everything back": "Mode zen. Pincez la page pour tout faire revenir"
 }

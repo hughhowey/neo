@@ -14929,7 +14929,9 @@ window.addEventListener('input', (e) => {
 /* ================================================================== */
 /*  ZEN MODE: nothing on screen but the words                          */
 /* ================================================================== */
-// View → Zen Mode (⌘⇧H / Ctrl+Shift+H), behind Show More Features. The
+// View → Zen Mode (⌘⇧H / Ctrl+Shift+H), behind Show More Features. Pocket
+// has no switch and no menu bar: there, spreading two fingers on the page
+// goes in and pinching them comes back (pocket/www/index.html). The
 // window goes full screen and
 // everything that isn't the manuscript goes with it: the bottom bar, both
 // panes and their hover zones (pinned or not), the edges and shadow of the
@@ -14942,7 +14944,7 @@ let zenOn = false;
 let zenMadeFullScreen = false; // whether leaving Zen should leave full screen too
 const ZEN_KEYS = IS_MAC ? '⌘⇧H' : 'Ctrl+Shift+H';
 function setZen(on) {
-  on = !!on && !!book && !$('#editor-view').hidden && moreOn();
+  on = !!on && !!book && !$('#editor-view').hidden && (moreOn() || IS_POCKET);
   if (on === zenOn) return;
   zenOn = on;
   document.body.classList.toggle('zen', on);
@@ -14953,7 +14955,7 @@ function setZen(on) {
     }
     zenMadeFullScreen = !document.body.classList.contains('full-screen');
     if (zenMadeFullScreen) window.neo.fullscreenToggle();
-    toast(t('Zen mode. Esc or {keys} brings everything back', { keys: ZEN_KEYS }), 2500);
+    toast(IS_POCKET ? t('Zen mode. Pinch the page to bring everything back') : t('Zen mode. Esc or {keys} brings everything back', { keys: ZEN_KEYS }), 2500);
   } else {
     if (zenMadeFullScreen && document.body.classList.contains('full-screen')) window.neo.fullscreenToggle();
     zenMadeFullScreen = false;
