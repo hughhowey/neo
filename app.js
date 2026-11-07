@@ -5103,6 +5103,7 @@ document.addEventListener('keydown', (e) => {
     // open, Esc only closes the bar and leaves the caret where it is.
     const inBar = !document.activeElement || document.activeElement === document.body || $('#searchbar').contains(document.activeElement);
     if (!$('#searchbar').hidden) { if (inBar) returnFromSearch(); else closeSearch(); }
+    else if (zenOn) setZen(false); // Zen first, then full screen, then the shelf
     else window.neo.fullscreenEscape().then((exited) => { if (!exited) backToShelf(); });
   }
 });
@@ -13398,6 +13399,7 @@ setInterval(() => { if (book) flushAllSaves('tick'); }, 20000);
 
 async function backToShelf() {
   if (reading) stopReadAloud(false);
+  setZen(false);
   flushAllSaves();
   tabPlaces = {};
   book = null;
@@ -14925,6 +14927,43 @@ window.addEventListener('input', (e) => {
 });
 
 /* ================================================================== */
+/*  ZEN MODE: nothing on screen but the words                          */
+/* ================================================================== */
+// View → Zen Mode (⌘⇧H / Ctrl+Shift+H), behind Show More Features. The
+// window goes full screen and
+// everything that isn't the manuscript goes with it: the bottom bar, both
+// panes and their hover zones (pinned or not), the edges and shadow of the
+// sheet, the scrollbar, the title in the Mac's bar. Nothing comes back on
+// hover. Esc, or the same keys, brings it all back, and full screen goes too
+// if Zen was what turned it on. Only a body class: the manuscript and the
+// files are never touched, and it isn't remembered (the next book opens as
+// usual).
+let zenOn = false;
+let zenMadeFullScreen = false; // whether leaving Zen should leave full screen too
+const ZEN_KEYS = IS_MAC ? '⌘⇧H' : 'Ctrl+Shift+H';
+function setZen(on) {
+  on = !!on && !!book && !$('#editor-view').hidden && moreOn();
+  if (on === zenOn) return;
+  zenOn = on;
+  document.body.classList.toggle('zen', on);
+  if (on) {
+    // a pane open from a hover or from the keyboard closes behind it
+    for (const pane of [$('#nav-pane'), $('#side-pane')]) {
+      if (pane.contains(document.activeElement)) focusPage();
+    }
+    zenMadeFullScreen = !document.body.classList.contains('full-screen');
+    if (zenMadeFullScreen) window.neo.fullscreenToggle();
+    toast(t('Zen mode. Esc or {keys} brings everything back', { keys: ZEN_KEYS }), 2500);
+  } else {
+    if (zenMadeFullScreen && document.body.classList.contains('full-screen')) window.neo.fullscreenToggle();
+    zenMadeFullScreen = false;
+  }
+  if (window.neo.zenState) window.neo.zenState(on); // the View menu's tick
+}
+function toggleZen() { setZen(!zenOn); }
+/* ---- end of zen mode ---- */
+
+/* ================================================================== */
 /*  FOCUS MODE: dim everything but the sentence or paragraph           */
 /* ================================================================== */
 // Painted with the CSS Custom Highlight API (like search and spellcheck),
@@ -15653,6 +15692,7 @@ function bookShortcutSections() {
       [[K('⌘⇧F', 'Ctrl+Shift+F'), K('⌘Enter', 'Ctrl+Enter'), ...(IS_MAC ? [] : ['F11'])], tk('Toggle full screen')],
       [K('⌘⇧T', 'Ctrl+Shift+T'), tk('Toggle typewriter scrolling')],
       ...(more ? [[K('⌘⇧O', 'Ctrl+Shift+O'), tk('Cycle focus mode'), tk('Off → paragraph → sentence → off.')]] : []),
+      ...(more ? [[K('⌘⇧H', 'Ctrl+Shift+H'), tk('Zen mode'), tk('Full screen with only the words. Esc brings everything back.')]] : []),
       [IS_MAC ? '⌥⌘↓' : ['Ctrl+Alt+↓', 'Ctrl+Page Down'], tk('Go to the next chapter')],
       [IS_MAC ? '⌥⌘↑' : ['Ctrl+Alt+↑', 'Ctrl+Page Up'], tk('Go to the previous chapter')],
       ...(more ? [
@@ -18051,7 +18091,11 @@ async function setEditorFontSize(value) {
 window.neo.onMenu(async (msg) => {
   // full screen and focus mode together hide the bottom bar until hovered
   // (styles.css); the window says when it goes in and out, whatever is open
-  if (msg.type === 'fullScreen') { document.body.classList.toggle('full-screen', !!msg.value); return; }
+  if (msg.type === 'fullScreen') {
+    document.body.classList.toggle('full-screen', !!msg.value);
+    if (!msg.value) zenMadeFullScreen = false; // left by other keys: Zen leaves the window as it is
+    return;
+  }
   if ($('#keyboard-shortcuts') && msg.type !== 'help') return;
   // a window the menu opens (⌘, for Goals, say) never stacks on one that's
   // already open: pressing it again used to pile up overlays
@@ -18086,6 +18130,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'spellLanguage') changeSpellLanguage(msg.value);
   if (msg.type === 'reshelve') reshelveBook();
   if (msg.type === 'typewriter') toggleTypewriter();
+  if (msg.type === 'zen') toggleZen();
   if (msg.type === 'nbspMarks') toggleNbspMarks();
   if (msg.type === 'pagedView') togglePaged();
   if (msg.type === 'pageWidth') setPageWidth(msg.value);
@@ -18386,6 +18431,7 @@ document.addEventListener('keydown', (e) => {
   const here = REGIONS.findIndex((r) => r.box().contains(document.activeElement));
   if (regionKey(e)) {
     e.preventDefault();
+    setZen(false); // the panes and the bar are where F6 goes: they come back
     // from nowhere in particular (a book just opened), forward starts at the page
     if (here < 0) { REGIONS[e.shiftKey ? REGIONS.length - 1 : 0].enter(); return; }
     REGIONS[(here + (e.shiftKey ? REGIONS.length - 1 : 1)) % REGIONS.length].enter();
@@ -18460,6 +18506,7 @@ async function setMoreFeatures(on) {
   if (IS_POCKET || on === moreOn()) return; // (Pocket is always simple)
   library.moreFeatures = on;
   await writeLibrary(library);
+  if (!on) setZen(false); // the bar and the panes come back with simple NEO
   reportMore();
   applyLook();
   if (book && !$('#editor-view').hidden) {

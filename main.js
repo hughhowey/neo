@@ -2726,6 +2726,14 @@ ipcMain.on('typewriter:state', (_e, on) => {
   typewriterState = on;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// View → Zen Mode shows whether the window is in it
+let zenState = false;
+ipcMain.on('zen:state', (_e, on) => {
+  on = !!on;
+  if (on === zenState) return;
+  zenState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
 // Format → Non-Breaking Marks shows whether the tint is on
 let nbspMarksState = false;
 ipcMain.on('nbspmarks:state', (_e, on) => {
@@ -3158,6 +3166,17 @@ function buildMenu() {
             const w = BrowserWindow.getFocusedWindow();
             if (w) w.setFullScreen(!w.isFullScreen());
           }
+        },
+        {
+          more: true,
+          // full screen with nothing but the manuscript (ZEN MODE in app.js);
+          // the window turns it on only with a book open
+          label: t('Zen Mode'),
+          accelerator: 'CmdOrCtrl+Shift+H',
+          type: 'checkbox',
+          checked: zenState,
+          enabled: bookOpenState,
+          click: () => sendToWindow({ type: 'zen' })
         },
         {
           more: true,

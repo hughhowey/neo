@@ -20,6 +20,7 @@
     "test:pages": "electron scripts/pages.e2e.js",
     "test:simple": "electron scripts/simple.e2e.js",
     "test:find": "electron scripts/find.e2e.js",
+    "test:zen": "electron scripts/zen.e2e.js",
     "test:script-keys": "electron scripts/script-keys.e2e.js",
     "test:new-script": "electron scripts/new-script.e2e.js",
     "test": "node --test \"scripts/*.test.js\"",
