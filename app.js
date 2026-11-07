@@ -14607,7 +14607,10 @@ async function changeSpellLanguage(code) {
     CSS.highlights.delete('neo-spell');
     scanSpellingHere();
   }
-  toast(t('Spellcheck: {lang}', { lang: SPELL_LANGUAGE_NAMES[code] || code }));
+  // a dictionary the writer added (#280) is named in the interface's language
+  let lang = SPELL_LANGUAGE_NAMES[code];
+  if (!lang) { try { lang = new Intl.DisplayNames([NeoI18n.getLocale()], { type: 'language' }).of(code); } catch { lang = code; } }
+  toast(t('Spellcheck: {lang}', { lang }));
 }
 
 // right-click a flagged word for suggestions

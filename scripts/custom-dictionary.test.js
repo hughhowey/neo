@@ -1,0 +1,183 @@
+'use strict';
+
+// Dictionaries the writer adds (#280): an .aff and .dic pair, or a
+// LibreOffice extension (.oxt) holding them, read into UTF-8 under their
+// language, and checked by the same Hunspell helper as NEO's own. Loads
+// main.js the way library-folder.test.js does.
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const vm = require('node:vm');
+const { createRequire } = require('node:module');
+const { describe, test } = require('node:test');
+
+const root = path.join(__dirname, '..');
+const localRequire = createRequire(path.join(root, 'main.js'));
+const JSZip = localRequire('jszip');
+
+function loadMain() {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-dictionary-'));
+  const userData = path.join(base, 'userData');
+  fs.mkdirSync(userData);
+  const electron = {
+    app: {
+      commandLine: { appendSwitch() {} },
+      getPath: (name) => (name === 'userData' ? userData : base),
+      getLocale: () => 'en',
+      requestSingleInstanceLock: () => true,
+      whenReady: () => ({ then() {} }),
+      on() {}
+    },
+    ipcMain: { on() {}, handle() {} },
+    BrowserWindow: { getFocusedWindow: () => null, getAllWindows: () => [] },
+    Menu: { buildFromTemplate: (items) => items, setApplicationMenu() {} },
+    dialog: {},
+    utilityProcess: { fork: () => ({ on() {}, postMessage() {} }) },
+    screen: {}
+  };
+  const context = vm.createContext({
+    require: (name) => name === 'electron' ? electron : localRequire(name),
+    __dirname: root,
+    process: { platform: process.platform, on() {} },
+    console,
+    TextDecoder,
+    Intl,
+    Buffer
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'main.js'), 'utf8'), context, { filename: path.join(root, 'main.js') });
+  return { base, userData, run: (code) => vm.runInContext(code, context), context };
+}
+
+// A small Italian dictionary in ISO-8859-15, as many LibreOffice ones are
+const AFF = 'SET ISO8859-15\nTRY aeiouàèéìòù\n\nSFX S Y 1\nSFX S o i o\n';
+const DIC = '3\ncittà\nperché\nlibro/S\n';
+const latin9 = (s) => Buffer.from(s, 'latin1');
+
+function folderWith(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-dictionary-files-'));
+  for (const [name, data] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), data);
+  return dir;
+}
+
+// the spell helper, run in-process as spellcheck.test.js does
+function spellWorker() {
+  let handle;
+  const waiting = new Map();
+  const context = vm.createContext({
+    require: localRequire,
+    process: { parentPort: { on: (_n, cb) => { handle = cb; }, postMessage: (m) => { const done = waiting.get(m.id); waiting.delete(m.id); if (done) done(m); } } }
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'spell-worker.js'), 'utf8'), context, { filename: path.join(root, 'spell-worker.js') });
+  let id = 0;
+  return (message) => new Promise((resolve) => { const n = ++id; waiting.set(n, resolve); handle({ data: { id: n, ...message } }); });
+}
+
+describe('dictionaries the writer adds', () => {
+  test('an ISO-8859-15 pair is read into UTF-8, under the language its name gives', async () => {
+    const neo = loadMain();
+    const dir = folderWith({ 'it_IT.aff': latin9(AFF), 'it_IT.dic': latin9(DIC) });
+    neo.context.picked = path.join(dir, 'it_IT.dic');
+    const [d] = await neo.run('dictionariesFromFile(picked)');
+    assert.equal(d.code, 'it-IT');
+    assert.match(d.aff, /^SET UTF-8$/m);
+    assert.doesNotMatch(d.aff, /ISO8859/);
+    assert.match(d.aff, /TRY aeiouàèéìòù/);
+    assert.equal(d.dic, DIC);
+  });
+
+  test('Hunspell checks the converted dictionary, accents and affixes included', async () => {
+    const neo = loadMain();
+    neo.context.aff = latin9(AFF);
+    neo.context.dic = latin9(DIC);
+    const d = neo.run('dictionaryFromPair("it_IT", aff, dic)');
+    const dir = folderWith({ 'index.aff': d.aff, 'index.dic': d.dic });
+    const send = spellWorker();
+    assert.equal((await send({ type: 'load', language: d.code, dir })).ok, true);
+    const res = (await send({ type: 'check', words: ['città', 'perché', 'libro', 'libri', 'citta', 'perche'] })).result;
+    assert.deepEqual({ ...res }, { città: true, perché: true, libro: true, libri: true, citta: false, perche: false });
+    assert.ok((await send({ type: 'suggest', word: 'citta' })).result.includes('città'));
+  });
+
+  test('the .aff\'s LANG line names the language before the file name does', () => {
+    const neo = loadMain();
+    neo.context.aff = Buffer.from('SET UTF-8\nLANG pt_PT\n');
+    neo.context.dic = Buffer.from('1\nolá\n');
+    assert.equal(neo.run('dictionaryFromPair("dicionario", aff, dic).code'), 'pt-PT');
+    neo.context.aff = Buffer.from('SET UTF-8\n');
+    assert.equal(neo.run('dictionaryFromPair("de_AT_frami", aff, dic).code'), 'de-AT');
+    assert.equal(neo.run('dictionaryFromPair("it", aff, dic).code'), 'it');
+    // no SET line: UTF-8 is said, so Hunspell doesn't guess
+    neo.context.aff = Buffer.from('TRY abc\n');
+    assert.match(neo.run('dictionaryFromPair("it", aff, dic).aff'), /^SET UTF-8\nTRY abc/);
+  });
+
+  test('a LibreOffice extension: its dictionary, not its hyphenation or thesaurus', async () => {
+    const neo = loadMain();
+    const zip = new JSZip();
+    zip.file('dictionaries/it_IT.aff', latin9(AFF));
+    zip.file('dictionaries/it_IT.dic', latin9(DIC));
+    zip.file('dictionaries/hyph_it_IT.dic', 'ISO8859-1\nLEFTHYPHENMIN 2\n');
+    zip.file('dictionaries/th_it_IT_v2.dat', 'UTF-8\n');
+    zip.file('description.xml', '<description/>');
+    const dir = folderWith({ 'dict-it.oxt': await zip.generateAsync({ type: 'nodebuffer' }) });
+    neo.context.picked = path.join(dir, 'dict-it.oxt');
+    const found = await neo.run('dictionariesFromFile(picked)');
+    assert.deepEqual([...found.map((d) => d.code)], ['it-IT']);
+    assert.equal(found[0].dic, DIC);
+  });
+
+  test('what isn\'t a dictionary is refused, saying why', async () => {
+    const neo = loadMain();
+    const refused = async (files, pick) => {
+      neo.context.picked = path.join(folderWith(files), pick);
+      try { await neo.run('dictionariesFromFile(picked)'); } catch (err) { return err.message; }
+      return null;
+    };
+    assert.equal(await refused({ 'en_US.dic': DIC }, 'en_US.dic'), 'NEO couldn’t find en_US.aff next to en_US.dic. A dictionary is two files with the same name in the same folder, or a single LibreOffice extension (.oxt).');
+    assert.match(await refused({ 'en_US.aff': 'SET UTF-8\n' }, 'en_US.aff'), /^NEO couldn’t find en_US\.dic next to en_US\.aff\./);
+    assert.match(await refused({ 'notes.txt': 'hello' }, 'notes.txt'), /two files with the same name, one ending \.aff and one \.dic/);
+    assert.match(await refused({ 'words.aff': 'SET UTF-8\n', 'words.dic': '1\nciao\n' }, 'words.aff'), /couldn't tell which language/);
+    assert.match(await refused({ 'it_IT.aff': 'SET KLINGON-1\n', 'it_IT.dic': '1\nciao\n' }, 'it_IT.aff'), /character set NEO can't read \(KLINGON-1\)/);
+    assert.match(await refused({ 'it_IT.aff': 'SET UTF-8\n', 'it_IT.dic': Buffer.from([0x31, 0x0a, 0xff, 0xfe, 0x0a]) }, 'it_IT.dic'), /aren't in the character set it names/);
+    assert.match(await refused({ 'it_IT.aff': 'SET UTF-8\n', 'it_IT.dic': 'ciao\n' }, 'it_IT.dic'), /isn't a Hunspell dictionary/);
+    const zip = new JSZip();
+    zip.file('README.txt', 'hello');
+    assert.match(await refused({ 'x.oxt': await zip.generateAsync({ type: 'nodebuffer' }) }, 'x.oxt'), /no spelling dictionary in it/);
+  });
+
+  test('an added dictionary is found by its folder, and one named like a bundled language is used instead of it', () => {
+    const neo = loadMain();
+    const added = path.join(neo.userData, 'dictionaries');
+    for (const code of ['it-IT', 'fr']) {
+      fs.mkdirSync(path.join(added, code), { recursive: true });
+      for (const f of ['index.aff', 'index.dic']) fs.writeFileSync(path.join(added, code, f), 'x');
+    }
+    fs.mkdirSync(path.join(added, 'half-made'), { recursive: true }); // not a language, nothing in it
+    fs.mkdirSync(path.join(added, 'es'), { recursive: true }); // .aff and .dic missing
+    assert.deepEqual(Object.keys(neo.run('addedDictionaries()')).sort(), ['fr', 'it-IT']);
+    assert.equal(neo.run('spellDir("it-IT")'), path.join(added, 'it-IT'));
+    assert.equal(neo.run('spellDir("fr")'), path.join(added, 'fr'));
+    assert.equal(neo.run('spellDir("es")'), path.join(root, 'node_modules', 'dictionary-es'));
+    assert.equal(neo.run('spellDir("xx")'), null);
+    assert.equal(neo.run('languageLabel("it-IT")'), 'Italiano (Italia)');
+    assert.equal(neo.run('languageLabel("es")'), 'Español');
+  });
+
+  test('Add a Dictionary… says what to pick before the file picker opens', async () => {
+    const neo = loadMain();
+    const shown = [];
+    neo.context.answer = 1; // Cancel
+    neo.context.shown = shown;
+    neo.run(`dialog.showMessageBox = async (_w, box) => { shown.push(box); return { response: answer }; };
+      dialog.showOpenDialog = async () => { shown.push('picker'); return { canceled: true, filePaths: [] }; };`);
+    await neo.run('addDictionary()');
+    assert.equal(shown.length, 1);
+    assert.match(shown[0].detail, /LibreOffice extension \(\.oxt\)/);
+    assert.deepEqual([...shown[0].buttons], ['Choose a File…', 'Cancel']);
+    neo.context.answer = 0; // Choose a File…
+    await neo.run('addDictionary()');
+    assert.equal(shown[2], 'picker');
+  });
+});
