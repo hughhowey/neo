@@ -8149,6 +8149,14 @@ const notesKind = (page) => (page === 'book' ? 'notes' : 'notes-' + page);
 // already stays open to the writer
 const notesPageOk = (page) => page === 'book' || (!!book && book.chapterOrder.includes(page) && isStory(page) && (moreOn() || !!notesPeeks[page]));
 
+// ---- notes back target:
+function notesBackTarget(page, previousPage, canOpenPage) {
+  if (page !== 'book') return 'book';
+  if (!previousPage || previousPage === 'book' || !canOpenPage(previousPage)) return null;
+  return previousPage;
+}
+// ---- end notes back target ----
+
 // what a page holds: the text waiting to be saved, else the file
 function readNotesPage(bookId, page) {
   const pending = auxPending[bookId + '/' + notesKind(page)];
@@ -8236,7 +8244,7 @@ function renderNotesNav() {
     item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     list.appendChild(item);
   };
-  row('book', t('The Book'), notesPeeksBook);
+  row('book', t('General notes'), notesPeeksBook);
   // simple NEO lists only the chapter pages that have notes on them
   const shown = (chId) => moreOn() || !!notesPeeks[chId];
   if (!book.chapterOrder.some((c) => isStory(c) && shown(c))) return;
@@ -8278,15 +8286,22 @@ function notesHeading() {
   if (!up) {
     up = document.createElement('button');
     up.id = 'notes-up';
-    up.addEventListener('click', () => openNotesPage('book'));
+    up.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg><span></span>';
+    up.addEventListener('click', () => {
+      const previousPage = tabPlaces.notes && tabPlaces.notes.page;
+      const page = notesBackTarget(notesPage, previousPage, notesPageOk);
+      if (page) openNotesPage(page);
+    });
     $('#aux-title').before(up);
     line = document.createElement('p');
     line.id = 'notes-outline';
     $('#aux-title').after(line);
   }
   const chapter = notesPage !== 'book';
-  up.hidden = !chapter;
-  up.textContent = '‹ ' + t('The Book');
+  const previousPage = tabPlaces.notes && tabPlaces.notes.page;
+  up.classList.toggle('notes-up-right', !chapter);
+  up.hidden = !notesBackTarget(notesPage, previousPage, notesPageOk);
+  up.lastElementChild.textContent = t(chapter ? 'General notes' : 'Chapter notes');
   $('#aux-title').textContent = chapter ? (notesPage === soloStory() ? notesLabel(notesPage) : chapterHeading(notesPage) || notesLabel(notesPage)) : tabName('notes');
   aux.classList.toggle('notes-chapter', chapter);
   notesOutlineLine();
