@@ -2559,6 +2559,7 @@ const SPELL_LANGUAGES = {
   'hu': { label: 'Magyar', pkg: 'dictionary-hu' },
   'ru': { label: 'Русский', pkg: 'dictionary-ru' },
   'sv': { label: 'Svenska', pkg: 'dictionary-sv' },
+  'da': { label: 'Dansk', pkg: 'dictionary-da' },
   'el': { label: 'Ελληνικά', pkg: 'dictionary-el' }
 };
 

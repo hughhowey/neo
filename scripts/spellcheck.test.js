@@ -58,6 +58,57 @@ test('Swedish: accents, inflections, compounds, suggestions and dictionary chang
   assert.equal((await send({ type: 'check', words: ['författare'] })).result.författare, true);
 });
 
+test('Danish: the pinned LibreOffice dictionary, æ ø å, inflections, compounds and suggestions', async () => {
+  const dir = path.join(root, 'node_modules/dictionary-da');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version, '2.9.101');
+  // the files are LibreOffice's, unchanged: their SHA-256 is the one NOTICE.txt gives
+  const notice = fs.readFileSync(path.join(dir, 'NOTICE.txt'), 'utf8');
+  for (const f of ['index.aff', 'index.dic']) {
+    const sum = require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(dir, f))).digest('hex');
+    assert.ok(notice.includes(`${sum}  ${f}`), f);
+  }
+  assert.match(fs.readFileSync(path.join(dir, 'index.aff'), 'utf8'), /^SET UTF-8$/m);
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'da', dir })).ok, true);
+  const good = await send({ type: 'check', words: [
+    'i', 'går', 'jeg', 'hun', 'bog', 'bogen', 'bøger', 'bøgerne', 'huset', 'husene', 'skrive', 'skrev', 'skrevet',
+    'æble', 'æbler', 'Æble', 'øje', 'øjne', 'år', 'årene', 'blåbær', 'kærlighed', 'forfatter', 'forfatterens',
+    'børnebog', 'børnebøger', 'skrivebord', 'sygeplejerske', 'fodboldspiller', 'sommerferie', 'København', 'Øresund', 'Århus', 'Aarhus', 'I'
+  ] });
+  for (const [word, ok] of Object.entries(good.result)) assert.equal(ok, true, word);
+  const bad = await send({ type: 'check', words: ['forfater', 'kærlihed', 'aeble', 'oejne', 'sygeplejeske', 'fodbolspiller', 'gaaet', 'hjemmme'] });
+  for (const [word, ok] of Object.entries(bad.result)) assert.equal(ok, false, word);
+  for (const [typo, fix] of [['forfater', 'forfatter'], ['kærlihed', 'kærlighed'], ['aeble', 'æble'], ['oejne', 'øjne'], ['gaaet', 'gået'], ['fodbolspiller', 'fodboldspiller']]) {
+    assert.ok((await send({ type: 'suggest', word: typo })).result.includes(fix), typo);
+  }
+  // a word learned with æ ø å is known straight away
+  assert.equal((await send({ type: 'check', words: ['Sølvgråbjørn'] })).result.Sølvgråbjørn, false);
+  await send({ type: 'add', word: 'Sølvgråbjørn' });
+  assert.equal((await send({ type: 'check', words: ['Sølvgråbjørn'] })).result.Sølvgråbjørn, true);
+  // and back and forth with English
+  assert.equal((await send({ type: 'load', language: 'en-US', dir: path.join(root, 'node_modules/dictionary-en-us') })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['blåbær'] })).result.blåbær, false);
+  assert.equal((await send({ type: 'load', language: 'da', dir })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['blåbær'] })).result.blåbær, true);
+});
+
+test('Danish ships with its license on desktop and in Pocket', () => {
+  const pkg = JSON.parse(source('package.json'));
+  assert.equal(pkg.dependencies['dictionary-da'], 'file:dictionaries/da');
+  assert.ok(pkg.build.asarUnpack.includes('node_modules/dictionary-da/**'));
+  const da = JSON.parse(source('dictionaries/da/package.json'));
+  assert.equal(da.license, '(GPL-2.0-only OR LGPL-2.1-only OR MPL-1.1)');
+  for (const f of da.files) assert.ok(fs.existsSync(path.join(root, 'dictionaries/da', f)), f);
+  for (const f of ['index.aff', 'index.dic', 'NOTICE.txt', 'MPL-1.1.txt', 'README_da_DK.txt']) assert.ok(da.files.includes(f), f);
+  assert.match(source('dictionaries/da/MPL-1.1.txt'), /MOZILLA PUBLIC LICENSE\s+Version 1\.1/);
+  assert.match(source('dictionaries/da/README_da_DK.txt'), /Mozilla MPL version 1\.1/);
+  // Pocket: the list desktop offers, with the notice copied beside the data
+  assert.match(source('main.js'), /'da': \{ label: 'Dansk', pkg: 'dictionary-da' \}/);
+  const pocket = source('scripts/pocket-www.js');
+  assert.match(pocket, /path\.join\(root, 'dictionaries', code\)/);
+  assert.match(pocket, /meta\.files/);
+});
+
 function spellWorker() {
   let handle, reply;
   const context = vm.createContext({
@@ -261,7 +312,7 @@ test('spellcheck follows the interface until a dictionary is picked; nothing is 
   }
 
   // a dictionary picked in Edit → Spellcheck Language wins, whatever the interface
-  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv']) {
+  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv', 'da']) {
     const explicit = mainContext(temp, 'ro-RO', {}, { spellLanguage: code });
     assert.equal(explicit.loads[0].language, code);
     assert.equal(explicit.read().spellLanguage, code);
@@ -269,6 +320,16 @@ test('spellcheck follows the interface until a dictionary is picked; nothing is 
     assert.equal(explicit.loads.length, 1);
     await Promise.resolve();
   }
+
+  // Danish spellcheck with an English interface: nothing else changes with it
+  const danish = mainContext(temp, 'en-US', {}, { spellLanguage: 'da' });
+  assert.equal(danish.loads[0].language, 'da');
+  assert.match(danish.loads[0].dir, /dictionary-da$/);
+  vm.runInContext('setUiLanguage("en")', danish.context);
+  assert.equal(vm.runInContext('spellLanguage', danish.context), 'da');
+  assert.equal(danish.read().spellLanguage, 'da');
+  assert.equal(await danish.handlers.get('spell:setLanguage')(null, 'da'), true);
+  await Promise.resolve();
 
   // a library.json that doesn't parse is never touched
   const broken = '{"shelves": [{"id": "shelf-1", "name": "Mine"';

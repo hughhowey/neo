@@ -1,0 +1,32 @@
+Danish spelling dictionary
+
+NEO distributes the dictionary and affix data of Stavekontrolden 2.9.101
+(7 June 2026), as published by the LibreOffice project, under its
+Mozilla Public License 1.1 option. The alternatives, the GNU General
+Public License 2.0 and the GNU Lesser General Public License 2.1, are
+not removed. NEO's MIT license does not replace the dictionary's.
+
+Copyright 2026 Foreningen for frit tilgængelige sprogværktøjer,
+http://www.stavekontrolden.dk. Based on data from Det Danske Sprog- og
+Litteraturselskab, https://dsl.dk.
+The upstream notice is README_da_DK.txt; the selected license is MPL-1.1.txt.
+
+Source availability
+
+index.aff and index.dic are LibreOffice's da_DK/da_DK.aff and
+da_DK/da_DK.dic, unchanged but for their names. They ship with every
+packaged app, beside this notice, in
+  app.asar.unpacked/node_modules/dictionary-da/
+and in NEO Pocket in dict/da/.
+
+Upstream: https://github.com/LibreOffice/dictionaries/tree/cdaeab266e35c0f1ce367629c7f2079c64fe9351/da_DK
+(commit cdaeab266e35c0f1ce367629c7f2079c64fe9351, 2026-06-18)
+Dictionary project: http://www.stavekontrolden.dk
+
+SHA-256
+  ee4fe193d19b72aa64bc0d2b9bcdf44ee44f11d9b4e7dcf6da36fd0e91528561  index.aff
+  298aabeca362ee2c71836c5c7748d22080a460bd7193e6fbd2471f27a70d0fd3  index.dic
+
+NEO's own spellcheck (WebAssembly Hunspell) never asked for these files
+in another form: Hunspell reads them as distributed. The thesaurus and
+hyphenation files of the same upstream folder are not included.

@@ -4838,6 +4838,7 @@ const QUOTE_STYLES = {
   el: { open: '«', close: '»' },
   hu: { open: '„', close: '”' },
   sv: { open: '”', close: '”' },
+  da: { open: '»', close: '«' },                          // »…« (or „…“, kept by bookQuotes)
   ko: { open: '“', close: '”', singles: true }            // ‘…’ inside, as in English
 };
 // The single quotation marks, where ' types them: English and Dutch ‘…’;
@@ -4877,8 +4878,8 @@ function bookQuotes(el) {
   const text = !body ? '' : body.children ? [...body.children].map((p) => p.textContent).join('\n') : body.textContent;
   let c = opens(text);
   if (!c['»'] && !c['«'] && !c['„'] && !c.own && book) c = opens(book.chapterOrder.map((id) => chapterHTML[id] || '').join(' '));
-  // a German book already written in „…“ keeps its marks
-  if (c['„'] > c.own && c['„'] >= c['»'] && c['„'] >= c['«'] && writingLanguage().toLowerCase().startsWith('de')) return { open: '„', close: '“' };
+  // a German or Danish book already written in „…“ keeps its marks
+  if (c['„'] > c.own && c['„'] >= c['»'] && c['„'] >= c['«'] && /^(de|da)\b/i.test(writingLanguage())) return { open: '„', close: '“' };
   if (c['»'] > c.own && c['»'] >= c['«']) return { open: '»', close: writingLanguage().split('-')[0] === 'sv' ? '»' : '«' };
   if (c['«'] > c.own && c['«'] > c['»']) return { open: '«', close: '»' };
   return q;
@@ -14493,7 +14494,9 @@ async function spellScanEl(el, key) {
 // Mid-paragraph, only a full stop ends a sentence: "Oh! how lovely",
 // "— Quanto falta? — perguntou ele" and "…and then" are the writer's.
 const capsRanges = new Map(); // key → [Range]
-const CAPS_ABBREV = new Set(['mr', 'mrs', 'ms', 'dr', 'st', 'jr', 'sr', 'vs', 'etc', 'e.g', 'i.e', 'cf', 'approx', 'no', 'vol', 'pp', 'p', 'fig', 'ca', 'mt', 'ft', 'lt', 'sgt', 'capt', 'col', 'gen', 'prof', 'rev', 'hon', 'inc', 'ltd', 'co', 'ave', 'a.m', 'p.m', 'sra', 'sr', 'srta', 'dra', 'av', 'ex', 'z.b', 'bzw', 'ggf', 'usw', 'm', 'mme', 'mlle']);
+const CAPS_ABBREV = new Set(['mr', 'mrs', 'ms', 'dr', 'st', 'jr', 'sr', 'vs', 'etc', 'e.g', 'i.e', 'cf', 'approx', 'no', 'vol', 'pp', 'p', 'fig', 'ca', 'mt', 'ft', 'lt', 'sgt', 'capt', 'col', 'gen', 'prof', 'rev', 'hon', 'inc', 'ltd', 'co', 'ave', 'a.m', 'p.m', 'sra', 'sr', 'srta', 'dra', 'av', 'ex', 'z.b', 'bzw', 'ggf', 'usw', 'm', 'mme', 'mlle',
+  // Danish: "vi købte f.eks. æbler" goes on in lowercase
+  'f.eks', 'bl.a', 'dvs', 'osv', 'mv', 'evt', 'jf', 'kl', 'nr', 'pga', 'mht', 'inkl']);
 function capitalSlips(el) {
   const out = [];
   if (typeof el.matches !== 'function' || !el.matches('.chapter-body')) return out;
@@ -14592,7 +14595,7 @@ function toggleSpellcheck() {
 const SPELL_LANGUAGE_NAMES = {
   'en-US': t('US English'), 'en-GB': t('UK English'), 'en-CA': t('Canadian English'),
   'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'),
-  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), hu: t('Hungarian'), sv: t('Swedish')
+  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
 };
 async function changeSpellLanguage(code) {
   const ok = await window.neo.setSpellLanguage(code);

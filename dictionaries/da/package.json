@@ -1,0 +1,7 @@
+{
+  "name": "dictionary-da",
+  "version": "2.9.101",
+  "description": "Danish Hunspell dictionary (Stavekontrolden 2.9.101), as shipped by LibreOffice",
+  "license": "(GPL-2.0-only OR LGPL-2.1-only OR MPL-1.1)",
+  "files": ["index.aff", "index.dic", "README_da_DK.txt", "NOTICE.txt", "MPL-1.1.txt"]
+}
