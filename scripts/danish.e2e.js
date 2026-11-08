@@ -44,6 +44,19 @@ const tick = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function type(text) {
   for (const c of text) {
+    // sendInputEvent has no key name for æ ø å: its keydown arrives with
+    // e.key '' (the character itself still comes). A Danish keyboard's
+    // keydown says 'æ', so send that one from the page, and the character
+    // after it unless the keydown was taken (as autoCapKey takes it).
+    if (/[^\x20-\x7e]/.test(c)) {
+      await js(`(() => {
+        const ev = new KeyboardEvent('keydown', { key: ${JSON.stringify(c)}, bubbles: true, cancelable: true });
+        document.activeElement.dispatchEvent(ev);
+        if (!ev.defaultPrevented) document.execCommand('insertText', false, ${JSON.stringify(c)});
+      })()`);
+      await tick(60);
+      continue;
+    }
     const keyCode = c === ' ' ? 'Space' : c;
     wc.sendInputEvent({ type: 'keyDown', keyCode });
     wc.sendInputEvent({ type: 'char', keyCode: c });
