@@ -20,7 +20,7 @@ NEO currently speaks:
 | `ko` | 한국어 | complete, machine-assisted: native review welcome |
 | `vi` | Tiếng Việt | complete |
 
-Spellchecking (Edit → Spellcheck Language) covers English, French, Spanish, German, Dutch, Polish, Brazilian Portuguese, Romanian, Russian, Hungarian and Swedish. The engine is Hunspell itself, compiled to WebAssembly, so every dictionary loads in well under a second. Italian is left out because the only Hunspell dictionary on npm is GPL-3.0-only, which does not sit well in an MIT app. The Brazilian Portuguese interface starts with the Brazilian dictionary; the European Portuguese interface leaves the choice to the writer, since spellings differ.
+Spellchecking (Edit → Spellcheck Language) covers English, French, Spanish, German, Dutch, Polish, Brazilian Portuguese, Romanian, Russian, Hungarian, Swedish and Danish. The engine is Hunspell itself, compiled to WebAssembly, so every dictionary loads in well under a second. Italian is left out because the only Hunspell dictionary on npm is GPL-3.0-only, which does not sit well in an MIT app. The Brazilian Portuguese interface starts with the Brazilian dictionary; the European Portuguese interface leaves the choice to the writer, since spellings differ.
 
 Spellcheck starts off on every launch. Choosing a dictionary does not turn it on. If the interface starts in Romanian and the library has no saved spellcheck language, NEO selects and saves Romanian. Explicit dictionary choices survive interface-language changes. Other interface languages keep their existing defaults.
 
@@ -29,6 +29,29 @@ Romanian lookup accepts standard diacritics, legacy `ş/ţ`, and decomposed Unic
 The Swedish dictionary (`sv`, **Svenska** in Edit → Spellcheck Language) is Göran Andersson's LibreOffice dictionary, pinned as `dictionary-sv` 4.0.0. Its data is LGPL 3.0, separately from NEO's MIT license. Desktop and Pocket distribute the unmodified `.aff`/`.dic` source files with attribution and the full LGPL/GPL license texts (`licenses/dictionary-sv`). This adds spellchecking only, not a Swedish interface translation.
 
 The Hungarian dictionary is LibreOffice's Magyar Ispell 1.9, kept in `dictionaries/hu` (the npm `dictionary-hu` package rejected common accusatives like *könyvet*). They are underlined in blue; right-click shows the fix and why. Each rule is a plain pattern run on the writer's computer, and fires only where a mistake is very likely.
+
+### Danish
+
+The Danish dictionary (`da`, **Dansk** in Edit → Spellcheck Language) is Stavekontrolden 2.9.101 (7 June 2026), as LibreOffice ships it, kept in `dictionaries/da`. NEO has no Danish interface: a writer can keep NEO in English (or any language) and spellcheck and type in Danish. Like every spellcheck language, Dansk sits behind File → Show More Features, is saved as `spellLanguage` in library.json, survives a change of interface language, and does not turn spellcheck on by itself.
+
+- **Source.** `index.aff` and `index.dic` are `da_DK/da_DK.aff` and `da_DK/da_DK.dic` from [LibreOffice/dictionaries](https://github.com/LibreOffice/dictionaries/tree/cdaeab266e35c0f1ce367629c7f2079c64fe9351/da_DK) at commit `cdaeab266e35c0f1ce367629c7f2079c64fe9351`, byte for byte, renamed only. Their SHA-256 sums are in `dictionaries/da/NOTICE.txt`, and the tests check them. The thesaurus and hyphenation files are left out. (The npm package `dictionary-da` carries the older 2.8.034.)
+- **License.** © Foreningen for frit tilgængelige sprogværktøjer, offered under GPL 2.0, LGPL 2.1 or MPL 1.1. NEO distributes it under MPL 1.1, separately from NEO's MIT license, with the upstream notice (`README_da_DK.txt`), `NOTICE.txt` and the full `MPL-1.1.txt` beside the data, on desktop (`app.asar.unpacked/node_modules/dictionary-da/`) and in Pocket (`dict/da/`).
+- **Writing.** `i` (in) stays lowercase and a typed `I` (you) stays as typed: turning `i` into `I`, as you type and in the spellcheck's capital check, is English only. Sentences still start with a capital, and the common abbreviations *f.eks., bl.a., dvs., osv., mv., evt., jf., kl., nr., pga., mht., inkl.* don't end one (`CAPS_ABBREV` in `app.js`; as with *etc.*, a sentence ending in *osv.* leaves the next capital to the writer). Quotation marks are »…«, one of the forms Danish uses (with „…“ and ”…”); a book already set in „…“ keeps it. `'` is the apostrophe ’.
+- **Compounds.** Hunspell takes compounds it can build from known words, so some typos that make two real words (*skrivebrod*: skrive + brod) pass.
+
+To update the dictionary:
+
+```
+C=<LibreOffice/dictionaries commit>
+B=https://raw.githubusercontent.com/LibreOffice/dictionaries/$C/da_DK
+curl -fsSL -o dictionaries/da/index.aff $B/da_DK.aff
+curl -fsSL -o dictionaries/da/index.dic $B/da_DK.dic
+curl -fsSL -o dictionaries/da/README_da_DK.txt $B/README_da_DK.txt
+head -3 dictionaries/da/index.aff     # version line; the license block follows
+sha256sum dictionaries/da/index.aff dictionaries/da/index.dic
+```
+
+Check that the license block in `index.aff` and `README_da_DK.txt` still offers MPL 1.1. Then put the commit, version and sums in `dictionaries/da/NOTICE.txt`, the version in `dictionaries/da/package.json` and in the Danish test in `scripts/spellcheck.test.js`, run `npm install --install-links=false` and `npm test`.
 
 If you speak one of these and something reads oddly, a pull request that fixes a line is the most welcome contribution there is.
 
@@ -73,11 +96,11 @@ So `fr-CA.json` is short: in Quebec, "courriel" instead of "e-mail", and no spac
 
 ## Typing in each language
 
-While writing, NEO sets the quotation marks of the language being written: the spellcheck language when one is chosen, otherwise NEO's own language. « » for French (with narrow no-break spaces), Spanish, Italian, European Portuguese and Russian; „ “ for German; „ ” for Polish, Romanian and Hungarian; “ ” for English, Dutch, Brazilian Portuguese and Korean; ” ” for Swedish. Swedish books set in »…» keep that style. The apostrophe is always ’. French also gets a narrow no-break space before ; : ! ? (before : only in Canadian French). The table is `QUOTE_STYLES` in `app.js`.
+While writing, NEO sets the quotation marks of the language being written: the spellcheck language when one is chosen, otherwise NEO's own language. « » for French (with narrow no-break spaces), Spanish, Italian, European Portuguese and Russian; „ “ for German; „ ” for Polish, Romanian and Hungarian; “ ” for English, Dutch, Brazilian Portuguese and Korean; ” ” for Swedish; » « for Danish. Swedish books set in »…» keep that style, and Danish books set in „…“ keep theirs. The apostrophe is always ’. French also gets a narrow no-break space before ; : ! ? (before : only in Canadian French). The table is `QUOTE_STYLES` in `app.js`.
 
 A book that has settled on other guillemets keeps them: in a German novel set in »…«, or Swiss writing in «…», type the first mark by hand and NEO carries on in that style (`bookQuotes` in `app.js`).
 
-Imports recognize chapter headings in all these languages (`CHAPTER_WORDS` in `main.js`), and cover titles treat each language's small words like "of" and "the" (`CONNECTORS` in `covers.js`).
+Imports recognize chapter headings in all these interface languages (`CHAPTER_WORDS` in `main.js`), and cover titles treat each language's small words like "of" and "the" (`CONNECTORS` in `covers.js`).
 
 ## Fonts in other alphabets
 

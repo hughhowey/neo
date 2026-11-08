@@ -29,6 +29,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `spell-worker.js` | Hunspell WASM, forked with `utilityProcess`. Messages: `load`, `check`, `suggest`, `add` |
 | `backup-worker.js` | The day's backup zip, forked with `utilityProcess` by `dailyBackup` so a file that won't come off iCloud never holds the main process |
 | `spell-ro.js` | Romanian diacritics, used by the worker. Does not alter the manuscript |
+| `dictionaries/<code>/` | Dictionaries NEO keeps itself (Hungarian, Danish), each a local `dictionary-<code>` package with its notice and license; see TRANSLATING.md |
 | `manuscript.js` | Standard manuscript format: the word count's rounding, the header's surname, the `.docx`'s parts and the PDF's page, from a model the window hands it. Plain JavaScript that also runs in Node (`window.NeoManuscript`, loaded by `index.html`) |
 | `locales/<code>.json` | One language. Regional files (`fr-CA.json`) hold only the strings that differ |
 | `pocket/` | Capacitor shell. It does not contain its own editor |
