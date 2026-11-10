@@ -81,10 +81,11 @@ describe('dictionaries the writer adds', () => {
     neo.context.picked = path.join(dir, 'it_IT.dic');
     const [d] = await neo.run('dictionariesFromFile(picked)');
     assert.equal(d.code, 'it-IT');
-    assert.match(d.aff, /^SET UTF-8$/m);
-    assert.doesNotMatch(d.aff, /ISO8859/);
-    assert.match(d.aff, /TRY aeiouàèéìòù/);
-    assert.equal(d.dic, DIC);
+    const aff = d.aff.toString();
+    assert.match(aff, /^SET UTF-8\nFLAG UTF-8$/m);
+    assert.doesNotMatch(aff, /ISO8859/);
+    assert.match(aff, /TRY aeiouàèéìòù/);
+    assert.equal(d.dic.toString(), DIC);
   });
 
   test('Hunspell checks the converted dictionary, accents and affixes included', async () => {
@@ -100,6 +101,31 @@ describe('dictionaries the writer adds', () => {
     assert.ok((await send({ type: 'suggest', word: 'citta' })).result.includes('città'));
   });
 
+  test('flags, a missing SET, a byte order mark and a UTF-8 .aff with raw bytes all check as Hunspell reads them', async () => {
+    const neo = loadMain();
+    const checks = async (aff, dic, words) => {
+      neo.context.aff = aff;
+      neo.context.dic = dic;
+      const d = neo.run('dictionaryFromPair("it_IT", aff, dic)');
+      const send = spellWorker();
+      assert.equal((await send({ type: 'load', language: d.code, dir: folderWith({ 'index.aff': d.aff, 'index.dic': d.dic }) })).ok, true);
+      return { ...(await send({ type: 'check', words })).result };
+    };
+    // é and è as flags share a first byte in UTF-8: each must keep its own rule
+    assert.deepEqual(await checks(
+      latin9('SET ISO8859-1\nSFX é Y 1\nSFX é o i o\nSFX è Y 1\nSFX è o a o\n'), latin9('2\nlibro/é\ngatto/è\n'),
+      ['libri', 'libra', 'gatta', 'gatti']), { libri: true, libra: false, gatta: true, gatti: false });
+    // no SET: Hunspell's own default, ISO-8859-1
+    assert.deepEqual(await checks(latin9('SFX S Y 1\nSFX S o i o\n'), latin9('2\ncittà\nlibro/S\n'), ['città', 'libri']), { città: true, libri: true });
+    // a byte order mark before SET on the first line
+    assert.deepEqual(await checks(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), latin9(AFF)]), latin9(DIC), ['perché', 'libri']), { perché: true, libri: true });
+    // a UTF-8 .aff whose flag aliases aren't UTF-8 (like the Hungarian one) is kept as it is
+    const raw = Buffer.concat([Buffer.from('SET UTF-8\nAF 1\nAF '), Buffer.from([0xd2, 0x53]), Buffer.from('\nSFX S Y 1\nSFX S o i o\n')]);
+    assert.deepEqual(await checks(raw, Buffer.from('2\nlibro/1\ncittà\n'), ['libri', 'città']), { libri: true, città: true });
+    neo.context.aff = raw;
+    assert.ok(neo.run('dictionaryFromPair("hu_HU", aff, Buffer.from("1\\nház\\n")).aff').equals(raw));
+  });
+
   test('the .aff\'s LANG line names the language before the file name does', () => {
     const neo = loadMain();
     neo.context.aff = Buffer.from('SET UTF-8\nLANG pt_PT\n');
@@ -110,7 +136,7 @@ describe('dictionaries the writer adds', () => {
     assert.equal(neo.run('dictionaryFromPair("it", aff, dic).code'), 'it');
     // no SET line: UTF-8 is said, so Hunspell doesn't guess
     neo.context.aff = Buffer.from('TRY abc\n');
-    assert.match(neo.run('dictionaryFromPair("it", aff, dic).aff'), /^SET UTF-8\nTRY abc/);
+    assert.match(neo.run('dictionaryFromPair("it", aff, dic).aff.toString()'), /^SET UTF-8\nTRY abc/);
   });
 
   test('a LibreOffice extension: its dictionary, not its hyphenation or thesaurus', async () => {
@@ -125,7 +151,7 @@ describe('dictionaries the writer adds', () => {
     neo.context.picked = path.join(dir, 'dict-it.oxt');
     const found = await neo.run('dictionariesFromFile(picked)');
     assert.deepEqual([...found.map((d) => d.code)], ['it-IT']);
-    assert.equal(found[0].dic, DIC);
+    assert.equal(found[0].dic.toString(), DIC);
   });
 
   test('what isn\'t a dictionary is refused, saying why', async () => {

@@ -2597,33 +2597,81 @@ function languageLabel(code) {
 }
 
 // An .aff and .dic pair read as one dictionary: its language (the .aff's
-// LANG line, else the file name: it_IT.aff → it-IT) and both files in UTF-8.
-// Throws an Error whose message the writer reads.
-function dictionaryFromPair(name, affBuf, dicBuf) {
-  const affLatin = Buffer.from(affBuf).toString('latin1');
-  const set = (/^SET\s+(\S+)/m.exec(affLatin) || [])[1] || 'UTF-8';
-  const label = set.replace(/^microsoft-cp(\d+)$/i, 'windows-$1').replace(/^ISO8859/i, 'iso-8859');
-  let decoder;
-  try { decoder = new TextDecoder(label, { fatal: true }); } catch {
-    throw new Error(t('It uses a character set NEO can\'t read ({set}).', { set }));
-  }
-  let aff, dic;
-  try {
-    aff = decoder.decode(affBuf).replace(/^﻿/, '');
-    dic = decoder.decode(dicBuf).replace(/^﻿/, '');
-  } catch {
-    throw new Error(t('Its files aren\'t in the character set it names ({set}).', { set }));
-  }
-  if (/^SET\s/m.test(aff)) aff = aff.replace(/^SET\s+\S+/m, 'SET UTF-8');
-  else aff = 'SET UTF-8\n' + aff;
-  const tag = (s) => {
-    const m = /^([a-z]{2,3})(?:[_-]([A-Za-z]{2}))?(?![A-Za-z])/.exec(String(s || ''));
-    return m ? m[1] + (m[2] ? '-' + m[2].toUpperCase() : '') : null;
+// LANG line, else the file name: it_IT.aff → it-IT) and both files as
+// Hunspell will read them in UTF-8, as buffers. Throws an Error whose message
+// the writer reads.
+function dictionaryFromPair(name, affBuffer, dicBuffer) {
+  // Until the character set is known, the files are read as latin1: it turns
+  // each byte into the one character with the same number, so the text can be
+  // searched and turned back into exactly the same bytes.
+  const bytesToText = (buffer) => Buffer.from(buffer).toString('latin1');
+  const textToBytes = (text) => Buffer.from(text, 'latin1');
+  const withoutByteOrderMark = (text) => text.replace(/^\xef\xbb\xbf/, '');
+  let affText = withoutByteOrderMark(bytesToText(affBuffer));
+  let dicText = withoutByteOrderMark(bytesToText(dicBuffer));
+
+  const isValidUtf8 = (text) => {
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(textToBytes(text));
+      return true;
+    } catch {
+      return false;
+    }
   };
-  const code = tag((/^LANG\s+(\S+)/m.exec(aff) || [])[1]) || tag(name);
+  // A .dic line is a word, then optionally /flags and a tab with notes. Only
+  // the words must be in the character set; the flags follow the .aff's FLAG.
+  const wordsOnly = (text) => text.split('\n')
+    .map((line) => line.replace(/(?<=[^\\])\/.*|\t.*/, ''))
+    .join('\n');
+
+  const setLine = /^SET[ \t]+(\S+)/m;
+  const namedSet = (setLine.exec(affText) || [])[1];
+  // With no SET line Hunspell reads ISO-8859-1, unless the words are plainly UTF-8
+  const characterSet = namedSet ||
+    (isValidUtf8(affText) && isValidUtf8(wordsOnly(dicText)) ? 'UTF-8' : 'ISO8859-1');
+  const notInItsSet = () => new Error(t('Its files aren\'t in the character set it names ({set}).', { set: characterSet }));
+
+  let files;
+  if (/^utf-?8$/i.test(characterSet)) {
+    // Kept byte for byte: Hunspell reads them as they are, and an .aff's flags
+    // needn't be UTF-8 (the Hungarian one's aren't). Its words must be.
+    if (!isValidUtf8(wordsOnly(dicText))) throw notInItsSet();
+    affText = namedSet ? affText.replace(setLine, 'SET UTF-8') : 'SET UTF-8\n' + affText;
+    files = { aff: textToBytes(affText), dic: textToBytes(dicText) };
+  } else {
+    // TextDecoder knows these sets by other names
+    const decoderName = characterSet
+      .replace(/^microsoft-cp(\d+)$/i, 'windows-$1')
+      .replace(/^ISO8859/i, 'iso-8859');
+    let decoder;
+    try {
+      decoder = new TextDecoder(decoderName, { fatal: true });
+    } catch {
+      throw new Error(t('It uses a character set NEO can\'t read ({set}).', { set: characterSet }));
+    }
+    try {
+      affText = decoder.decode(textToBytes(affText));
+      dicText = decoder.decode(textToBytes(dicText));
+    } catch {
+      throw notInItsSet();
+    }
+    // Flags like é and è are one byte each here, but in UTF-8 they share their
+    // first byte. FLAG UTF-8 has Hunspell read each flag as a whole character.
+    const header = /^FLAG\s/m.test(affText) ? 'SET UTF-8' : 'SET UTF-8\nFLAG UTF-8';
+    affText = namedSet ? affText.replace(setLine, header) : header + '\n' + affText;
+    files = { aff: Buffer.from(affText), dic: Buffer.from(dicText) };
+  }
+
+  const languageTag = (text) => {
+    const match = /^([a-z]{2,3})(?:[_-]([A-Za-z]{2}))?(?![A-Za-z])/.exec(String(text || ''));
+    if (!match) return null;
+    const [, language, region] = match;
+    return region ? language + '-' + region.toUpperCase() : language;
+  };
+  const code = languageTag((/^LANG\s+(\S+)/m.exec(affText) || [])[1]) || languageTag(name);
   if (!code) throw new Error(t('NEO couldn\'t tell which language it is for. Name its files after the language, like en_US.aff and en_US.dic.'));
-  if (!/^\d+/.test(dic.trimStart())) throw new Error(t('Its .dic file doesn\'t start with a word count, so it isn\'t a Hunspell dictionary.'));
-  return { code, aff, dic };
+  if (!/^\d+/.test(dicText.trimStart())) throw new Error(t('Its .dic file doesn\'t start with a word count, so it isn\'t a Hunspell dictionary.'));
+  return { code, ...files };
 }
 
 // What the writer picked → the dictionaries in it. A .oxt (or .zip) can hold
