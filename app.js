@@ -7719,9 +7719,11 @@ function renderNav() {
   navRefreshPending = false;
   if (isScript()) { renderScriptNav(); return; }
   const list = $('#nav-list');
-  // a keyboard user on a chapter row keeps their place through the rebuild
-  const focusedRow = document.activeElement && document.activeElement.classList.contains('n-row') &&
-    document.activeElement.matches(':focus-visible') ? document.activeElement.closest('.nav-item').dataset.id : null;
+  // a keyboard user in the chapter pane keeps their place through the rebuild
+  const focused = list.contains(document.activeElement) &&
+    document.activeElement.matches('.n-row:focus-visible, .nav-note-edit:focus-visible') ? document.activeElement : null;
+  const focusedId = focused?.closest('.nav-item').dataset.id;
+  const focusedEdit = focused?.classList.contains('nav-note-edit');
   list.innerHTML = '';
   book.chapterNotes = book.chapterNotes || {};
   const solo = soloStory();
@@ -7761,16 +7763,16 @@ function renderNav() {
       ? (book.title ? shownTitle(book.title) : t('The story'))
       : (chTitle ? `${chapterMark(chId)} · ${chTitle}` : chapterName(chId));
 
-    // the row is the drag handle, so the note below stays freely editable
     const rowEl = item.querySelector('.n-row');
-    rowEl.draggable = true;
-    rowEl.addEventListener('dragstart', (e) => {
+    const dragHandle = story && !IS_POCKET ? item : rowEl;
+    dragHandle.draggable = true;
+    dragHandle.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('application/x-neo-chapter', chId);
       chapterDragActive = true;
       $('#nav-pane').classList.add('open');
       item.classList.add('dragging');
     });
-    rowEl.addEventListener('dragend', finishChapterDrag);
+    dragHandle.addEventListener('dragend', finishChapterDrag);
     // right-click: what it is, or Delete
     item.addEventListener('contextmenu', (e) => {
       if (IS_POCKET) { e.preventDefault(); return; } // on a phone this pane is for hopping
@@ -7787,25 +7789,61 @@ function renderNav() {
       note.textContent = book.chapterNotes[chId] || '';
       item.appendChild(note);
     } else if (story) {
-      // outline your whole book from this panel:
+      const noteRow = document.createElement('div');
+      noteRow.className = 'nav-note-row';
       const note = document.createElement('div');
       note.className = 'nav-note';
-      note.contentEditable = 'true';
+      note.contentEditable = 'false';
       note.spellcheck = false;
       note.textContent = book.chapterNotes[chId] || '';
-      note.setAttribute('role', 'textbox');
-      note.setAttribute('aria-label', t('Outline note'));
-      note.setAttribute('aria-placeholder', t('What happens here…'));
-      note.addEventListener('click', (e) => e.stopPropagation());
+      const editNote = document.createElement('button');
+      editNote.type = 'button';
+      editNote.className = 'nav-note-edit';
+      editNote.textContent = '✎';
+      editNote.title = t('Edit description');
+      editNote.setAttribute('aria-label', editNote.title);
+      editNote.addEventListener('mousedown', (e) => {
+        if (e.button === 0) e.preventDefault(); // keep a press on the pencil out of the card's drag
+      });
+      let restoreEditFocus = false;
+      editNote.addEventListener('click', (e) => {
+        e.stopPropagation();
+        restoreEditFocus = e.detail === 0;
+        item.draggable = false;
+        note.contentEditable = 'true';
+        note.setAttribute('role', 'textbox');
+        note.setAttribute('aria-label', t('Outline note'));
+        note.setAttribute('aria-placeholder', t('What happens here…'));
+        note.focus({ preventScroll: true });
+        editNote.disabled = true;
+      });
+      note.addEventListener('click', (e) => {
+        if (note.isContentEditable) e.stopPropagation();
+      });
       note.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); note.blur(); }
+        if (e.key === 'Enter' && !e.isComposing) {
+          e.preventDefault();
+          note.blur();
+          if (restoreEditFocus) editNote.focus({ preventScroll: true });
+        }
         e.stopPropagation();
       });
       note.addEventListener('blur', () => {
-        book.chapterNotes[chId] = note.textContent.trim();
-        scheduleMetaSave();
+        const text = note.textContent.trim();
+        note.contentEditable = 'false';
+        note.removeAttribute('role');
+        note.removeAttribute('aria-label');
+        note.removeAttribute('aria-placeholder');
+        note.textContent = text;
+        item.draggable = true;
+        editNote.disabled = false;
+        if (text !== (book.chapterNotes[chId] || '')) {
+          book.chapterNotes[chId] = text;
+          scheduleMetaSave();
+        }
       });
-      item.appendChild(note);
+      noteRow.append(note, editNote);
+      item.appendChild(noteRow);
     } else if (kind !== 'contents') {
       // a page shows the start of what it says
       const peek = document.createElement('div');
@@ -7835,7 +7873,10 @@ function renderNav() {
     ].filter(Boolean).join(', '));
     list.appendChild(gap(i));
     list.appendChild(item);
-    if (chId === focusedRow) rowEl.focus({ preventScroll: true });
+    if (chId === focusedId) {
+      const control = focusedEdit ? item.querySelector('.nav-note-edit') || rowEl : rowEl;
+      control.focus({ preventScroll: true });
+    }
   });
   list.appendChild(gap(book.chapterOrder.length));
   justAddedEntry = null;
