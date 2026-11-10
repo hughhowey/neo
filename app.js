@@ -4401,6 +4401,17 @@ function refreshDropCaps(remeasure = false) {
   }
 }
 if (document.fonts) document.fonts.addEventListener('loadingdone', () => refreshDropCaps(true));
+// Words copied, cut or dragged out to another program take the paragraph's
+// look with them, and the opening paragraph's would carry the little pull
+// back that tucks its letter under the cap: in Word or an email, a first
+// line hanging out to the left. For the moment the copy is made, that
+// paragraph is set flush (nothing is drawn in between).
+for (const type of ['copy', 'cut', 'dragstart']) {
+  document.addEventListener(type, () => {
+    document.body.classList.add('cap-copying');
+    setTimeout(() => document.body.classList.remove('cap-copying'), 0);
+  }, true);
+}
 // In focus mode selected text is given its full ink back, and the unseen
 // letter with it. While a selection takes that letter in, the cap stands on a
 // patch of the page's own colour, over it (cap-sel, styles.css).

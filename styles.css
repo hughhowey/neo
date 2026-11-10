@@ -899,6 +899,8 @@ body:not(.no-dropcap) .chapter-body.has-cap:not(.no-cap):not(.opens-dialogue) p[
   text-indent: calc(-1 * var(--cap-w, 0em)) !important;
 }
 ::highlight(neo-cap) { color: transparent; -webkit-text-fill-color: transparent; }
+/* …but not in what's copied out to another program (cap-copying, app.js) */
+body.cap-copying:not(.no-dropcap) .chapter-body.has-cap:not(.no-cap):not(.opens-dialogue) p[data-first] { text-indent: 0 !important; }
 /* a selection in focus mode sets its own ink, that letter's too: the cap
    covers it until the selection lets go (cap-sel, set in app.js) */
 body.focus-mode .chapter-body.cap-sel.has-cap p[data-first]::before { position: relative; z-index: 1; background: var(--paper); }

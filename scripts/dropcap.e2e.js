@@ -169,6 +169,29 @@ test('Enter at the start hands the cap to the paragraph with words; joining give
   assert.equal(o.page, o.text);
 });
 
+test('words copied from the opening paragraph take no trace of the cap with them', async () => {
+  const { clipboard } = require('electron');
+  clipboard.clear();
+  await js(`(() => {
+    const body = document.querySelector('.chapter-body');
+    const r = document.createRange();
+    r.setStart(body.children[0].firstChild, 0);
+    r.setEnd(body.children[1].firstChild, 5);
+    body.focus({ preventScroll: true });
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  })()`);
+  const o = await opening();
+  wc.copy();
+  await tick(300);
+  assert.equal(clipboard.readText().slice(0, 12), o.text.slice(0, 12), 'the first letter is copied, once');
+  const html = clipboard.readHTML();
+  assert.ok(!/text-indent:\s*-/.test(html), 'no pull-back in what another program is handed: ' + (html.match(/text-indent:[^;]*/) || [''])[0]);
+  assert.ok(!/has-cap|--cap/.test(html));
+  assert.ok((await opening()).indent < 0, 'and the page itself is as it was');
+  await js(`getSelection().collapse(document.querySelector('.chapter-body').children[0].firstChild, 3)`);
+});
+
 test('nothing of the cap is saved with the chapter', async () => {
   const o = await opening();
   assert.ok(!/data-first|has-cap|--cap|text-indent/.test(o.saved), o.saved.slice(0, 120));
