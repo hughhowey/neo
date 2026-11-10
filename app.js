@@ -4391,6 +4391,32 @@ function setDropCap(body, first, remeasure = false) {
   }
   st.cap = cap;
   st.sig = sig;
+  queueCapCheck(body);
+}
+
+// The letter's width also turns on things no key above can name: whether the
+// engine has just joined two runs of text, so that "AT" is now set as a pair.
+// So once the page has settled after an edit the width is read again, as laid
+// out, and put right if it's off (a pixel, when it is).
+const capChecks = new Set();
+let capCheckFrame = 0;
+function queueCapCheck(body) {
+  capChecks.add(body);
+  if (capCheckFrame) return;
+  capCheckFrame = requestAnimationFrame(() => {
+    capCheckFrame = 0;
+    const bodies = [...capChecks];
+    capChecks.clear();
+    const found = [];
+    for (const body of bodies) {
+      const st = capState.get(body);
+      if (!st || !body.isConnected || !st.range.startContainer.isConnected) continue;
+      const w = st.range.getBoundingClientRect().width;
+      const size = w && parseFloat(getComputedStyle(st.range.startContainer.parentElement).fontSize);
+      if (w && size) found.push([body, (w / size).toFixed(4) + 'em']);
+    }
+    for (const [body, em] of found) if (body.style.getPropertyValue('--cap-w') !== em) body.style.setProperty('--cap-w', em);
+  });
 }
 
 // every chapter's cap, looked at again (the cap turned on or off, a new font)
