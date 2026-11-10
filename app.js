@@ -4247,6 +4247,13 @@ function openingPara(body) {
   return ps.find((p) => p.textContent.trim() !== '') || ps[0] || null;
 }
 function markDialogueOpening(body) {
+  // the engine, joining or emptying paragraphs, writes the indent a paragraph
+  // had at that moment onto it for good (the opening one's most of all). The
+  // indent is the stylesheet's to give; an alignment the writer chose stays.
+  for (const p of body.querySelectorAll(':scope > p[style*="text-indent"]')) {
+    p.style.removeProperty('text-indent');
+    if (!p.getAttribute('style')) p.removeAttribute('style');
+  }
   const first = openingPara(body);
   for (const p of body.querySelectorAll('p[data-first]')) if (p !== first) p.removeAttribute('data-first');
   if (first && !first.hasAttribute('data-first')) first.setAttribute('data-first', '');
@@ -4256,7 +4263,157 @@ function markDialogueOpening(body) {
     const speech = OPENING_DASH.test(p.textContent);
     if (p.hasAttribute('data-speech') !== speech) p.toggleAttribute('data-speech', speech);
   }
+  setDropCap(body, first);
 }
+
+// THE DROP CAP is a letter NEO draws beside the opening paragraph (that
+// paragraph's ::before, its letter and width handed over in --cap and --cap-w
+// on the chapter body, which is never saved). It is not a ::first-letter:
+// that makes the engine split the paragraph's text in two behind the scenes,
+// and typing or deleting beside the split left doubled letters on the page,
+// so for a long time the cap had to step aside whenever the caret was in its
+// paragraph. Now the words are one plain run of text to edit. The real first
+// letter is still there, unseen (the neo-cap highlight paints it clear) and
+// drawn back under the cap by its own width, so the line starts where it
+// always did.
+const capHidden = window.Highlight && window.CSS && CSS.highlights ? new Highlight() : null;
+if (capHidden) {
+  capHidden.priority = 50; // over the focus, search and spelling highlights: none of them may ink it in
+  CSS.highlights.set('neo-cap', capHidden);
+}
+const capState = new WeakMap(); // chapter body → { range, cap, sig }
+const capWidths = new Map(); // what a letter measures, in em, when its chapter isn't laid out
+const CAP_LEAD = /^[\p{Ps}\p{Pi}\p{Pf}\p{Pe}\p{Po}]*/u; // an opening quote or ¿ is set with its letter
+const capSegmenter = window.Intl && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+
+// The letter (with any mark that opens it) a paragraph's text begins with;
+// '' when it begins with a space or with nothing a cap can be made of
+function capOf(text) {
+  const lead = CAP_LEAD.exec(text)[0];
+  const rest = text.slice(lead.length);
+  if (!rest) return '';
+  const g = capSegmenter ? capSegmenter.segment(rest)[Symbol.iterator]().next().value.segment : String.fromCodePoint(rest.codePointAt(0));
+  return /[\p{L}\p{N}]/u.test(g) ? lead + g : '';
+}
+
+// Where the paragraph's words begin: its first text nodes, in order. A flag
+// or a footnote number standing before the first word means no cap.
+function capOpening(p) {
+  const nodes = [];
+  let text = '';
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && n.matches(UNCOUNTED) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)
+  });
+  // (a rejected element's subtree is skipped; one that takes up room ends the search)
+  for (let n = p.firstChild; n; n = n.nextSibling) {
+    if (n.nodeType === Node.ELEMENT_NODE && n.matches('.ph-mark, .fn')) return null;
+    if (n.nodeType !== Node.ELEMENT_NODE || !n.matches(UNCOUNTED)) break;
+  }
+  let n;
+  while (text.length < 16 && (n = walker.nextNode())) {
+    // a line break before the first word: the letter isn't on the first line to be tucked away
+    if (n.nodeName === 'BR' && !text) return null;
+    if (n.nodeType !== Node.TEXT_NODE || !n.data) continue;
+    nodes.push(n);
+    text += n.data;
+  }
+  return nodes.length ? { nodes, text } : null;
+}
+
+function clearDropCap(body) {
+  const st = capState.get(body);
+  if (!st) return;
+  if (capHidden) capHidden.delete(st.range);
+  capState.delete(body);
+  body.classList.remove('has-cap');
+  body.style.removeProperty('--cap');
+  body.style.removeProperty('--cap-w');
+  if (!body.getAttribute('style')) body.removeAttribute('style');
+}
+
+// `remeasure`: the type changed (a font chosen, or one that just arrived)
+function setDropCap(body, first, remeasure = false) {
+  const open = capHidden && first && !body.classList.contains('no-cap') && !body.classList.contains('opens-dialogue') &&
+    !document.body.classList.contains('no-dropcap') && capOpening(first);
+  const cap = open ? capOf(open.text) : '';
+  if (!cap) { clearDropCap(body); return; }
+  // the cap's own letters, from the paragraph's first character on
+  let left = cap.length;
+  let end = open.nodes[0];
+  let endAt = 0;
+  for (const n of open.nodes) {
+    end = n;
+    endAt = Math.min(left, n.data.length);
+    left -= endAt;
+    if (!left) break;
+  }
+  // how the letter is set where it stands (in an italic, say) decides its width
+  // (and the letter after it: a pair like "To" is set closer than "Th")
+  let sig = cap + '~' + open.text.slice(cap.length, cap.length + 2);
+  for (const n of open.nodes) {
+    // (the engine's own spans carry their weight and slant in a style)
+    for (let el = n.parentElement; el && el !== first; el = el.parentElement) sig += '>' + el.tagName + (el.getAttribute('style') || '');
+    if (n === end) break;
+    sig += '|';
+  }
+  let st = capState.get(body);
+  if (!st) {
+    st = { range: document.createRange(), cap: '', sig: '' };
+    capState.set(body, st);
+    if (capHidden.size > 400) for (const r of [...capHidden]) if (!r.startContainer.isConnected) capHidden.delete(r); // chapters since redrawn
+  }
+  const r = st.range;
+  if (r.startContainer !== open.nodes[0] || r.startOffset !== 0 || r.endContainer !== end || r.endOffset !== endAt) {
+    r.setStart(open.nodes[0], 0);
+    r.setEnd(end, endAt);
+  }
+  if (!capHidden.has(r)) capHidden.add(r);
+  if (st.cap !== cap) body.style.setProperty('--cap', JSON.stringify(cap));
+  if (!body.classList.contains('has-cap')) body.classList.add('has-cap');
+  if (st.sig !== sig || remeasure) {
+    const host = open.nodes[0].parentElement;
+    const cs = getComputedStyle(host);
+    const size = parseFloat(cs.fontSize) || 17;
+    // as laid out on the page; from the font's own figures while the chapter isn't on screen
+    let w = r.getBoundingClientRect().width / size;
+    if (!w) {
+      const font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+      const key = font + '|' + cap;
+      if (remeasure || !capWidths.has(key)) {
+        const ctx = (setDropCap.canvas || (setDropCap.canvas = document.createElement('canvas'))).getContext('2d');
+        ctx.font = font;
+        capWidths.set(key, ctx.measureText(cap).width / size);
+      }
+      w = capWidths.get(key);
+      sig = ''; // measured for real the next time it's looked at
+    }
+    body.style.setProperty('--cap-w', w.toFixed(4) + 'em');
+  }
+  st.cap = cap;
+  st.sig = sig;
+}
+
+// every chapter's cap, looked at again (the cap turned on or off, a new font)
+function refreshDropCaps(remeasure = false) {
+  for (const body of document.querySelectorAll('#chapters .chapter-body')) {
+    const first = body.querySelector(':scope > p[data-first]');
+    if (first) setDropCap(body, first, remeasure); else clearDropCap(body);
+  }
+}
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => refreshDropCaps(true));
+// In focus mode selected text is given its full ink back, and the unseen
+// letter with it. While a selection takes that letter in, the cap stands on a
+// patch of the page's own colour, over it (cap-sel, styles.css).
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  const r = focusLevel !== 'off' && sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0) : null;
+  if (!r && !document.querySelector('#chapters .chapter-body.cap-sel')) return;
+  for (const body of document.querySelectorAll('#chapters .chapter-body.has-cap, #chapters .chapter-body.cap-sel')) {
+    const st = capState.get(body);
+    const over = !!(r && st && st.range.startContainer.isConnected && r.isPointInRange(st.range.startContainer, 0));
+    if (body.classList.contains('cap-sel') !== over) body.classList.toggle('cap-sel', over);
+  }
+});
 
 function syncChapter(body, chId) {
   markDialogueOpening(body);
@@ -4269,7 +4426,6 @@ function syncChapter(body, chId) {
 
 // Heal text-node fragmentation in each paragraph as the caret leaves it:
 let lastCaretPara = null;
-let capOffBody = null;
 let menuPoetryState = false;
 let menuFlushState = false;
 document.addEventListener('selectionchange', () => {
@@ -4300,7 +4456,6 @@ document.addEventListener('selectionchange', () => {
     const ch = caretP.closest('.chapter');
     if (ch) scanSpellingIn(ch.querySelector('.chapter-body'), ch.dataset.id);
   }
-  // the drop cap steps aside while the caret is in the first paragraph
   const inPoetry = !!(caretP && caretP.classList.contains('poetry'));
   if (inPoetry !== menuPoetryState && window.neo.poetryState) {
     menuPoetryState = inPoetry;
@@ -4310,15 +4465,6 @@ document.addEventListener('selectionchange', () => {
   if (inFlush !== menuFlushState && window.neo.flushState) {
     menuFlushState = inFlush;
     window.neo.flushState(inFlush);
-  }
-  const inFirst = caretP && caretP.parentElement &&
-    caretP.hasAttribute('data-first');
-  const capBody = inFirst ? caretP.parentElement : null;
-  if (capBody !== capOffBody) {
-    if (capOffBody && capOffBody.isConnected) capOffBody.classList.remove('cap-off');
-    if (capBody) capBody.classList.add('cap-off');
-    capOffBody = capBody;
-    queueSoftHyphenTicks(); // the first lines wrap anew around the cap
   }
 });
 
@@ -15073,7 +15219,7 @@ function updateFocus() {
   else if (focusLevel === 'paragraph') { r = document.createRange(); r.selectNodeContents(p); }
   if (r) CSS.highlights.set('neo-focus', new Highlight(r));
   else CSS.highlights.delete('neo-focus');
-  // highlights can't reach ::first-letter, so the drop cap gets a class
+  // highlights can't reach the drop cap (it isn't text), so it gets a class
   // on its chapter body (a class on the body itself is never saved)
   document.querySelectorAll('.chapter-body.focus-cap').forEach((b) => b.classList.remove('focus-cap'));
   const body = p.parentElement;
@@ -15380,6 +15526,7 @@ function applyFonts() {
     document.documentElement.style.setProperty('--dropcap-font', DROPCAP_FONTS[f.dropcap]);
   }
   document.body.classList.toggle('no-dropcap', f.dropcap === 'none');
+  refreshDropCaps(true);
   document.body.classList.toggle('night', library.pageTheme === 'night');
   // Light: the paper page in a light room, the whole app with it
   document.body.classList.toggle('light', library.pageTheme === 'light');
@@ -16945,7 +17092,7 @@ function paintNonBreakingMarks() {
 // put the caret in, and screen readers pass it by. Only the sheets in or near
 // view get one, so a long book costs no more than the chapter on screen.
 // Anything that can move the words (typing, the page's width, zoom, type
-// size, a font arriving, the drop cap stepping aside, a paragraph's
+// size, a font arriving, a paragraph's
 // alignment, poetry or flush) starts a new pass;
 // scrolling only draws the sheets that come into view. One frame at a time.
 let shyPass = 0;

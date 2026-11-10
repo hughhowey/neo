@@ -745,9 +745,8 @@ body.night ::highlight(neo-focus) { color: #d6d2c6; }
    (dragging a selection into the next paragraph moves the focus with it) */
 body.focus-mode .sheet ::selection { color: #1c1c1c; }
 body.focus-mode.night .sheet ::selection { color: #d6d2c6; }
-/* the drop cap sits outside the highlight's reach; same selector as the cap
-   itself so no other paragraph grows a ::first-letter */
-body.focus-mode:not(.no-dropcap) .chapter-body.focus-cap:not(.cap-off):not(.no-cap):not(.opens-dialogue) p[data-first]::first-letter { color: var(--ink); }
+/* the drop cap sits outside the highlight's reach (it isn't text) */
+body.focus-mode:not(.no-dropcap) .chapter-body.focus-cap.has-cap:not(.no-cap):not(.opens-dialogue) p[data-first]::before { color: var(--ink); }
 .sheet {
   background: var(--paper); color: var(--ink);
   padding: 70px var(--page-pad-x) 90px;
@@ -884,13 +883,25 @@ body.paged #paper:not(.script) #tp-author { font-size: calc(14px * var(--page-zo
 .chapter-body i i i { font-style: italic; }
 .chapter-body p:not(.poetry) + p.poetry { margin-top: 0.9em; }
 .chapter-body p.poetry + p:not(.poetry) { margin-top: 0.9em; }
-/* cap-off while the caret is in the first paragraph: the rule must stop
-   MATCHING entirely — a matching first-letter rule, even styled to nothing,
-   makes the engine split the text internally, which corrupts deletes */
-body:not(.no-dropcap) .chapter-body:not(.cap-off):not(.no-cap):not(.opens-dialogue) p[data-first]::first-letter {
-  font-size: 3.4em; float: left; line-height: 0.8;
-  padding: 4px 8px 0 0; font-family: var(--dropcap-font);
+/* The drop cap is drawn beside the opening paragraph, not made of its first
+   letter (setDropCap in app.js): a ::first-letter makes the engine split the
+   paragraph's text in two, which left doubled letters on the page when
+   words beside it were typed or deleted. The real first letter is painted
+   clear and drawn back under the cap by its own width, so the paragraph is
+   one plain run of text to edit and the cap never has to step aside. */
+body:not(.no-dropcap) .chapter-body.has-cap:not(.no-cap):not(.opens-dialogue) p[data-first]::before {
+  content: var(--cap, ""); float: inline-start; font-size: 3.4em; line-height: 0.8;
+  padding: 4px 0 0 0; padding-inline-end: 8px; font-family: var(--dropcap-font);
+  font-style: normal; font-weight: normal; text-indent: 0; white-space: pre;
+  letter-spacing: normal; text-transform: none;
 }
+body:not(.no-dropcap) .chapter-body.has-cap:not(.no-cap):not(.opens-dialogue) p[data-first] {
+  text-indent: calc(-1 * var(--cap-w, 0em)) !important;
+}
+::highlight(neo-cap) { color: transparent; -webkit-text-fill-color: transparent; }
+/* a selection in focus mode sets its own ink, that letter's too: the cap
+   covers it until the selection lets go (cap-sel, set in app.js) */
+body.focus-mode .chapter-body.cap-sel.has-cap p[data-first]::before { position: relative; z-index: 1; background: var(--paper); }
 /* NEO's spellcheck pass: flagged words, painted like search matches */
 ::highlight(neo-spell) {
   text-decoration: underline wavy #cf5c56;
