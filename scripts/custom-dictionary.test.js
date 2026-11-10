@@ -17,7 +17,7 @@ const root = path.join(__dirname, '..');
 const localRequire = createRequire(path.join(root, 'main.js'));
 const JSZip = localRequire('jszip');
 
-function loadMain() {
+function loadMain({ spellProcess } = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-dictionary-'));
   const userData = path.join(base, 'userData');
   fs.mkdirSync(userData);
@@ -34,7 +34,7 @@ function loadMain() {
     BrowserWindow: { getFocusedWindow: () => null, getAllWindows: () => [] },
     Menu: { buildFromTemplate: (items) => items, setApplicationMenu() {} },
     dialog: {},
-    utilityProcess: { fork: () => ({ on() {}, postMessage() {} }) },
+    utilityProcess: { fork: () => spellProcess || ({ on() {}, postMessage() {} }) },
     screen: {}
   };
   const context = vm.createContext({
@@ -73,6 +73,24 @@ function spellWorker() {
   let id = 0;
   return (message) => new Promise((resolve) => { const n = ++id; waiting.set(n, resolve); handle({ data: { id: n, ...message } }); });
 }
+
+// the spell helper as main.js's own forked process, so addDictionary loads for real
+function spellProcess() {
+  let handle;
+  const listeners = {};
+  const context = vm.createContext({
+    require: localRequire,
+    process: { parentPort: { on: (_n, cb) => { handle = cb; }, postMessage: (message) => listeners.message(message) } }
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'spell-worker.js'), 'utf8'), context, { filename: path.join(root, 'spell-worker.js') });
+  return { on: (name, callback) => { listeners[name] = callback; }, postMessage: (message) => handle({ data: message }) };
+}
+
+// A Chromium .dic_delta: more words in UTF-8, no count line, often with a
+// byte order mark and Windows line endings
+const EN_AFF = 'SET UTF-8\nSFX S Y 1\nSFX S 0 s .\nSFX D Y 1\nSFX D 0 ed .\n';
+const EN_DIC = '2\nwalk/S\ncolour\n';
+const EN_DELTA = '\ufeffwalk/D\r\n\r\nNEOword\r\n';
 
 describe('dictionaries the writer adds', () => {
   test('an ISO-8859-15 pair is read into UTF-8, under the language its name gives', async () => {
@@ -205,5 +223,114 @@ describe('dictionaries the writer adds', () => {
     neo.context.answer = 0; // Choose a File…
     await neo.run('addDictionary()');
     assert.equal(shown[2], 'picker');
+  });
+
+  test('a .dic_delta beside the pair joins the .dic, whichever of the three is picked', async () => {
+    const neo = loadMain();
+    const dir = folderWith({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'en_US.dic_delta': EN_DELTA });
+    for (const picked of ['en_US.aff', 'en_US.dic', 'en_US.dic_delta']) {
+      neo.context.picked = path.join(dir, picked);
+      const [d] = await neo.run('dictionariesFromFile(picked)');
+      assert.equal(d.dic.toString(), '4\nwalk/S\ncolour\nwalk/D\nNEOword\n', picked);
+    }
+    const [d] = await neo.run('dictionariesFromFile(picked)');
+    const send = spellWorker();
+    assert.equal((await send({ type: 'load', language: d.code, dir: folderWith({ 'index.aff': d.aff, 'index.dic': d.dic }) })).ok, true);
+    // a word in both keeps the flags of both
+    const res = (await send({ type: 'check', words: ['walk', 'walks', 'walked', 'NEOword', 'colour', 'colours'] })).result;
+    assert.deepEqual({ ...res }, { walk: true, walks: true, walked: true, NEOword: true, colour: true, colours: false });
+  });
+
+  test('a .dic_delta: alone, not UTF-8, beside an 8-bit dictionary, inside or beside a LibreOffice extension', async () => {
+    const neo = loadMain();
+    const read = async (files, pick) => {
+      neo.context.picked = path.join(folderWith(files), pick);
+      try { return await neo.run('dictionariesFromFile(picked)'); } catch (err) { return err.message; }
+    };
+    assert.match(await read({ 'en_US.dic_delta': EN_DELTA }, 'en_US.dic_delta'), /^NEO couldn’t find en_US\.aff next to en_US\.dic_delta\./);
+    assert.match(await read({ 'en_US.dic': EN_DIC, 'en_US.dic_delta': EN_DELTA }, 'en_US.dic_delta'), /^NEO couldn’t find en_US\.aff next to/);
+    // not UTF-8: the dictionary comes in without it, and says which it left out
+    const [notUtf8] = await read({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'en_US.dic_delta': latin9('caffè\n') }, 'en_US.aff');
+    assert.equal(notUtf8.dic.toString(), EN_DIC);
+    assert.deepEqual([...notUtf8.deltasNotUtf8], ['en_US.dic_delta']);
+    assert.deepEqual([...notUtf8.deltasBeside], []);
+    // the same name, ignoring case and - against _ (Chromium's hu-HU, LibreOffice's hu_HU)
+    const [dashed] = await read({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'EN-us.dic_delta': EN_DELTA }, 'EN-us.dic_delta');
+    assert.equal(dashed.dic.toString(), '4\nwalk/S\ncolour\nwalk/D\nNEOword\n');
+    assert.deepEqual([...dashed.deltasBeside], ['EN-us.dic_delta']);
+    const [other] = await read({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'words.dic_delta': EN_DELTA }, 'en_US.aff');
+    assert.equal(other.dic.toString(), EN_DIC);
+    assert.deepEqual([...other.deltasBeside], []);
+    // an 8-bit dictionary's flags, written in the UTF-8 delta, still apply
+    const [eight] = await read({ 'it_IT.aff': latin9('SET ISO8859-1\nSFX é Y 1\nSFX é o i o\n'), 'it_IT.dic': latin9('1\nlibro/é\n'), 'it_IT.dic_delta': 'gatto/é\ncittà\n' }, 'it_IT.dic');
+    const send = spellWorker();
+    assert.equal((await send({ type: 'load', language: eight.code, dir: folderWith({ 'index.aff': eight.aff, 'index.dic': eight.dic }) })).ok, true);
+    assert.deepEqual({ ...(await send({ type: 'check', words: ['libri', 'gatti', 'città'] })).result }, { libri: true, gatti: true, città: true });
+    const zip = new JSZip();
+    zip.file('dictionaries/en_US.aff', EN_AFF);
+    zip.file('dictionaries/en_US.dic', EN_DIC);
+    zip.file('dictionaries/en_US.dic_delta', EN_DELTA);
+    const [packed] = await read({ 'dict-en.oxt': await zip.generateAsync({ type: 'nodebuffer' }) }, 'dict-en.oxt');
+    assert.equal(packed.dic.toString(), '4\nwalk/S\ncolour\nwalk/D\nNEOword\n');
+    // a delta beside the .oxt, named like the dictionary inside it
+    const bare = new JSZip();
+    bare.file('dictionaries/en_US.aff', EN_AFF);
+    bare.file('dictionaries/en_US.dic', EN_DIC);
+    const bareOxt = await bare.generateAsync({ type: 'nodebuffer' });
+    const [beside] = await read({ 'dict-en.oxt': bareOxt, 'en_US.dic_delta': EN_DELTA }, 'dict-en.oxt');
+    assert.equal(beside.dic.toString(), '4\nwalk/S\ncolour\nwalk/D\nNEOword\n');
+    // the delta picked: the .oxt beside it holds its dictionary
+    const picked = await read({ 'dict-en.oxt': bareOxt, 'en_US.dic_delta': EN_DELTA }, 'en_US.dic_delta');
+    assert.deepEqual([...picked.map((dictionary) => dictionary.code)], ['en-US']);
+    assert.equal(picked[0].dic.toString(), '4\nwalk/S\ncolour\nwalk/D\nNEOword\n');
+    assert.match(await read({ 'dict-en.oxt': bareOxt, 'fr_FR.dic_delta': EN_DELTA }, 'fr_FR.dic_delta'), /^NEO couldn’t find fr_FR\.aff next to fr_FR\.dic_delta\./);
+    // one in another folder of the .oxt, and one beside it: both join
+    const both = new JSZip();
+    both.file('dictionaries/en_US.aff', EN_AFF);
+    both.file('dictionaries/en_US.dic', EN_DIC);
+    both.file('extra/en_US.dic_delta', '\ufeffinsideword\n');
+    const [joined] = await read({ 'dict-en.oxt': await both.generateAsync({ type: 'nodebuffer' }), 'en_US.dic_delta': '\ufeffbesideword\n' }, 'dict-en.oxt');
+    assert.equal(joined.dic.toString(), '4\nwalk/S\ncolour\ninsideword\nbesideword\n');
+  });
+
+  test('adding a language again replaces it, delta and all, and its words are checked at once', async () => {
+    const neo = loadMain({ spellProcess: spellProcess() });
+    neo.context.picks = [];
+    neo.run(`dialog.showMessageBox = async () => ({ response: 0 });
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [picks.shift()] });`);
+    const add = async (files) => {
+      neo.context.picks.push(path.join(folderWith(files), 'en_US.dic'));
+      await neo.run('addDictionary()');
+      return { ...(await neo.run('spellRequest({ type: "check", words: ["NEOword", "otherword", "walked"] })')).result };
+    };
+    const added = path.join(neo.userData, 'dictionaries', 'en-US');
+    assert.deepEqual(await add({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'en_US.dic_delta': EN_DELTA }), { NEOword: true, otherword: false, walked: true });
+    assert.deepEqual(await add({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'en_US.dic_delta': 'otherword\n' }), { NEOword: false, otherword: true, walked: false });
+    assert.deepEqual(await add({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC }), { NEOword: false, otherword: false, walked: false });
+    assert.deepEqual(fs.readdirSync(added).sort(), ['index.aff', 'index.dic']);
+    assert.equal(fs.readFileSync(path.join(added, 'index.dic'), 'utf8'), EN_DIC);
+  });
+
+  test('a .dic_delta left out is named: one that matched no dictionary, with the name it needs, and one not in UTF-8', async () => {
+    const neo = loadMain({ spellProcess: spellProcess() });
+    neo.context.picks = [];
+    neo.context.shown = [];
+    neo.run(`dialog.showMessageBox = async (_w, box) => { shown.push(box.message); return { response: 0 }; };
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [picks.shift()] });`);
+    const add = async (files, pick) => {
+      neo.context.shown.length = 0;
+      neo.context.picks.push(path.join(folderWith(files), pick));
+      await neo.run('addDictionary()');
+      return neo.context.shown.slice(1); // after the window that says what to pick
+    };
+    const bare = new JSZip();
+    bare.file('en_US.aff', EN_AFF);
+    bare.file('en_US.dic', EN_DIC);
+    const oxt = await bare.generateAsync({ type: 'nodebuffer' });
+    assert.deepEqual(await add({ 'dict-en.oxt': oxt, 'dict-en.dic_delta': EN_DELTA }, 'dict-en.oxt'), ['dict-en.dic_delta wasn’t used. A .dic_delta joins a dictionary when it’s named like it: en_US.dic_delta.']);
+    assert.deepEqual(await add({ 'dict-en.oxt': oxt, 'en-US.dic_delta': EN_DELTA }, 'dict-en.oxt'), []);
+    assert.deepEqual(await add({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC }, 'en_US.aff'), []);
+    assert.deepEqual(await add({ 'en_US.aff': EN_AFF, 'en_US.dic': EN_DIC, 'en_US.dic_delta': latin9('caffè\n') }, 'en_US.aff'), ['en_US.dic_delta wasn’t used: it isn’t in UTF-8.']);
+    assert.equal(fs.readFileSync(path.join(neo.userData, 'dictionaries', 'en-US', 'index.dic'), 'utf8'), EN_DIC);
   });
 });

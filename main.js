@@ -2598,9 +2598,10 @@ function languageLabel(code) {
 
 // An .aff and .dic pair read as one dictionary: its language (the .aff's
 // LANG line, else the file name: it_IT.aff → it-IT) and both files as
-// Hunspell will read them in UTF-8, as buffers. Throws an Error whose message
-// the writer reads.
-function dictionaryFromPair(name, affBuffer, dicBuffer) {
+// Hunspell will read them in UTF-8, as buffers. Chromium .dic_delta files
+// ({ name, buffer }), when there are any, join the .dic; the names of any
+// that aren't UTF-8, and so stay out, are in deltasNotUtf8. Throws an Error whose message the writer reads.
+function dictionaryFromPair(name, affBuffer, dicBuffer, deltas = []) {
   // Until the character set is known, the files are read as latin1: it turns
   // each byte into the one character with the same number, so the text can be
   // searched and turned back into exactly the same bytes.
@@ -2671,38 +2672,86 @@ function dictionaryFromPair(name, affBuffer, dicBuffer) {
   const code = languageTag((/^LANG\s+(\S+)/m.exec(affText) || [])[1]) || languageTag(name);
   if (!code) throw new Error(t('NEO couldn\'t tell which language it is for. Name its files after the language, like en_US.aff and en_US.dic.'));
   if (!/^\d+/.test(dicText.trimStart())) throw new Error(t('Its .dic file doesn\'t start with a word count, so it isn\'t a Hunspell dictionary.'));
-  return { code, ...files };
+  // A .dic_delta is more words in UTF-8, with no count line. Listed after
+  // the .dic's, a word in both keeps the flags of both, as in Chromium.
+  const deltaLines = [];
+  const deltasNotUtf8 = [];
+  for (const delta of deltas) {
+    const lines = withoutByteOrderMark(bytesToText(delta.buffer)).split(/\r?\n/).filter((line) => line.trim());
+    if (isValidUtf8(wordsOnly(lines.join('\n')))) deltaLines.push(...lines);
+    else deltasNotUtf8.push(delta.name);
+  }
+  if (deltaLines.length) {
+    const dicWithCount = bytesToText(files.dic).replace(/^(\s*)(\d+)/, (whole, space, count) => space + (Number(count) + deltaLines.length));
+    files.dic = textToBytes(dicWithCount.replace(/\n?$/, '\n') + deltaLines.join('\n') + '\n');
+  }
+  return { code, ...files, deltasNotUtf8 };
 }
 
-// What the writer picked → the dictionaries in it. A .oxt (or .zip) can hold
-// several; its hyphenation patterns and thesaurus have no .aff, so stay out.
+// What the writer picked → the dictionaries in it, each with the names of
+// the .dic_delta files beside it that joined it (deltasBeside). A .oxt (or
+// .zip) can hold several; its hyphenation patterns and thesaurus have no
+// .aff, so stay out.
 async function dictionariesFromFile(file) {
   const ext = path.extname(file).toLowerCase();
-  if (ext === '.oxt' || ext === '.zip') {
+  const folder = path.dirname(file);
+  const besideFiles = fs.readdirSync(folder);
+  // A name matches ignoring case, with - and _ alike: Chromium writes
+  // hu-HU.dic_delta where LibreOffice writes hu_HU.dic.
+  const sameName = (first, second) => first.toLowerCase().replace(/-/g, '_') === second.toLowerCase().replace(/-/g, '_');
+  const deltasBeside = (dictionaryName) => besideFiles.filter((entry) => sameName(entry, dictionaryName + '.dic_delta'));
+  const readBeside = (entry) => fs.readFileSync(path.join(folder, entry));
+
+  const fromExtension = async (extensionFile) => {
     const JSZip = require('jszip');
-    const zip = await JSZip.loadAsync(fs.readFileSync(file));
-    const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
+    const zip = await JSZip.loadAsync(fs.readFileSync(extensionFile));
+    const entries = Object.keys(zip.files).filter((entry) => !zip.files[entry].dir);
+    const read = (entry) => zip.file(entry).async('uint8array');
     const out = [];
-    for (const affName of names.filter((n) => /\.aff$/i.test(n))) {
-      const base = affName.slice(0, -4);
-      const dicName = names.find((n) => n.toLowerCase() === (base + '.dic').toLowerCase());
-      if (!dicName) continue;
-      out.push(dictionaryFromPair(path.basename(base), await zip.file(affName).async('uint8array'), await zip.file(dicName).async('uint8array')));
+    for (const affEntry of entries.filter((entry) => /\.aff$/i.test(entry))) {
+      const base = affEntry.slice(0, -4);
+      const dicEntry = entries.find((entry) => entry.toLowerCase() === (base + '.dic').toLowerCase());
+      if (!dicEntry) continue;
+      const name = path.posix.basename(base);
+      // a delta anywhere inside, and beside the .oxt
+      const inside = entries.filter((entry) => sameName(path.posix.basename(entry), name + '.dic_delta'));
+      const beside = deltasBeside(name);
+      const deltas = [
+        ...await Promise.all(inside.map(async (entry) => ({ name: path.posix.basename(entry), buffer: await read(entry) }))),
+        ...beside.map((entry) => ({ name: entry, buffer: readBeside(entry) }))
+      ];
+      const dictionary = dictionaryFromPair(name, await read(affEntry), await read(dicEntry), deltas);
+      out.push({ ...dictionary, name, deltasBeside: beside.filter((entry) => !dictionary.deltasNotUtf8.includes(entry)) });
     }
     if (!out.length) throw new Error(t('There\'s no spelling dictionary in it (an .aff and a .dic file with the same name).'));
     return out;
-  }
-  const base = file.slice(0, -ext.length);
-  const pair = ['.aff', '.dic'].map((x) => [base + x, base + x.toUpperCase()].find((f) => fs.existsSync(f)));
-  if (['.aff', '.dic'].includes(ext) && (!pair[0] || !pair[1])) {
+  };
+  if (ext === '.oxt' || ext === '.zip') return fromExtension(file);
+
+  const name = path.basename(file).slice(0, -ext.length);
+  const [affEntry, dicEntry] = ['.aff', '.dic'].map((extension) => besideFiles.find((entry) => sameName(entry, name + extension)));
+  if (['.aff', '.dic', '.dic_delta'].includes(ext) && (!affEntry || !dicEntry)) {
+    // a delta picked beside the LibreOffice extension that holds its dictionary
+    if (ext === '.dic_delta') {
+      for (const entry of besideFiles.filter((candidate) => /\.(oxt|zip)$/i.test(candidate))) {
+        let found;
+        try { found = await fromExtension(path.join(folder, entry)); } catch { continue; }
+        const matching = found.filter((dictionary) => sameName(dictionary.name, name));
+        if (matching.length) return matching;
+      }
+    }
     throw new Error(t('NEO couldn’t find {missing} next to {picked}. A dictionary is two files with the same name in the same folder, or a single LibreOffice extension (.oxt).', {
-      missing: path.basename(base) + (pair[0] ? '.dic' : '.aff'), picked: path.basename(file)
+      missing: name + (affEntry ? '.dic' : '.aff'), picked: path.basename(file)
     }));
   }
-  if (!['.aff', '.dic'].includes(ext)) {
+  if (!['.aff', '.dic', '.dic_delta'].includes(ext)) {
     throw new Error(t('A spelling dictionary is either two files with the same name, one ending .aff and one .dic (like en_US.aff and en_US.dic), or a LibreOffice dictionary extension (.oxt).'));
   }
-  return [dictionaryFromPair(path.basename(base), fs.readFileSync(pair[0]), fs.readFileSync(pair[1]))];
+  // named as its .aff is, whichever of its files was picked
+  const dictionaryName = affEntry.slice(0, -'.aff'.length);
+  const beside = deltasBeside(dictionaryName);
+  const dictionary = dictionaryFromPair(dictionaryName, readBeside(affEntry), readBeside(dicEntry), beside.map((entry) => ({ name: entry, buffer: readBeside(entry) })));
+  return [{ ...dictionary, name: dictionaryName, deltasBeside: beside.filter((entry) => !dictionary.deltasNotUtf8.includes(entry)) }];
 }
 
 // Spellcheck Language → Add a Dictionary…: copied in, loaded to be sure
@@ -2713,7 +2762,7 @@ async function addDictionary() {
   const { response } = await dialog.showMessageBox(win, {
     type: 'info',
     message: t('Add a Spelling Dictionary'),
-    detail: t('NEO can spellcheck any language that has a Hunspell dictionary.\nDownload one as a LibreOffice extension (.oxt) and choose that file, available on LibreOffice’s extensions webpage.\nOr, if you have an .aff and a .dic with the same name in one folder, choose either of them.\nThe dictionary stays on this computer.'),
+    detail: t('NEO can spellcheck any language that has a Hunspell dictionary.\nDownload one as a LibreOffice extension (.oxt) and choose that file, available on LibreOffice’s extensions webpage.\nOr, if you have an .aff and a .dic with the same name in one folder, choose either of them.\nA .dic_delta file with the same name as the dictionary (like en_US.dic_delta), next to the file you choose, adds its extra words too.\nThe dictionary stays on this computer.'),
     buttons: [t('Choose a File…'), t('Cancel')],
     defaultId: 0,
     cancelId: 1
@@ -2721,7 +2770,7 @@ async function addDictionary() {
   if (response !== 0) return;
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     title: t('Add a Spelling Dictionary'),
-    filters: [{ name: t('Spelling dictionaries'), extensions: ['oxt', 'aff', 'dic', 'zip'] }],
+    filters: [{ name: t('Spelling dictionaries'), extensions: ['oxt', 'aff', 'dic', 'dic_delta', 'zip'] }],
     properties: ['openFile']
   });
   if (canceled || !filePaths || !filePaths[0]) return;
@@ -2747,6 +2796,15 @@ async function addDictionary() {
   // the window records the choice with the library, as from the menu
   sendToWindow({ type: 'spellLanguage', value: added[0].code });
   try { buildMenu(); } catch (err) { logError('menu', err); }
+  // a .dic_delta left out: not UTF-8, or beside it but matching no dictionary
+  const joined = found.flatMap((dictionary) => dictionary.deltasBeside);
+  const notUtf8 = found.flatMap((dictionary) => dictionary.deltasNotUtf8);
+  const notes = notUtf8.map((file) => t('{file} wasn’t used: it isn’t in UTF-8.', { file }));
+  const unmatched = fs.readdirSync(path.dirname(filePaths[0])).find((entry) => /\.dic_delta$/i.test(entry) && !notUtf8.includes(entry));
+  if (unmatched && !joined.length && !notUtf8.length) {
+    notes.push(t('{file} wasn’t used. A .dic_delta joins a dictionary when it’s named like it: {name}.', { file: unmatched, name: added[0].name + '.dic_delta' }));
+  }
+  if (notes.length) dialog.showMessageBox(win, { type: 'info', message: notes.join('\n'), buttons: [t('OK')] }).catch(() => {});
 }
 
 // The dictionary work runs in a helper process (spell-worker.js), so the

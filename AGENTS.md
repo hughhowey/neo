@@ -201,7 +201,7 @@ node scripts/i18n.js check fr
 
 Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 
-Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.0-only, and NEO is MIT. Do not add it. A writer can add it, or any Hunspell dictionary, themselves: Edit → Spellcheck Language → Add a Dictionary… takes an `.aff`/`.dic` pair or a LibreOffice `.oxt`, converts it to UTF-8 and keeps it on that computer in `userData/dictionaries/<language>/` (`addedDictionaries` in `main.js`, `scripts/custom-dictionary.test.js`). One named like a bundled language is used instead of NEO's. Pocket doesn't have them.
+Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.0-only, and NEO is MIT. Do not add it. A writer can add it, or any Hunspell dictionary, themselves: Edit → Spellcheck Language → Add a Dictionary… takes an `.aff`/`.dic` pair or a LibreOffice `.oxt`, converts it to UTF-8 and keeps it on that computer in `userData/dictionaries/<language>/` (`addedDictionaries` in `main.js`, `scripts/custom-dictionary.test.js`). A Chromium `.dic_delta` (more words, UTF-8, no count line) named like the dictionary, ignoring case and `-` against `_`, beside the files or the `.oxt` or anywhere inside it, is added to the `.dic` then, so a word in both keeps the flags of both, as in Chromium; one beside that matches nothing is named to the writer. One named like a bundled language is used instead of NEO's. Pocket doesn't have them.
 
 ## Pocket
 
