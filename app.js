@@ -4987,6 +4987,7 @@ const QUOTE_STYLES = {
   pl: { open: '„', close: '”' },
   ro: { open: '„', close: '”' },
   ru: { open: '«', close: '»' },
+  uk: { open: '«', close: '»' },
   el: { open: '«', close: '»' },
   hu: { open: '„', close: '”' },
   sv: { open: '”', close: '”' },
@@ -5047,6 +5048,7 @@ function bookQuotes(el) {
 const DIALOGUE_DASHES = {
   pt: { open: '—', space: ' ', mid: '—' },   // — Olá — diz ela.
   ru: { open: '—', space: ' ', mid: '—' },
+  uk: { open: '—', space: ' ', mid: '—' },
   hu: { open: '–', space: ' ', mid: '–' },   // – Szia – mondta.
   es: { open: '—', space: '', mid: '—' },    // —Hola —dijo él—.
   en: { open: '—', mid: '–' }                // and every other language: word – word
@@ -14755,7 +14757,7 @@ function toggleSpellcheck() {
 const SPELL_LANGUAGE_NAMES = {
   'en-US': t('US English'), 'en-GB': t('UK English'), 'en-CA': t('Canadian English'),
   'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'),
-  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
+  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
 };
 async function changeSpellLanguage(code) {
   const ok = await window.neo.setSpellLanguage(code);
@@ -14833,7 +14835,9 @@ document.addEventListener('contextmenu', async (e) => {
       const r = document.createRange();
       r.setStart(node, a); r.setEnd(node, b);
       sel.removeAllRanges(); sel.addRange(r);
-      document.execCommand('insertText', false, s);
+      // a dictionary suggests its apostrophe straight (м'ясо); on the page
+      // it's ’, as NEO types it
+      document.execCommand('insertText', false, s.replace(/(?<=[\p{L}\p{M}])'(?=[\p{L}\p{M}])/gu, '’'));
       if (key) spellScanEl(spellElFor(key), key);
     },
     learn: async () => {

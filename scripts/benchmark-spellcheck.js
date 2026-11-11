@@ -13,7 +13,8 @@ const SAMPLES = {
   'pt-BR': { pkg: 'dictionary-pt', good: 'fazê-lo', typo: 'coracao' },
   'ro': { pkg: 'dictionary-ro', good: 'trebui', typo: 'frgament' },
   'hu': { pkg: 'dictionary-hu', good: 'házaimban', typo: 'gyonyoru' },
-  'ru': { pkg: 'dictionary-ru', good: 'привет', typo: 'привт' }
+  'ru': { pkg: 'dictionary-ru', good: 'привет', typo: 'привт' },
+  'uk': { pkg: 'dictionary-uk', good: 'ластівка', typo: 'ластывка' }
 };
 
 const variant = process.argv[2];
