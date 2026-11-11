@@ -2496,6 +2496,15 @@ function createWindow() {
   // a trial says so in the window bar
   if (TRY_DIR) win.on('page-title-updated', (e, title) => { e.preventDefault(); win.setTitle(title + ' (trial copy)'); });
   win.loadFile('index.html');
+  // NEO's window only ever shows NEO. A chapter's file can hold a link (one
+  // that came in a book folder from someone else, say), and clicked where the
+  // page is read-only, in History, it took the whole window to that address,
+  // which then held every key to the library this window has. Nothing
+  // navigates this window away, and nothing opens a second one from it.
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url !== win.webContents.getURL()) e.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   // The menu bar follows the real full-screen state, whoever changed it.
   // Electron only puts the bar back after a full screen it entered itself,
   // so once a window manager's own full-screen key had been used (Sway, i3),
