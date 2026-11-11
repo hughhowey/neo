@@ -156,15 +156,21 @@ describe('power loss', { concurrency: 1 }, () => {
     assert.equal(got[0].text, 'recover me');
   });
 
-  test('a save never goes over words another device wrote since; an older copy is simply replaced', () => {
+  test('a save never goes over words another device wrote since; an older copy is kept as a twin first, then replaced', () => {
     const { book, bookDir } = libraryWithBook();
     const file = path.join(bookDir, 'chapters', 'ch-aaa.html');
     fs.writeFileSync(file, '<p>Written on the iPad.</p>');
     const r = main.call('chapter:write', book.id, 'ch-aaa', '<p>First chapter, edited here.</p>', '<p>First chapter.</p>');
     assert.equal(r.conflict, '<p>Written on the iPad.</p>');
     assert.equal(fs.readFileSync(file, 'utf8'), '<p>Written on the iPad.</p>');
+    // an older-looking disk copy is an unexpected revision too: it is handed
+    // back (to keep as a twin) rather than replaced silently
     fs.writeFileSync(file, '<p>First</p>');
-    assert.equal(main.call('chapter:write', book.id, 'ch-aaa', '<p>First chapter, edited here.</p>', '<p>First chapter.</p>'), true);
+    const older = main.call('chapter:write', book.id, 'ch-aaa', '<p>First chapter, edited here.</p>', '<p>First chapter.</p>');
+    assert.equal(older.conflict, '<p>First</p>');
+    assert.equal(fs.readFileSync(file, 'utf8'), '<p>First</p>');
+    // after the window keeps it, its retry is based on what is now on disk
+    assert.equal(main.call('chapter:write', book.id, 'ch-aaa', '<p>First chapter, edited here.</p>', '<p>First</p>'), true);
     assert.equal(fs.readFileSync(file, 'utf8'), '<p>First chapter, edited here.</p>');
   });
 
