@@ -1,0 +1,72 @@
+{
+  "_meta": {
+    "name": "Deutsch (Schweiz)",
+    "translators": [
+      "Kai Mueri"
+    ],
+    "note": "Only what differs from de.json: Swiss spelling (ss instead of ß) and Swiss quotation marks «…» and ‹…›."
+  },
+  "“{name}” · one book": "«{name}» · ein Buch",
+  "“{name}” is bound into one book": "«{name}» ist zu einem Buch gebunden",
+  "(appears as the author on every document — leave blank for “Anonymous”)": "(erscheint als Autor auf jedem Dokument; leer lassen für «Anonym»)",
+  "{n} scripts imported onto “{shelf}”": {
+    "one": "{n} Drehbuch in «{shelf}» importiert",
+    "other": "{n} Drehbücher in «{shelf}» importiert"
+  },
+  "A part page goes in before “{title}”.": "Vor «{title}» kommt eine Teil-Seite.",
+  "A {name} key is saved, encrypted, outside your library folder. Paste a new one to replace it, or type “{remove}” to forget it.": "Ein {name}-Schlüssel ist verschlüsselt ausserhalb deines Bibliotheksordners gespeichert. Füge einen neuen ein, um ihn zu ersetzen, oder gib «{remove}» ein, um ihn zu vergessen.",
+  "Add “{word}” to dictionary": "«{word}» zum Wörterbuch hinzufügen",
+  "Close": "Schliessen",
+  "Close (Esc)": "Schliessen (Esc)",
+  "Close Window": "Fenster schliessen",
+  "Cover for “{title}”": "Cover für «{title}»",
+  "Draft snapshot of “{title}” — {n} words.": {
+    "one": "Entwurfsstand von «{title}» ({n} Wort).",
+    "other": "Entwurfsstand von «{title}» ({n} Wörter)."
+  },
+  "Every book gets a cover on the shelf: an abstract with the title set in type. With an OpenAI key, NEO can also read a story once it passes {n} words and paint a cover from the text. Paintings stay on your shelf — exports never include them.": "Jedes Buch bekommt ein Cover im Regal: eine Abstraktion mit dem Titel in echter Typografie. Mit einem OpenAI-Schlüssel kann NEO eine Geschichte ausserdem lesen, sobald sie {n} Wörter überschreitet, und ein Cover aus dem Text malen. Die Gemälde bleiben in deinem Regal: Exporte enthalten sie nie.",
+  "Export “{title}”": "«{title}» exportieren",
+  "Hit {key} while writing to drop a placeholder — a “come back to this” mark that never breaks your flow.": "Drück beim Schreiben {key}, um einen Merker zu setzen: ein «hierher zurückkommen», das deinen Schreibfluss nie unterbricht.",
+  "Larger Text": "Grösserer Text",
+  "Move “{title}” to the Recycle Bin?": "«{title}» in den Papierkorb verschieben?",
+  "Move “{title}” to the Trash?": "«{title}» in den Papierkorb legen?",
+  "NEO knows you're writing books. A few quick questions and it will never ask anything again.": "NEO weiss, dass du Bücher schreibst. Ein paar kurze Fragen, und es fragt nie wieder etwas.",
+  "Reset Text Size": "Textgrösse zurücksetzen",
+  "Shelf “{name}”": "Regal «{name}»",
+  "That dictionary would not load": "Dieses Wörterbuch liess sich nicht laden",
+  "UK English": "Englisch (Grossbritannien)",
+  "Zoom in": "Vergrössern",
+  "{n} books imported onto “{shelf}” — chapters and scene breaks detected": {
+    "one": "{n} Buch in «{shelf}» importiert: Kapitel und Szenenwechsel erkannt",
+    "other": "{n} Bücher in «{shelf}» importiert: Kapitel und Szenenwechsel erkannt"
+  },
+  "“{title}” is back on the shelf": "«{title}» steht wieder im Regal",
+  "“{title}” is back where it was": "«{title}» ist wieder an seinem Platz",
+  "“{title}” now sits on {name}’s top shelf — Esc puts it back": "«{title}» steht jetzt im obersten Regal von {name}: Esc macht es rückgängig",
+  "“{title}” removed from the shelves — its files are still in your NEO Library": "«{title}» aus den Regalen entfernt: Die Dateien liegen weiterhin in deiner NEO-Bibliothek",
+  "Larger text": "Grösserer Text",
+  "Reset text size and page zoom": "Textgrösse und Seitenzoom zurücksetzen",
+  "Interface Size": "Grösse der Oberfläche",
+  "“{title}”": "«{title}»",
+  "“END” after the last line": "«ENDE» nach der letzten Zeile",
+  "(tap to dismiss)": "(zum Schliessen tippen)",
+  "{n} chapters added to “{title}”": {
+    "one": "{n} Kapitel zu «{title}» hinzugefügt",
+    "other": "{n} Kapitel zu «{title}» hinzugefügt"
+  },
+  "Add a footnote": "Fussnote hinzufügen",
+  "Click into a chapter first, then {key} adds a footnote": "Klicke zuerst in ein Kapitel, dann fügt {key} eine Fussnote hinzu",
+  "Footnote": "Fussnote",
+  "Footnote {n}": "Fussnote {n}",
+  "Footnote removed — its words are in Darlings": "Fussnote entfernt: Ihr Text liegt unter Verworfenes",
+  "Footnotes": "Fussnoten",
+  "Larger": "Grösser",
+  "Look Up “{word}”": "«{word}» nachschlagen",
+  "Made a copy: “{title}”": "Kopie erstellt: «{title}»",
+  "Moves the book folder to Deleted Books in your NEO Library, where you can recover it.": "Verschiebt den Buchordner nach «Deleted Books» in deiner NEO-Bibliothek, wo du ihn wiederherstellen kannst.",
+  "No part of this book may be reproduced in any form or by any electronic or mechanical means, including information storage and retrieval systems, without written permission from the author, except for the use of brief quotations in a book review.": "Kein Teil dieses Buches darf ohne schriftliche Genehmigung des Autors in irgendeiner Form oder mit elektronischen oder mechanischen Mitteln, einschliesslich Systemen zur Speicherung und Abfrage von Informationen, vervielfältigt werden, ausgenommen kurze Zitate in einer Buchbesprechung.",
+  "Street, city, postcode": "Strasse, Ort, Postleitzahl",
+  "Text size": "Textgrösse",
+  "White": "Weiss",
+  "white paper": "weisses Papier"
+}
