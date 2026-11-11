@@ -194,6 +194,48 @@ test('learning a Romanian word removes cached Unicode-variant underlines across 
   assert.deepEqual(flagged(), ['frgament']);
 });
 
+test('a book opened again is checked again: new pages, the same chapter ids', async () => {
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'en-US', dir: path.join(root, 'node_modules/dictionary-en-us') })).ok, true);
+  const pageWith = (text) => ({ node: { data: text, nodeType: 3, isConnected: true } });
+  let page = pageWith('a frgament');
+  class TextRange {
+    setStart(node, offset) { this.node = node; this.start = offset; }
+    setEnd(_node, offset) { this.end = offset; }
+    toString() { return this.node.data.slice(this.start, this.end); }
+  }
+  const highlights = new Map();
+  const context = vm.createContext({
+    document: {
+      addEventListener() {},
+      createTreeWalker: (el) => {
+        let node = el.node;
+        return { nextNode: () => { const next = node; node = null; return next; } };
+      },
+      querySelector: (selector) => selector.startsWith('.chapter[') ? page : null
+    },
+    Node: { TEXT_NODE: 3 }, NodeFilter: { SHOW_TEXT: 4 }, Range: TextRange,
+    Highlight: Set, CSS: { highlights }, t: (text) => text, toast() {},
+    currentTab: 'manuscript', currentChapterId: 'ch-test', library: {},
+    window: { neo: { spellCheckWords: async (words) => (await send({ type: 'check', words })).result } }
+  });
+  const app = source('app.js');
+  vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
+  vm.runInContext('spellOn = true;', context);
+  await vm.runInContext('spellScanEl(spellElFor("ch-test"), "ch-test")', context);
+  const flagged = () => [...highlights.get('neo-spell')].map((range) => [range.node, range.toString()]);
+  assert.deepEqual(flagged(), [[page.node, 'frgament']]);
+  // back to the shelf and open the book again: the chapter is a new page
+  page.node.isConnected = false;
+  page = pageWith('another frgament');
+  vm.runInContext('forgetSpelling(); scanSpellingHere();', context);
+  await new Promise(setImmediate);
+  assert.deepEqual(flagged(), [[page.node, 'frgament']]);
+  // openBook is where it happens
+  const open = app.slice(app.indexOf('async function openBook('));
+  assert.match(open.slice(0, open.indexOf('\n}\n')), /forgetSpelling\(\)/);
+});
+
 // Run the real main-process startup functions against a temporary library.
 // Only Electron's window/worker APIs are replaced; settings and library IO
 // use the same code and files as the app.
