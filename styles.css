@@ -1279,6 +1279,10 @@ body.focus-mode .walk-note { opacity: 0.6; }
 #nav-hotzone, #side-hotzone {
   width: clamp(18px, calc((100vw - min((var(--sheet-w) + var(--page-gutter)) * var(--page-zoom, 1), 94vw)) / 2 - 24px), 96px);
 }
+/* over the outline's cards there is no page margin to wake from: the cards
+   run nearly to the window's edges, and a wide zone opened the pane over the
+   outermost ones (#523) */
+#editor-view.outline-tab.board-on #nav-hotzone, #editor-view.outline-tab.board-on #side-hotzone { width: 18px; }
 #nav-pane {
   position: fixed; left: 0; top: 0; bottom: 40px; width: 248px;
   background: var(--pane); border-right: 1px solid #2c2c2c;
