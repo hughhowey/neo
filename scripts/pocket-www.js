@@ -59,8 +59,15 @@ const dictDir = path.join(www, 'dict');
 fs.rmSync(dictDir, { recursive: true, force: true });
 for (const [code, pkg] of Object.entries(langs)) {
   for (const f of ['index.aff', 'index.dic']) copy(path.join(mods, pkg, f), path.join(dictDir, code, f));
-  if (code === 'sv') {
-    for (const f of fs.readdirSync(path.join(root, 'licenses', pkg))) copy(path.join(root, 'licenses', pkg, f), path.join(dictDir, code, f));
+  // the license and notice go along: NEO's own copy in licenses/<pkg>
+  // (Swedish), or the files a dictionary kept in dictionaries/<code> lists
+  // beside its data (Hungarian, Danish)
+  const own = path.join(root, 'licenses', pkg);
+  if (fs.existsSync(own)) for (const f of fs.readdirSync(own)) copy(path.join(own, f), path.join(dictDir, code, f));
+  const kept = path.join(root, 'dictionaries', code);
+  const meta = fs.existsSync(path.join(kept, 'package.json')) ? JSON.parse(fs.readFileSync(path.join(kept, 'package.json'), 'utf8')) : null;
+  if (meta && meta.name === pkg) {
+    for (const f of meta.files || []) if (!/^index\.(aff|dic)$/.test(f)) copy(path.join(kept, f), path.join(dictDir, code, f));
   }
 }
 fs.writeFileSync(path.join(dictDir, 'languages.json'), JSON.stringify(labels) + '\n');
