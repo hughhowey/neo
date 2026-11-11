@@ -3017,15 +3017,6 @@ function wireChapterBody(body, chId) {
       structuralUndo();
       return;
     }
-    // Chromium's selection-delete can duplicate a neighboring character when
-    // the selection spans fragmented text nodes. Merging the fragments right
-    // before any destructive keystroke.
-    if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-      const s = window.getSelection();
-      const destructive = e.key === 'Backspace' || e.key === 'Delete' ||
-        (s && !s.isCollapsed && (e.key.length === 1 || e.key === 'Enter'));
-      if (destructive) healSelectionSeams(body);
-    }
     if (styleKeepScroll(e)) return;
     // a script: its own Enter, Tab and ⌘1–7; no breaks, poetry or chapters
     if (isScript()) {
@@ -3050,10 +3041,6 @@ function wireChapterBody(body, chId) {
     if (handleEnter(e, body, chId)) return;
     if (handleTabSpacing(e)) return;
     smartKeys(e, body);
-  });
-  // when the whole chapter loses focus, merge every fragmented text node
-  body.addEventListener('blur', () => {
-    try { body.normalize(); } catch { /* nothing to merge */ }
   });
   body.addEventListener('mousedown', () => { enterRun = 0; });
   body.addEventListener('click', (e) => {
@@ -3600,22 +3587,6 @@ function spaceSafeDelete(e, body, chId) {
   sel.removeAllRanges(); sel.addRange(nr);
   document.execCommand('insertText', false, '');
   return true;
-}
-
-// Merge fragmented text nodes in the paragraph(s) the selection touches,
-// so native editing operates on whole text instead of seams.
-function healSelectionSeams(body) {
-  const sel = window.getSelection();
-  if (!sel.rangeCount) return;
-  const r = sel.getRangeAt(0);
-  const paraOf = (n) => {
-    if (n && n.nodeType === Node.TEXT_NODE) n = n.parentElement;
-    return n && n.closest ? n.closest('p') : null;
-  };
-  const a = paraOf(r.startContainer);
-  const b = paraOf(r.endContainer);
-  try { if (a && body.contains(a)) a.normalize(); } catch { /* fine */ }
-  try { if (b && b !== a && body.contains(b)) b.normalize(); } catch { /* fine */ }
 }
 
 // Chromium mangles Backspace/Delete beside non-editable inline elements:
@@ -4462,8 +4433,11 @@ function syncChapter(body, chId) {
   scheduleNavRefresh();
 }
 
-// Heal text-node fragmentation in each paragraph as the caret leaves it:
-let lastCaretPara = null;
+// Text nodes are never merged behind the engine's back (by normalize()):
+// its undo history points at the nodes, so ⌘Z after a cut footnote put the
+// words back without the number once the caret had moved on (#477). The
+// character duplication those merges were for (0.3.7): Electron 43 has no
+// such issue.
 let menuPoetryState = false;
 let menuFlushState = false;
 document.addEventListener('selectionchange', () => {
@@ -4475,12 +4449,6 @@ document.addEventListener('selectionchange', () => {
     if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
     const p = el && el.closest ? el.closest('p') : null;
     if (p && p.parentElement && p.parentElement.classList.contains('chapter-body')) caretP = p;
-  }
-  if (caretP !== lastCaretPara) {
-    if (lastCaretPara && lastCaretPara.isConnected) {
-      try { lastCaretPara.normalize(); } catch { /* fine */ }
-    }
-    lastCaretPara = caretP;
   }
   // a script: the element in the pane, the suggestion at the caret
   if (isScript()) {

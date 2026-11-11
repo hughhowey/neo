@@ -176,6 +176,71 @@ test('Backspace on a number removes it and keeps its words in Darlings', async (
   assert.equal(await js(`darlings[0].text`), 'Tally clerks recorded weight in stone.');
 });
 
+// #477: the caret moving on (a click in another line, the window losing
+// focus) used to merge the line's text, and ⌘Z then brought the words back
+// without the number
+for (const away of ['a click in another line', 'the window losing focus']) {
+  test(`cut with its words, then ${away}, ⌘Z puts the number back`, async () => {
+    await js(`(() => { const m = document.querySelector('.chapter-body .fn'); const r = document.createRange(); r.setStart(m.previousSibling, 1); r.setEndAfter(m); m.closest('.chapter-body').focus(); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+    await key('X', [MOD]);
+    assert.equal(await js(`document.querySelectorAll('.chapter-body .fn').length`), 0);
+    if (away === 'a click in another line') { await caretAt(2, 4); await tick(300); }
+    else { await js(`document.activeElement.blur()`); await tick(300); await js(`document.querySelectorAll('.chapter-body')[0].focus()`); }
+    await key('Z', [MOD]);
+    await tick(300);
+    assert.equal(await js(`document.querySelectorAll('.chapter-body .fn').length`), 1);
+    assert.match(await js(`document.querySelector('.chapter-body .fn').closest('p').textContent`), /^The​ scale/);
+    assert.match(await html0(), /data-note="Kessick Cross is invented\."/);
+  });
+}
+
+// NEO no longer merges a line's text nodes (#477), which 0.3.7 did because
+// deleting across a seam between them duplicated a character. Here a line
+// cut into pieces, with numbers between some, is edited across every kind
+// of seam, and each key has to leave exactly the letters it should.
+test('deleting, typing or cutting across split text duplicates nothing', async () => {
+  const keys = [['Backspace'], ['Delete'], ['x'], ['X', [MOD]], ['Return']];
+  // [start, end] in letters; seams fall every 3, a number after 6, 12 and 18
+  const spans = [[2, 4], [5, 7], [6, 9], [1, 10], [11, 19], [3, 6], [9, 9], [15, 15]];
+  const keep = await js(`darlings.length`);
+  const wrong = [];
+  for (const [s, e] of spans) {
+    for (const [k, mods] of keys) {
+      if (s === e && !['Backspace', 'Delete'].includes(k)) continue;
+      await js(`(() => {
+        const b = document.querySelectorAll('.chapter-body')[0];
+        const p = document.createElement('p');
+        p.dataset.seams = '';
+        'abc def ghi jkl mno pqr stu vw'.split(' ').forEach((bit, i) => {
+          p.append(bit);
+          if (i % 2) { const m = document.createElement('span'); m.className = 'fn'; m.contentEditable = 'false'; m.dataset.note = 'n'; m.textContent = '\\u200B'; p.append(m); }
+        });
+        b.insertBefore(p, b.children[1]);
+        const at = (off) => { let c = 0; for (const n of p.childNodes) { if (n.nodeType === 3 && off <= c + n.data.length) return [n, off - c]; if (n.nodeType === 3) c += n.data.length; } };
+        const r = document.createRange(); r.setStart(...at(${s})); r.setEnd(...at(${e}));
+        b.focus(); getSelection().removeAllRanges(); getSelection().addRange(r);
+      })()`);
+      if (k === 'Return') { for (const type of ['keyDown', 'char', 'keyUp']) wc.sendInputEvent({ type, keyCode: type === 'char' ? '\r' : 'Return' }); await tick(150); }
+      else await key(k, mods);
+      const got = await js(`(() => {
+        const b = document.querySelectorAll('.chapter-body')[0];
+        const ps = [...b.querySelectorAll('p[data-seams]')];
+        const text = ps.map((p) => p.textContent.replace(/\\u200B/g, '')).join('¶');
+        ps.forEach((p) => p.remove());
+        return text;
+      })()`);
+      const full = 'abcdefghijklmnopqrstuvw';
+      const put = { x: 'x', Return: '¶' }[k] || '';
+      const want = s < e ? full.slice(0, s) + put + full.slice(e)
+        : k === 'Backspace' ? full.slice(0, s - 1) + full.slice(s) : full.slice(0, s) + full.slice(s + 1);
+      if (got !== want && got !== want.replace('x', 'X')) wrong.push(`${k} over ${s}–${e}: ${got} (wanted ${want})`);
+    }
+  }
+  await js(`darlings.length = ${keep}; syncChapter(document.querySelectorAll('.chapter-body')[0], book.chapterOrder[0])`);
+  assert.deepEqual(wrong, []);
+  assert.equal(await js(`document.querySelectorAll('.chapter-body .fn').length`), 1);
+});
+
 test('on disk, the chapter holds the marker and its note', async () => {
   await js(`flushAllSaves()`);
   await tick(600);
