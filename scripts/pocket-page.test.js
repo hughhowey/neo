@@ -47,3 +47,20 @@ test('every word on Pocket\'s page is marked for translation', () => {
   }
   assert.deepEqual(unmarked, []);
 });
+
+// The phone's own per-app language setting (#507) offers only the languages
+// these two lists name. Each must name every file in locales/, and no more.
+// pt.json is Brazilian Portuguese, so the phones call it pt-BR.
+test('the phones offer every language in locales/', () => {
+  const codes = fs.readdirSync(path.join(root, 'locales'))
+    .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+    .map((f) => (f === 'pt.json' ? 'pt-BR' : f.slice(0, -5)))
+    .sort();
+  const read = (file) => fs.readFileSync(path.join(root, 'pocket', file), 'utf8');
+  const android = [...read('android/app/src/main/res/xml/locales_config.xml').matchAll(/android:name="([\w-]+)"/g)].map((m) => m[1]);
+  const plist = read('ios/App/App/Info.plist').match(/<key>CFBundleLocalizations<\/key>\s*<array>([\s\S]*?)<\/array>/);
+  assert.ok(plist, 'Info.plist has CFBundleLocalizations');
+  const ios = [...plist[1].matchAll(/<string>([\w-]+)<\/string>/g)].map((m) => m[1]);
+  assert.deepEqual(android.sort(), codes);
+  assert.deepEqual(ios.sort(), codes);
+});

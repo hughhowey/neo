@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The languages in locales/, so Android 13+ offers Settings → Apps → NEO Pocket → Language. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+    <locale android:name="el" />
+    <locale android:name="es" />
+    <locale android:name="fr" />
+    <locale android:name="fr-CA" />
+    <locale android:name="hu" />
+    <locale android:name="it" />
+    <locale android:name="ko" />
+    <locale android:name="nl" />
+    <locale android:name="pl" />
+    <locale android:name="pt-BR" />
+    <locale android:name="pt-PT" />
+    <locale android:name="ro" />
+    <locale android:name="ru" />
+    <locale android:name="tr" />
+    <locale android:name="vi" />
+</locale-config>
