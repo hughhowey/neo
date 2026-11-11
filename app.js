@@ -198,6 +198,15 @@ let book = null;             // current book.json
 let chapterHTML = {};        // chapterId -> html (loaded at open)
 let savedHTML = {};          // chapterId -> html as last read from / written to disk
 let savedMetaSig = '';       // book.json as last read/written, minus the volatile bits
+// Two devices on one library. Every chapter this window holds or has held for
+// the open book: one book.json lists that isn't here was added on another
+// device, and is taken in before book.json is written (saveMeta). And the
+// order book.json held when this window last saved or took it: a chapter gone
+// from it since was taken out here, on purpose, and is named in
+// book.removedChapters so the other device lets it go too, where a chapter
+// its book.json merely never heard of is kept.
+let knownChapters = new Set();
+let savedOrder = [];
 let diskStamps = {};         // chapterId -> file mtime as of the last look at the disk
 let writing = {};            // chapterId -> chapter writes still on their way to disk
 let stickies = [];           // [{id, chapterId, text, resolved}]
@@ -892,9 +901,9 @@ async function shelfMeta(bookId) {
 // Saves a book's meta and drops the cached copy. This used to be done by
 // replacing window.neo.writeBookMeta, but on desktop that object is
 // read-only, so the assignment threw and app.js stopped loading.
-function writeBookMeta(bookId, meta) {
+function writeBookMeta(bookId, meta, known) {
   bookMetaCache.delete(bookId);
-  return window.neo.writeBookMeta(bookId, meta);
+  return window.neo.writeBookMeta(bookId, meta, known);
 }
 
 async function renderShelves() {
@@ -2541,6 +2550,8 @@ async function openBook(bookId) {
   for (const chId of Object.keys(html)) knowDisk(bookId, chId, html[chId]);
   diskStamps = {};
   savedMetaSig = metaSig(book); // what disk holds; NEO's own defaults don't count as edits
+  knownChapters = new Set(book.chapterOrder);
+  savedOrder = [...book.chapterOrder];
   stickies = sideStickies;
   darlings = sideDarlings;
   sidecarBase[bookId + '/stickies'] = JSON.stringify(stickies);
@@ -12612,15 +12623,38 @@ function scheduleMetaSave() {
   clearTimeout(saveTimers.meta);
   saveTimers.meta = setTimeout(saveMeta, 800);
 }
-async function saveMeta() {
+// Chapters taken out of the book here since book.json was last saved are
+// named in it, so another device can tell "deleted there" from "never heard
+// of there" (see knownChapters). One put back is no longer named.
+function noteRemovedChapters() {
+  const here = new Set(book.chapterOrder);
+  let list = (Array.isArray(book.removedChapters) ? book.removedChapters : []).filter((c) => !here.has(c));
+  for (const c of savedOrder) if (!here.has(c) && !list.includes(c)) list.push(c);
+  if (list.length > 400) list = list.slice(-400);
+  if (list.length) book.removedChapters = list; else delete book.removedChapters;
+}
+
+async function saveMeta(again) {
   if (!book || shelfExport) return;
   const bookId = book.id;
+  noteRemovedChapters();
+  for (const c of book.chapterOrder) knownChapters.add(c);
   const sig = metaSig(book);
-  const stamp = await writeBookMeta(bookId, book);
+  const order = [...book.chapterOrder];
+  const stamp = await writeBookMeta(bookId, book, [...knownChapters]);
   // the answer belongs to the book that was saved; another one may be open now
   if (!book || book.id !== bookId) return;
+  if (stamp && Array.isArray(stamp.unseen)) {
+    // another device added a chapter since this one last looked: nothing was
+    // written. Take the chapter in, then save (once; the next save tries again)
+    if (again) return;
+    await refreshFromDisk();
+    if (book && book.id === bookId) await saveMeta(true);
+    return;
+  }
   if (typeof stamp === 'string') book.modified = stamp;
   savedMetaSig = sig;
+  savedOrder = order;
 }
 
 function flushAllSaves(e) {
@@ -13387,11 +13421,27 @@ async function refreshFromDisk() {
       // book.json stands, no chapter holding words is dropped: theirs keeps
       // the chapters with unsaved words here, and ours (when this device
       // restructured too and hasn't saved yet) takes in the chapters they wrote.
-      const order = [...(mine ? book.chapterOrder : meta.chapterOrder)];
+      const hasWords = (h) => /[^\s]/.test(String(h || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' '));
+      const theirRemoved = new Set(Array.isArray(meta.removedChapters) ? meta.removedChapters : []);
+      const myRemoved = new Set(Array.isArray(book.removedChapters) ? book.removedChapters : []);
+      // (a chapter taken out here, its file gone, that a book.json written
+      // before it heard of that still lists: it stays out)
+      const order = mine ? [...book.chapterOrder] : meta.chapterOrder.filter((c) => !(myRemoved.has(c) && chapterHTML[c] === undefined && !hasWords(incoming[c])));
       const other = mine ? meta.chapterOrder : book.chapterOrder;
+      const kept = []; // chapters of this device's that their book.json doesn't list, and stay
       other.forEach((chId, i) => {
         if (order.includes(chId)) return;
-        if (mine ? !/[^\s]/.test(String(incoming[chId] || '').replace(/<[^>]*>/g, '')) : chapterHTML[chId] === savedHTML[chId]) return;
+        if (mine) {
+          if (!hasWords(incoming[chId])) return;
+        } else if (chapterHTML[chId] === savedHTML[chId]) {
+          // Saved here, and not in their list. They took it out (they say
+          // so, or its file is gone from the disk): it goes. Otherwise their
+          // book.json was written without ever having heard of it (both
+          // devices added a chapter while apart, or an older NEO saved over
+          // the list): a chapter with words in it stays in the book.
+          if (!hasWords(chapterHTML[chId]) || theirRemoved.has(chId) || (stamps && stamps[chId] === undefined)) return;
+        }
+        if (!mine) kept.push(chId);
         const prev = other.slice(0, i).reverse().find((c) => order.includes(c));
         order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, chId);
       });
@@ -13404,9 +13454,25 @@ async function refreshFromDisk() {
         }
         if (mine) {
           book.chapterOrder = order;
+          // what they took out stays named, with what this device took out
+          const removed = [...new Set([...myRemoved, ...theirRemoved])].filter((c) => !order.includes(c));
+          if (removed.length) book.removedChapters = removed; else delete book.removedChapters;
         } else {
+          const was = book;
           book = { ...meta, chapterOrder: order, lastPosition: book.lastPosition, dailyCounts: book.dailyCounts };
+          // a chapter kept keeps its name, its kind and its notes
+          for (const chId of kept) {
+            for (const key of ['chapterTitles', 'chapterKinds', 'chapterNotes', 'sectionNotes', 'sceneNotes']) {
+              if (!was[key] || was[key][chId] === undefined) continue;
+              book[key] = { ...(book[key] || {}), [chId]: was[key][chId] };
+            }
+          }
+          if (Array.isArray(book.removedChapters)) {
+            book.removedChapters = book.removedChapters.filter((c) => !order.includes(c));
+            if (!book.removedChapters.length) delete book.removedChapters;
+          }
           savedMetaSig = metaSig(meta);
+          savedOrder = [...meta.chapterOrder];
         }
         if (metaSig(book) !== savedMetaSig) scheduleMetaSave();
         if (!book.chapterOrder.includes(currentChapterId)) currentChapterId = null;
@@ -13414,6 +13480,8 @@ async function refreshFromDisk() {
         restructured = true;
       }
     }
+    // their list has been looked at, whatever was made of it
+    if (Array.isArray(meta.chapterOrder)) for (const chId of meta.chapterOrder) knownChapters.add(chId);
     book.dailyCounts = days;
     let sideChanged = false;
     for (const name of Object.keys(sides)) {

@@ -16,6 +16,7 @@
     "test:cover-text": "electron scripts/cover-text.e2e.js",
     "test:caret": "electron scripts/caret.e2e.js",
     "test:dropcap": "electron scripts/dropcap.e2e.js",
+    "test:twodevices": "electron scripts/twodevices.e2e.js",
     "test:emphasis": "electron scripts/emphasis.e2e.js",
     "test:manuscript": "electron scripts/manuscript.e2e.js",
     "test:pages": "electron scripts/pages.e2e.js",

@@ -100,6 +100,30 @@ describe('filesystem', { concurrency: 1 }, () => {
     }
   });
 
+  test('book.json is not written over a chapter list naming a chapter the window has never seen', () => {
+    const dir = tempLibrary();
+    try {
+      const book = main.call('book:create', { title: 'Two', author: 'Ada' });
+      const file = path.join(dir, book.id, 'book.json');
+      const mine = { ...book, chapterOrder: ['c1', 'c2'] };
+      assert.equal(typeof main.call('book:writeMeta', book.id, mine, ['c1', 'c2']), 'string');
+      // another device adds c3 and its book.json arrives
+      fs.writeFileSync(file, JSON.stringify({ ...mine, chapterOrder: ['c1', 'c2', 'c3'] }));
+      const r = main.call('book:writeMeta', book.id, { ...mine, wordCount: 9 }, ['c1', 'c2']);
+      assert.equal(JSON.stringify(r), JSON.stringify({ unseen: ['c3'] }));
+      assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).chapterOrder, ['c1', 'c2', 'c3'], 'left as the other device wrote it');
+      // once the window has taken c3 in, or taken it out on purpose, the save lands
+      assert.equal(typeof main.call('book:writeMeta', book.id, { ...mine, chapterOrder: ['c1', 'c2', 'c3'] }, ['c1', 'c2', 'c3']), 'string');
+      assert.equal(typeof main.call('book:writeMeta', book.id, mine, ['c1', 'c2', 'c3']), 'string');
+      assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).chapterOrder, ['c1', 'c2']);
+      // a save that names no chapters it knows (the shelf's own) is not checked
+      fs.writeFileSync(file, JSON.stringify({ ...mine, chapterOrder: ['c1', 'c2', 'c4'] }));
+      assert.equal(typeof main.call('book:writeMeta', book.id, mine), 'string');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('chapters round-trip, and a missing chapter reads back empty', () => {
     const dir = tempLibrary();
     try {

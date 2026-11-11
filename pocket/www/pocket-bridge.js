@@ -227,7 +227,15 @@
       } catch { /* an empty list is honest enough */ }
       return out;
     },
-    writeBookMeta: async (bookId, meta) => {
+    // the same rule as main.js book:writeMeta: a chapter book.json lists that
+    // this page has never seen was added on another device; it is taken in
+    // before anything is written over the list that names it
+    writeBookMeta: async (bookId, meta, known) => {
+      if (Array.isArray(known)) {
+        const disk = await readJSONFile(p(bookId, 'book.json'), null);
+        const unseen = disk && Array.isArray(disk.chapterOrder) ? disk.chapterOrder.filter((c) => typeof c === 'string' && !known.includes(c)) : [];
+        if (unseen.length) return { unseen };
+      }
       meta.modified = new Date().toISOString();
       await writeJSONFile(p(bookId, 'book.json'), meta);
       return meta.modified;

@@ -1063,12 +1063,35 @@ function readBookMeta(bookId) {
   return rebuildBookMeta(bookId);
 }
 
-ipcMain.handle('book:writeMeta', (_e, bookId, meta) => {
+// `known` is every chapter the window holds or has held for this book. When
+// book.json on disk lists one it has never seen, another device added a
+// chapter since this window last looked: nothing is written, and the window
+// is told, so it takes the chapter in first. (book.json is saved whole at
+// every pause in typing; written blind, it dropped the other device's new
+// chapter from the book, its words left in a file no list named.)
+ipcMain.handle('book:writeMeta', (_e, bookId, meta, known) => {
+  const file = path.join(bookDir(bookId), 'book.json');
+  if (Array.isArray(known)) {
+    const unseen = unseenChapters(file, known);
+    if (unseen.length) return { unseen };
+  }
   meta.modified = new Date().toISOString();
-  writeJSON(path.join(bookDir(bookId), 'book.json'), meta);
+  writeJSON(file, meta);
   writeCatalog();
   return meta.modified;
 });
+
+// shared with Pocket's bridge (same rule)
+function unseenChapters(file, known) {
+  let disk = null;
+  try {
+    if (isCloudOnly(file)) return [];
+    disk = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch { return []; } // no book.json yet, or one that can't be read: nothing to compare
+  if (!disk || !Array.isArray(disk.chapterOrder)) return [];
+  const seen = new Set(known);
+  return disk.chapterOrder.filter((c) => typeof c === 'string' && !seen.has(c));
+}
 
 // {chapterId: mtime and size} for a book's chapter files — how refreshFromDisk
 // tells what changed without re-reading every chapter. The size is there
