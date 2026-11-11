@@ -2404,3 +2404,23 @@ html:lang(ko) :is(#aux-paper h2, .pen-slot, .shelf-label, .shelf-bound-mark, .pt
   .side-cards-title, .side-card-head, .notes-part, .ns-label, #notes-up, #notes-outline b) {
   letter-spacing: 0.04em;
 }
+
+/* ================================================================== */
+/* ZEN MODE (View → Zen Mode, ZEN MODE in app.js): full screen with    */
+/* nothing on it but the words. The room takes the paper's color, so   */
+/* the sheet's edges and shadow go; the bar, the panes and their hover */
+/* zones go too, pinned or not, and nothing comes back on hover. Esc   */
+/* brings it all back.                                                 */
+/* ================================================================== */
+html:has(> body.zen), body.zen { background: var(--paper); }
+body.zen #bottombar, body.zen #nav-pane, body.zen #side-pane,
+body.zen #nav-hotzone, body.zen #side-hotzone, body.zen .walk-note { display: none !important; }
+body.zen .sheet, body.zen #aux-paper { box-shadow: none !important; border-color: transparent !important; }
+/* the page stands in the middle again, with the room the bar took */
+body.zen #editor-view #paper-scroll { bottom: 0 !important; }
+body.zen #editor-view:not(.board-on) #paper-scroll { left: 50% !important; right: auto !important; }
+body.zen #editor-view.board-on #paper-scroll { left: 0 !important; right: 0 !important; }
+body.zen #paper-scroll::-webkit-scrollbar { width: 0; height: 0; }
+body.zen #dragstrip { color: transparent; }
+/* the one toast (how to come back) sits where the bar was */
+body.zen #hint { bottom: 24px; }
