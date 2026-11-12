@@ -1312,6 +1312,7 @@ body.focus-mode .walk-note { opacity: 0.6; }
 .nav-item .n-label {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 155px;
 }
+.nav-item[draggable="true"] { cursor: grab; }
 .nav-item .n-row { cursor: grab; }
 .nav-item.dragging { opacity: 0.4; }
 .nav-drop-ind {
@@ -1330,6 +1331,21 @@ body.focus-mode .walk-note { opacity: 0.6; }
 /* a long outline note shows its first two lines until you click into it */
 .nav-note:not(:focus) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .nav-note:focus { color: #ccc; }
+.nav-note-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  column-gap: 4px;
+}
+.nav-note-row .nav-note[contenteditable="false"] { cursor: inherit; user-select: none; }
+.nav-note-edit {
+  width: 22px; height: 22px; padding: 0;
+  border: 0; border-radius: 3px; background: none; color: var(--muted);
+  font-size: 16px; line-height: 1;
+  opacity: 0; pointer-events: none;
+}
+.nav-item:hover .nav-note-edit:not(:disabled), .nav-note-edit:focus-visible {
+  opacity: 1; pointer-events: auto;
+}
+.nav-note-edit:hover, .nav-note-edit:focus-visible { color: var(--accent); }
 #nav-add {
   display: block; width: calc(100% - 36px); margin: 14px 18px 0;
   background: none; border: 1px dashed #3a3a3a; border-radius: 6px;
