@@ -16,7 +16,7 @@ for (const file of ['index.aff', 'index.dic', 'license']) {
 }
 for (const file of ['NOTICE.txt', 'MPL-1.1.txt', 'upstream-license.txt']) {
   assert.deepEqual(fs.readFileSync(path.join(dictionary, file)),
-    fs.readFileSync(path.join(root, 'licenses/dictionary-ro', file)), file);
+    fs.readFileSync(path.join(root, 'notices/dictionary-ro', file)), file);
 }
 for (const file of ['spell-worker.js', 'spell-ro.js']) {
   assert.deepEqual(asar.extractFile(path.join(resources, 'app.asar'), file),
@@ -29,7 +29,7 @@ for (const file of ['index.aff', 'index.dic', 'license']) {
 }
 for (const file of ['NOTICE.txt', 'MPL-2.0.txt', 'upstream-license.txt']) {
   assert.deepEqual(fs.readFileSync(path.join(portuguese, file)),
-    fs.readFileSync(path.join(root, 'licenses/dictionary-pt', file)), file);
+    fs.readFileSync(path.join(root, 'notices/dictionary-pt', file)), file);
 }
 const swedish = path.join(resources, 'app.asar.unpacked/node_modules/dictionary-sv');
 for (const file of ['index.aff', 'index.dic', 'license']) {
@@ -38,10 +38,10 @@ for (const file of ['index.aff', 'index.dic', 'license']) {
 }
 for (const file of ['NOTICE.txt', 'LGPL-3.0.txt', 'GPL-3.0.txt', 'upstream-license.txt']) {
   assert.deepEqual(fs.readFileSync(path.join(swedish, file)),
-    fs.readFileSync(path.join(root, 'licenses/dictionary-sv', file)), file);
+    fs.readFileSync(path.join(root, 'notices/dictionary-sv', file)), file);
 }
 for (const file of ['NOTICE.txt', 'MPL-1.1.txt']) {
   assert.deepEqual(fs.readFileSync(path.join(resources, 'licenses/hunspell', file)),
-    fs.readFileSync(path.join(root, 'licenses/hunspell', file)), file);
+    fs.readFileSync(path.join(root, 'notices/hunspell', file)), file);
 }
 console.log('Romanian, Portuguese and Swedish dictionaries, Hunspell and license notices, and worker code verified.');

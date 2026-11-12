@@ -35,7 +35,8 @@
     "package:mac": "electron-builder --mac",
     "package:win": "electron-builder --win",
     "package:linux": "electron-builder --linux",
-    "package:all": "electron-builder --mac --win --linux"
+    "package:all": "electron-builder --mac --win --linux",
+    "lint:reuse": "reuse lint"
   },
   "build": {
     "appId": "com.hughhowey.neo",
@@ -123,19 +124,35 @@
     ],
     "extraResources": [
       {
-        "from": "licenses/dictionary-sv",
+        "from": "notices/dictionary-sv",
         "to": "app.asar.unpacked/node_modules/dictionary-sv"
       },
       {
-        "from": "licenses/dictionary-ro",
+        "from": "notices/dictionary-ro",
         "to": "app.asar.unpacked/node_modules/dictionary-ro"
       },
       {
-        "from": "licenses/dictionary-pt",
+        "from": "notices/dictionary-pt",
         "to": "app.asar.unpacked/node_modules/dictionary-pt"
       },
       {
-        "from": "licenses/hunspell",
+        "from": "notices/dictionary-de",
+        "to": "licenses/dictionary-de"
+      },
+      {
+        "from": "notices/dictionary-es",
+        "to": "licenses/dictionary-es"
+      },
+      {
+        "from": "notices/dictionary-fr",
+        "to": "licenses/dictionary-fr"
+      },
+      {
+        "from": "notices/dictionary-pl",
+        "to": "licenses/dictionary-pl"
+      },
+      {
+        "from": "notices/hunspell",
         "to": "licenses/hunspell"
       }
     ],
@@ -147,7 +164,7 @@
       "!*.md",
       "!.github/**",
       "!scripts/**",
-      "!licenses/**",
+      "!notices/**",
       "!Claude outputs/**",
       "!dictionaries/**",
       "!locales/_template.json",

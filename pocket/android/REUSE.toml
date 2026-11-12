@@ -1,0 +1,15 @@
+# Files the Android tooling generated. NEO's own code here falls back on the
+# root REUSE.toml (MIT); gradlew and gradlew.bat carry their own SPDX lines.
+version = 1
+
+[[annotations]]
+path = ["gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2015-2021 the original authors (Gradle)"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["app/src/test/java/com/getcapacitor/myapp/ExampleUnitTest.java", "app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2017-present Ionic (Capacitor's Android template)"
+SPDX-License-Identifier = "MIT"

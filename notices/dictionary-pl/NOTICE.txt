@@ -1,0 +1,24 @@
+Polish spelling dictionary (Polish Native Lang Project)
+
+NEO distributes the unmodified dictionary and affix data from dictionary-pl
+2.0.0 under the Mozilla Public License 2.0
+option of its GPL / LGPL / MPL license, and does not remove the alternatives.
+NEO's MIT license does not replace the dictionary's license.
+
+Dictionary maintainer: Marek Futrega; corrections: Marcin Miłkowski.
+The upstream notice is in upstream-license.txt. The selected
+license is in MPL-2.0.txt.
+
+Source availability
+
+index.aff and index.dic are the dictionary's source files, shipped verbatim:
+inside app.asar at node_modules/dictionary-pl/ on desktop, with this notice in
+the resources directory's licenses/dictionary-pl/, and in dict/<language>/ in
+NEO Pocket, beside this notice.
+
+Exact source package:
+https://registry.npmjs.org/dictionary-pl/-/dictionary-pl-2.0.0.tgz
+Package project:
+https://github.com/wooorm/dictionaries/tree/main/dictionaries/pl
+Original dictionary:
+https://github.com/LibreOffice/dictionaries/tree/master/pl_PL

@@ -34,6 +34,8 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `locales/<code>.json` | One language. Regional files (`fr-CA.json`) hold only the strings that differ |
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
+| `notices/<package>/` | Notices and license texts that ship beside npm dictionaries and Hunspell, in the app and in Pocket |
+| `REUSE.toml`, `LICENSES/` | Every file's copyright and license (REUSE 3.3); nested `REUSE.toml` files hold third-party folders' own |
 
 `app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, manuscript format.
 
@@ -241,4 +243,5 @@ Hugh pushes and releases himself and isn't a git user. Hand him work as a git bu
 - A new writer-visible string needs `t()` and a template refresh.
 - A new way to remove text needs a recovery path and a sentence in the UI that says where the words went.
 - Export formats are assembled in `app.js` and written by `export:save` in `main.js`. EPUB is a zip built in memory. PDF is printed from temporary HTML.
+- A file NEO didn't write (dictionary, font, vendored script) needs a table in the nearest `REUSE.toml` with its upstream copyright and SPDX expression, its license text in `LICENSES/`, and `reuse lint` passing. The notices that ship beside npm dictionaries live in `notices/<package>/` (not `licenses/`: it would collide with `LICENSES/` on a Mac). See CONTRIBUTING.md.
 - Errors in the main process are appended to `neo-errors.log` via `logError`. Renderer failures go through `window.neo.logError`. Do not swallow a save failure; `persistChapter` rolls `savedHTML` back so the next flush retries.

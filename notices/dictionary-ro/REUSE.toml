@@ -1,0 +1,16 @@
+# dictionary-ro 3.0.0's license and notice, shipped beside its data (see NOTICE.txt).
+version = 1
+
+[[annotations]]
+# The dictionary data; NEO puts this file beside it in the app, where the
+# package's own index.js and package.json (MIT, Titus Wormer) are not covered here.
+path = ["index.aff", "index.dic", "*.txt"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2005-2013 Rospell Team <http://rospell.sourceforge.net>"
+SPDX-License-Identifier = "GPL-2.0-or-later OR LGPL-2.1-or-later OR MPL-1.1+"
+
+[[annotations]]
+path = ["NOTICE.txt", "REUSE.toml"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Hugh Howey and NEO contributors"
+SPDX-License-Identifier = "MIT"

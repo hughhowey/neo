@@ -1,0 +1,24 @@
+French spelling dictionary (Grammalecte)
+
+NEO distributes the unmodified dictionary and affix data from dictionary-fr
+3.0.0. Its data is licensed under the Mozilla Public
+License 2.0.
+NEO's MIT license does not replace the dictionary's license.
+
+Copyright Olivier R. and the Grammalecte contributors.
+The upstream notice is in upstream-license.txt. The license text is
+MPL-2.0.txt.
+
+Source availability
+
+index.aff and index.dic are the dictionary's source files, shipped verbatim:
+inside app.asar at node_modules/dictionary-fr/ on desktop, with this notice in
+the resources directory's licenses/dictionary-fr/, and in dict/<language>/ in
+NEO Pocket, beside this notice.
+
+Exact source package:
+https://registry.npmjs.org/dictionary-fr/-/dictionary-fr-3.0.0.tgz
+Package project:
+https://github.com/wooorm/dictionaries/tree/main/dictionaries/fr
+Original dictionary:
+https://grammalecte.net

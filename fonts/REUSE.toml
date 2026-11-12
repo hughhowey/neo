@@ -1,0 +1,153 @@
+# The bundled fonts. Each family's license, with its copyright and reserved
+# names, is the LICENSE-<family>.txt beside it.
+version = 1
+
+[[annotations]]
+path = "abril-fatface-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 TypeTogether (www.type-together.com)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "alegreya-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 The Alegreya Project Authors (https://github.com/huertatipografica/Alegreya)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "anton-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2020 The Anton Project Authors (https://github.com/googlefonts/AntonFont.git)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "bebas-neue-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2019 The Bebas Neue Project Authors (https://github.com/dharmatype/Bebas-Neue)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "cinzel-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "courier-prime-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2015 The Courier Prime Project Authors (https://github.com/quoteunquoteapps/CourierPrime)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "forum-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 Denis Masharov <denis.masharov@gmail.com>"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "gelasio-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2017 The Gelasio Project Authors (https://github.com/SorkinType/Gelasio)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "iAWriterQuattroS-*"
+precedence = "closest"
+SPDX-FileCopyrightText = ["2018 Information Architects Inc.", "2017 IBM Corp."]
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "josefin-sans-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2010 The Josefin Sans Project Authors (https://github.com/ThomasJockin/JosefinSansFont-master)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "jost-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2020 The Jost Project Authors (https://github.com/indestructible-type/Jost)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "libre-baskerville-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2012 The Libre Baskerville Project Authors (https://github.com/impallari/Libre-Baskerville)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "libre-bodoni-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2021 The Libre Bodoni Project Authors"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "lora-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "marck-script-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 Denis Masharov <denis.masharov@gmail.com> & Marck Fogel"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "merriweather-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2020 The Merriweather Project Authors (https://github.com/EbenSorkin/Merriweather4)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["noto-sans-kr-*", "noto-serif-kr-*"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2012 Google Inc."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "old-standard-tt-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 The Old Standard Project Authors (amkryukov@gmail.com)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "oswald-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2016 The Oswald Project Authors (https://github.com/googlefonts/OswaldFont)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "playfair-display-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "prata-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011 The Prata Project Authors (https://github.com/cyrealtype/Prata)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "russo-one-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2011-2012 Jovanny Lemonad (jovanny.ru)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "source-serif-pro-*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2014-2021 Adobe (http://www.adobe.com/)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "texgyre*"
+precedence = "closest"
+SPDX-FileCopyrightText = "2006-2009 B. Jackowski and J.M. Nowacki (on behalf of TeX Users Groups)"
+SPDX-License-Identifier = "LPPL-1.3c"
+
+[[annotations]]
+path = "REUSE.toml"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Hugh Howey and NEO contributors"
+SPDX-License-Identifier = "MIT"

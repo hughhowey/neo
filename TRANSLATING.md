@@ -28,7 +28,7 @@ Spellcheck starts off on every launch. Choosing a dictionary does not turn it on
 
 Romanian lookup accepts standard diacritics, legacy `ş/ţ`, and decomposed Unicode accents without changing manuscript text. Suggestions use standard Romanian spelling. This checks spelling, not grammar: both `sa` and `să` are words. See [the Romanian evaluation](scripts/romanian-spellcheck.md) and [the Portuguese evaluation](scripts/portuguese-spellcheck.md) for performance and licensing details.
 
-The Swedish dictionary (`sv`, **Svenska** in Edit → Spellcheck Language) is Göran Andersson's LibreOffice dictionary, pinned as `dictionary-sv` 4.0.0. Its data is LGPL 3.0, separately from NEO's MIT license. Desktop and Pocket distribute the unmodified `.aff`/`.dic` source files with attribution and the full LGPL/GPL license texts (`licenses/dictionary-sv`). This adds spellchecking only, not a Swedish interface translation.
+The Swedish dictionary (`sv`, **Svenska** in Edit → Spellcheck Language) is Göran Andersson's LibreOffice dictionary, pinned as `dictionary-sv` 4.0.0. Its data is LGPL 3.0, separately from NEO's MIT license. Desktop and Pocket distribute the unmodified `.aff`/`.dic` source files with attribution and the full LGPL/GPL license texts (`notices/dictionary-sv`). This adds spellchecking only, not a Swedish interface translation.
 
 The Ukrainian dictionary is LibreOffice's uk_UA (from the dict_uk project), kept in `dictionaries/uk` under its MPL 1.1 license; the npm `dictionary-uk` package is GPL-3.0 and stays out. A suggestion with an apostrophe (м'ясо) goes onto the page with ’.
 
