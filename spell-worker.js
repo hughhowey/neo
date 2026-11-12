@@ -6,7 +6,7 @@
 // WebAssembly. It reads the same .aff/.dic files as-is and applies the affix
 // rules on lookup instead of expanding every word form into memory up front,
 // so even the big dictionaries (French, Portuguese) load in well under a
-// second. See licenses/hunspell for its license and source.
+// second. See notices/hunspell for its license and source.
 'use strict';
 
 const fs = require('fs');

@@ -1,0 +1,13 @@
+# Licensing of NEO, after the REUSE specification 3.3 (https://reuse.software).
+#
+# Everything is NEO's own and MIT unless a REUSE.toml nearer to the file says
+# otherwise: the dictionaries, fonts, print and notices folders and
+# pocket/android hold their own. "closest" lets those win over this one.
+# The license texts are in LICENSES/; check with `reuse lint`.
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Hugh Howey and NEO contributors"
+SPDX-License-Identifier = "MIT"

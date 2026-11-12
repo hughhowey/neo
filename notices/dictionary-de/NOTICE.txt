@@ -1,0 +1,24 @@
+German spelling dictionary (igerman98)
+
+NEO distributes the unmodified dictionary and affix data from dictionary-de
+3.0.0. Its data is licensed under the GNU General Public License,
+version 2 or version 3; NEO does not choose between them.
+NEO's MIT license does not replace the dictionary's license.
+
+Copyright (C) 1999-2016 Björn Jacke <bjoern@j3e.de>.
+The upstream notice is in upstream-license.txt. The license texts are
+GPL-2.0.txt and GPL-3.0.txt.
+
+Source availability
+
+index.aff and index.dic are the dictionary's source files, shipped verbatim:
+inside app.asar at node_modules/dictionary-de/ on desktop, with this notice in
+the resources directory's licenses/dictionary-de/, and in dict/<language>/ in
+NEO Pocket, beside this notice.
+
+Exact source package:
+https://registry.npmjs.org/dictionary-de/-/dictionary-de-3.0.0.tgz
+Package project:
+https://github.com/wooorm/dictionaries/tree/main/dictionaries/de
+Original dictionary:
+https://www.j3e.de/ispell/igerman98/

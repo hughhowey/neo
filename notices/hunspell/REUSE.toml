@@ -1,0 +1,14 @@
+# Hunspell 1.7.3's license and notice (see NOTICE.txt).
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "Németh László and the Hunspell contributors"
+SPDX-License-Identifier = "MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later"
+
+[[annotations]]
+path = ["NOTICE.txt", "REUSE.toml"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Hugh Howey and NEO contributors"
+SPDX-License-Identifier = "MIT"

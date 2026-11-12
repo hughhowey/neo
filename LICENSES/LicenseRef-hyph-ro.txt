@@ -1,0 +1,10 @@
+No licence.
+
+The Romanian hyphenation patterns (hyph-ro.tex, version 1.1, 29.10.1996,
+Copyright (C) 1995-1996 Adrian Rezus) state no licence. Their header in
+hyph-utf8 says "licence: - text: [None]". They are distributed with TeX Live
+as part of the hyph-utf8 package (https://www.hyphenation.org/tex,
+https://github.com/hyphenation/tex-hyphen) and by the npm package hyphen,
+from which NEO takes them unchanged.
+
+This file records that no licence was found. It grants nothing.

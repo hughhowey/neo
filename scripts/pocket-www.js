@@ -43,6 +43,8 @@ const index = fs.readFileSync(path.join(hun, 'index.mjs'), 'utf8')
 if (!index.includes('import("#hunspell-glue")')) throw new Error('hunspell-wasm changed shape: index.mjs no longer imports #hunspell-glue');
 fs.writeFileSync(path.join(spellDir, 'index.js'), index.replace('import("#hunspell-glue")', 'import("./hunspell.web.js")'));
 copy(path.join(hun, 'lib', 'hunspell.web.mjs'), path.join(spellDir, 'hunspell.web.js'));
+// Hunspell's license and notice go along, as on desktop (Resources/licenses/hunspell)
+for (const f of ['NOTICE.txt', 'MPL-1.1.txt']) copy(path.join(root, 'notices', 'hunspell', f), path.join(spellDir, f));
 
 // The dictionaries: the list desktop NEO offers (SPELL_LANGUAGES in main.js)
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
@@ -59,16 +61,19 @@ const dictDir = path.join(www, 'dict');
 fs.rmSync(dictDir, { recursive: true, force: true });
 for (const [code, pkg] of Object.entries(langs)) {
   for (const f of ['index.aff', 'index.dic']) copy(path.join(mods, pkg, f), path.join(dictDir, code, f));
-  // the license and notice go along: NEO's own copy in licenses/<pkg>
+  // the license and notice go along: NEO's own copy in notices/<pkg>
   // (Swedish), or the files a dictionary kept in dictionaries/<code> lists
   // beside its data (Hungarian, Danish)
-  const own = path.join(root, 'licenses', pkg);
+  const own = path.join(root, 'notices', pkg);
   if (fs.existsSync(own)) for (const f of fs.readdirSync(own)) copy(path.join(own, f), path.join(dictDir, code, f));
   const kept = path.join(root, 'dictionaries', code);
   const meta = fs.existsSync(path.join(kept, 'package.json')) ? JSON.parse(fs.readFileSync(path.join(kept, 'package.json'), 'utf8')) : null;
   if (meta && meta.name === pkg) {
     for (const f of meta.files || []) if (!/^index\.(aff|dic)$/.test(f)) copy(path.join(kept, f), path.join(dictDir, code, f));
   }
+  // every other npm dictionary carries its upstream notice as `license`
+  const upstream = path.join(mods, pkg, 'license');
+  if (fs.existsSync(upstream) && !fs.existsSync(path.join(dictDir, code, 'upstream-license.txt'))) copy(upstream, path.join(dictDir, code, 'upstream-license.txt'));
 }
 fs.writeFileSync(path.join(dictDir, 'languages.json'), JSON.stringify(labels) + '\n');
 

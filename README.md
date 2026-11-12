@@ -120,6 +120,8 @@ Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [MIT](LICENSE) — free to use, free to modify, free to share.
 
+The spellcheck dictionaries, fonts and print tools NEO bundles keep their own licenses. Every file's license is declared in [`REUSE.toml`](REUSE.toml) files, with the license texts in [`LICENSES/`](LICENSES) ([REUSE](https://reuse.software)); see [CONTRIBUTING.md](CONTRIBUTING.md#licenses-and-third-party-files).
+
 ## Philosophy
 
 If you didn't know, I opened up the Silo universe to fan fiction years ago. And not just to put on fan fiction sites, but you can charge money for the things you write and keep every penny of the income! Lots of incredible Silo Stories out there. But readers are forever looking for more.

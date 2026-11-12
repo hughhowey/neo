@@ -1,0 +1,25 @@
+Spanish spelling dictionary (RLA-ES)
+
+NEO distributes the unmodified dictionary and affix data from dictionary-es
+4.0.0 under the Mozilla Public License 1.1
+option of its GPL-3.0-or-later / LGPL-3.0-or-later / MPL-1.1-or-later license, and
+does not remove the alternatives.
+NEO's MIT license does not replace the dictionary's license.
+
+Copyright Santiago Bosio and the RLA-ES contributors.
+The upstream notice is in upstream-license.txt. The selected license
+is in MPL-1.1.txt.
+
+Source availability
+
+index.aff and index.dic are the dictionary's source files, shipped verbatim:
+inside app.asar at node_modules/dictionary-es/ on desktop, with this notice in
+the resources directory's licenses/dictionary-es/, and in dict/<language>/ in
+NEO Pocket, beside this notice.
+
+Exact source package:
+https://registry.npmjs.org/dictionary-es/-/dictionary-es-4.0.0.tgz
+Package project:
+https://github.com/wooorm/dictionaries/tree/main/dictionaries/es
+Original dictionary:
+https://github.com/sbosio/rla-es
