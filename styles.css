@@ -1520,6 +1520,20 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
   padding: 6px 14px; color: #191919; font-size: 12px;
 }
 #stats-chart { background: #1d1d1d; border-radius: 8px; padding: 10px; margin-top: 8px; }
+.stats-chart-tooltip {
+  position: fixed; z-index: 1; pointer-events: none; max-width: calc(100vw - 16px);
+  padding: 6px 9px; border: 1px solid #555; border-radius: 5px;
+  background: var(--bg-soft); color: inherit; font-size: 12px; line-height: 1.35;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35); white-space: nowrap;
+}
+body.light .stats-chart-tooltip { border-color: #cfcac0; box-shadow: 0 4px 14px rgba(0,0,0,0.18); }
+/* the chart's view switch: Daily | Sprints */
+.st-seg { display: flex; justify-content: center; gap: 18px; margin-top: 6px; }
+.st-seg button {
+  background: none; border: none; border-bottom: 2px solid transparent; padding: 3px 8px;
+  font-size: 12px; letter-spacing: 1px; color: var(--muted); cursor: pointer;
+}
+.st-seg button.on { color: var(--ink); border-bottom-color: var(--accent); }
 /* on a phone the modal is narrower than the chart's 520px: it scales down instead of spilling out */
 @media (max-width: 600px) {
   #stats-chart { box-sizing: border-box; max-width: 100%; height: auto; display: block; }
