@@ -12403,13 +12403,14 @@ function trackDailyWords(total) {
   if (sprint && total < sprint.startCount) sprint.startCount = total;
   const wordsToday = Math.max(0, book.dailyCounts[today].end - book.dailyCounts[today].start);
   const gc = $('#goal-counter');
-  if (sprint && !sprint.done) {
-    const sprintWords = total - sprint.startCount;
-    setText(gc, `⚡ ${fmtNum(sprintWords)} / ${fmtNum(sprint.target)}`);
-    if (sprintWords >= sprint.target) {
-      sprint.done = true;
-      toast(t('Sprint complete — {n} words. Well earned.', { n: sprintWords }), 6000);
-    }
+  // a sprint to a word count ends at the word that reaches it; a timed one
+  // is ended by its clock (sprintTick)
+  if (sprint && sprint.by === 'words' && sprintOver(sprint, total, Date.now())) endSprint('words', total);
+  showSprintAgain();
+  if (sprint) {
+    sprint.words = total - sprint.startCount;
+    gc.classList.remove('goal-met');
+    setText(gc, sprintCounterText(sprint, Date.now()));
   } else {
     const goal = library.dailyGoal || 0;
     setText(gc, goal
@@ -15335,7 +15336,153 @@ document.addEventListener('input', () => {
 /*  GOALS, SPRINTS, AND THE CHART                                      */
 /* ================================================================== */
 
-let sprint = null;
+let sprint = null;      // the sprint that is running
+let lastSprint = null;  // how the last one went, and its settings, to run it again
+
+// ---- sprint rules: plain functions, tested in scripts/sprint.test.js ----
+// A sprint ends after a set time (the default: ten minutes) or at a word
+// count, whichever the writer chose. The choice is kept in library.sprint.
+function sprintSettings(saved) {
+  const s = saved && typeof saved === 'object' ? saved : {};
+  const whole = (v, most, otherwise) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n >= 1 ? Math.min(n, most) : otherwise;
+  };
+  return {
+    by: s.by === 'words' ? 'words' : 'time',
+    minutes: whole(s.minutes, 600, 10),
+    words: whole(s.words, 1000000, 500),
+    chime: s.chime !== false
+  };
+}
+function sprintOver(sp, total, now) {
+  return sp.by === 'words' ? total - sp.startCount >= sp.target : now >= sp.endsAt;
+}
+// words an hour, at the pace of the sprint
+function sprintRate(words, ms) {
+  return ms > 0 && words > 0 ? Math.round(words / ms * 3600000) : 0;
+}
+// 10 min 0 sec: the length of a sprint, to the second
+function sprintSpan(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return { min: Math.floor(s / 60), sec: s % 60 };
+}
+// 7:42 left. Rounded up, so the clock reads 0:00 only when the time is gone
+function sprintClock(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+// ---- end of sprint rules ----
+
+// the counter while a sprint runs: its words, and the time left or the target
+function sprintCounterText(sp, now) {
+  const words = fmtNum(sp.words || 0);
+  return sp.by === 'words' ? `⚡ ${words} / ${fmtNum(sp.target)}` : `⚡ ${words} · ${sprintClock(sp.endsAt - now)}`;
+}
+// said when a sprint ends; later: the same, as the Goals window keeps it
+function sprintResultText(r, later) {
+  const { min, sec } = sprintSpan(r.ms);
+  const vars = { n: r.words, time: t('{n} mins', { n: min }) + ' ' + t('{n} seconds', { n: sec }), rate: r.rate };
+  return later
+    ? t('Last sprint: {n} words in {time} ({rate} words/hr)', vars)
+    : t('Sprint Complete: {n} words in {time} ({rate} words/hr)', vars);
+}
+
+function startSprint(settings) {
+  if (!book) return;
+  const s = sprintSettings(settings);
+  const now = Date.now();
+  sprint = {
+    by: s.by, target: s.words, minutes: s.minutes, chime: s.chime,
+    startCount: bookWordCount(), words: 0, startTime: now, endsAt: now + s.minutes * 60000, bookId: book.id
+  };
+  lastSprint = null;
+  clearInterval(startSprint.clock);
+  if (s.by === 'time') startSprint.clock = setInterval(sprintTick, 500);
+  // the click that starts the sprint is what lets a phone play its chime later
+  if (s.chime) sprintChime(true);
+  toast(s.by === 'words'
+    ? t('Sprint started — {n} words. Go.', { n: s.words })
+    : t('{n}-minute sprint. Go.', { n: s.minutes }));
+  updateCounters();
+}
+
+// how: 'time' (the clock ran out), 'words' (the count was reached) or
+// 'hand' (the writer ended it). The result stays on the Sprint again button.
+function endSprint(how, total) {
+  const sp = sprint;
+  if (!sp) return;
+  sprint = null;
+  clearInterval(startSprint.clock);
+  const words = Math.max(0, (typeof total === 'number' ? total : bookWordCount()) - sp.startCount);
+  // a timed sprint lasted its minutes, even if the Mac slept past the end
+  const ms = how === 'time' ? sp.minutes * 60000 : Date.now() - sp.startTime;
+  lastSprint = {
+    bookId: sp.bookId, words, ms, rate: sprintRate(words, ms),
+    settings: { by: sp.by, minutes: sp.minutes, words: sp.target, chime: sp.chime }
+  };
+  if (how !== 'hand' && sp.chime) sprintChime();
+  toast(sprintResultText(lastSprint), 10000);
+  showSprintAgain();
+}
+
+// the clock of a timed sprint. It only redraws the counter: the words are
+// counted as they are typed (trackDailyWords)
+function sprintTick() {
+  if (!sprint || sprint.by !== 'time') { clearInterval(startSprint.clock); return; }
+  const here = book && book.id === sprint.bookId;
+  if (Date.now() >= sprint.endsAt) {
+    if (here) { endSprint('time'); updateCounters(); }
+    else { sprint = null; clearInterval(startSprint.clock); } // it ran out on the shelf: nothing to report
+  } else if (here) {
+    setText($('#goal-counter'), sprintCounterText(sprint, Date.now()));
+  }
+}
+
+// Three soft notes when a sprint ends, made here so NEO carries no sound
+// file. quiet: open the sound without playing anything.
+function sprintChime(quiet) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ac = sprintChime.ac || (sprintChime.ac = new AC());
+    if (ac.state === 'suspended') ac.resume();
+    if (quiet) return;
+    [659.25, 880, 1318.51].forEach((hz, i) => {
+      const at = ac.currentTime + 0.05 + i * 0.2;
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = hz;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 1.4);
+      osc.connect(gain).connect(ac.destination);
+      osc.start(at);
+      osc.stop(at + 1.5);
+    });
+  } catch { /* no sound on this machine: the message still says how it went */ }
+}
+
+// Beside the counter once a sprint has ended: one click runs it again with
+// the same settings. Made here, not in index.html, so Pocket's page has it too.
+function showSprintAgain() {
+  let el = $('#sprint-again');
+  const show = !!(book && !sprint && lastSprint && lastSprint.bookId === book.id);
+  if (!el) {
+    if (!show) return;
+    el = document.createElement('span');
+    el.id = 'sprint-again';
+    el.onclick = () => { if (lastSprint) startSprint(lastSprint.settings); };
+    pressable(el);
+    $('#goal-counter').after(el);
+  }
+  el.hidden = !show;
+  if (!show || el._for === lastSprint) return;
+  el._for = lastSprint;
+  setText(el, '⚡ ' + t('Sprint again'));
+  el.title = sprintResultText(lastSprint, true);
+}
 
 function statsChartSvg() {
   const W = 520, H = 200, PAD = 6;
@@ -15507,6 +15654,8 @@ function openStats() {
   const today = hasBook ? (book.dailyCounts || {})[todayStr()] : null;
   const wordsToday = today ? Math.max(0, today.end - today.start) : 0;
   const total = hasBook ? bookWordCount() : 0;
+  // a running sprint shows its own settings; otherwise the last ones chosen
+  const sp = sprintSettings(sprint ? { by: sprint.by, minutes: sprint.minutes, words: sprint.target, chime: sprint.chime } : library.sprint);
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
@@ -15531,21 +15680,39 @@ function openStats() {
         </label>
       </div>
       ${hasBook ? `
-      <div class="stats-row stats-goals">
-        <label>${t('Sprint')} <input id="st-sprint" type="number" min="50" value="${sprint ? sprint.target : 500}"/> ${t('words')}</label>
-        <button id="st-sprint-btn" class="btn-gold" style="align-self: center;">${sprint && !sprint.done ? t('End sprint') : t('Start sprint')}</button>
-      </div>` : ''}
+      <div class="stats-row stats-goals stats-sprint">
+        <label>${t('Sprint')}
+          <select id="st-sprint-by">
+            <option value="time"${sp.by === 'time' ? ' selected' : ''}>${t('for a set time')}</option>
+            <option value="words"${sp.by === 'words' ? ' selected' : ''}>${t('to a word count')}</option>
+          </select>
+        </label>
+        <label>${t('Minutes')} <input id="st-sprint-min" type="number" min="1" max="600" value="${sp.minutes}"/></label>
+        <label>${t('Words')} <input id="st-sprint" type="number" min="1" value="${sp.words}"/></label>
+        <button id="st-sprint-btn" class="btn-gold">${sprint ? t('End sprint') : t('Start sprint')}</button>
+      </div>
+      <div class="stats-row stats-sprint-more">
+        <label><input id="st-sprint-chime" type="checkbox"${sp.chime ? ' checked' : ''}/> ${t('Chime when the sprint ends')}</label>
+      </div>
+      ${lastSprint && lastSprint.bookId === book.id ? `<div id="st-sprint-last" class="stats-row stats-sprint-more">${escHtml(sprintResultText(lastSprint, true))}</div>` : ''}` : ''}
       <div style="text-align:right;margin-top:14px">
         <button class="m-ok btn-gold">${t('Done')}</button>
       </div>
     </div>`;
   document.body.appendChild(bd);
+  const sprintChoice = () => sprintSettings({
+    by: bd.querySelector('#st-sprint-by').value,
+    minutes: bd.querySelector('#st-sprint-min').value,
+    words: bd.querySelector('#st-sprint').value,
+    chime: bd.querySelector('#st-sprint-chime').checked
+  });
   const close = async () => {
     library.dailyGoal = parseInt(bd.querySelector('#st-daily').value, 10) || 0;
     library.dayEndsAt = parseInt(bd.querySelector('#st-dayends').value, 10) || 0;
     if (hasBook) {
       book.wordGoal = parseInt(bd.querySelector('#st-book').value, 10) || 0;
       scheduleMetaSave();
+      library.sprint = sprintChoice();
     }
     await writeLibrary(library);
     bd.remove();
@@ -15559,17 +15726,18 @@ function openStats() {
   bd.focus();
   bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
   if (hasBook) {
+    // only the box the sprint will use is lit
+    const lit = () => {
+      const byWords = bd.querySelector('#st-sprint-by').value === 'words';
+      bd.querySelector('#st-sprint-min').disabled = byWords;
+      bd.querySelector('#st-sprint').disabled = !byWords;
+    };
+    bd.querySelector('#st-sprint-by').onchange = lit;
+    lit();
     bd.querySelector('#st-sprint-btn').onclick = () => {
-      if (sprint && !sprint.done) {
-        const got = bookWordCount() - sprint.startCount;
-        toast(t('Sprint ended — {n} words in {min} min', { n: got, min: Math.round((Date.now() - sprint.startTime) / 60000) }));
-        sprint = null;
-      } else {
-        const target = parseInt(bd.querySelector('#st-sprint').value, 10) || 500;
-        sprint = { target, startCount: bookWordCount(), startTime: Date.now(), done: false, bookId: book.id };
-        toast(t('Sprint started — {n} words. Go.', { n: target }));
-      }
-      close();
+      const running = !!sprint;
+      if (running) endSprint('hand');
+      close().then(() => { if (!running) startSprint(library.sprint); });
     };
   }
 }
