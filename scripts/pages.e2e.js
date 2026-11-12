@@ -67,6 +67,39 @@ test('the manuscript starts as one long sheet per chapter', async () => {
   assert.equal(menuItem('Two Pages Side by Side').enabled, false, 'greyed out until the pages are shown');
 });
 
+test('with typewriter scrolling on one long sheet, the last sheet runs past the bottom of the window', async () => {
+  const r = await js(`(async () => {
+    if (!typewriterEnabled) toggleTypewriter();
+    await new Promise((res) => setTimeout(res, 200));
+    const secs = [...document.querySelectorAll('#chapters section.chapter')];
+    const last = secs[secs.length - 1];
+    const body = last.querySelector('.chapter-body');
+    const p = body.lastElementChild;
+    body.focus();
+    const range = document.createRange(); range.selectNodeContents(p); range.collapse(false);
+    getSelection().removeAllRanges(); getSelection().addRange(range);
+    const sc = document.getElementById('paper-scroll');
+    // the last line held at the writing height
+    sc.scrollTop += p.getBoundingClientRect().bottom - window.innerHeight * 0.45;
+    await new Promise((res) => setTimeout(res, 100));
+    const lineBottom = p.getBoundingClientRect().bottom;
+    const out = {
+      lineBottom, writing: window.innerHeight * 0.45,
+      sheetBottom: last.getBoundingClientRect().bottom,
+      viewBottom: sc.getBoundingClientRect().bottom,
+      firstPad: parseFloat(getComputedStyle(secs[0]).paddingBottom)
+    };
+    toggleTypewriter();
+    await new Promise((res) => setTimeout(res, 100));
+    out.offPad = parseFloat(getComputedStyle(last).paddingBottom);
+    return out;
+  })()`);
+  assert.ok(Math.abs(r.lineBottom - r.writing) < 40, `the last line sits at the writing height (${r.lineBottom} vs ${r.writing})`);
+  assert.ok(r.sheetBottom > r.viewBottom, `the sheet runs past the window (${r.sheetBottom} > ${r.viewBottom})`);
+  assert.equal(r.firstPad, 90, 'a chapter before it ends where it always did');
+  assert.equal(r.offPad, 90, 'typewriter off, the last sheet is back to its own margin');
+});
+
 test('Show Pages cuts a chapter into pages of one height with a gap between', async () => {
   await js(`togglePaged()`);
   await tick(300);

@@ -15030,6 +15030,18 @@ function typewriterRoom() {
   const last = bodies[bodies.length - 1];
   if (!typewriterEnabled || !last || paper.hidden) return;
   const line = parseFloat(getComputedStyle(last).lineHeight) || 30;
+  // On one long sheet (not Pages, not a script) the room is paper: the last
+  // sheet runs on past the bottom of the window while the line is held at
+  // the writing height, so no edge of the page creeps up under the words.
+  // The sheet ends where a chapter does, and nowhere else.
+  if (!document.body.classList.contains('paged') && !paper.classList.contains('script')) {
+    const view = $('#paper-scroll').getBoundingClientRect();
+    // the line's bottom at its highest in the band (see typewriterScrollTarget),
+    // and a little overhang so the edge never sits flush with the window
+    const pad = view.bottom - (window.innerHeight * 0.45 - line * 0.5) + 60;
+    paper.style.setProperty('--typewriter-sheet', Math.max(90, Math.ceil(pad)) + 'px');
+    return;
+  }
   // the last line must be able to rise to the writing height (45% of the
   // window, as in the selectionchange handler below)
   const below = paper.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom;

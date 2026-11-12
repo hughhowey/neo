@@ -733,7 +733,12 @@ body.night { --nb-mark-tint: color-mix(in srgb, var(--ink) 22%, transparent); }
 }
 /* typewriter scrolling: room below the last line so it can sit mid-screen
    (app.js works out how much the last page doesn't already give) */
-body.typewriter #paper { margin-bottom: var(--typewriter-room, 60vh); }
+body.typewriter.paged #paper, body.typewriter #paper.script { margin-bottom: var(--typewriter-room, 60vh); }
+/* on one long sheet the room is the last sheet's own paper instead, running
+   past the bottom of the window (app.js sets how far) */
+body.typewriter:not(.paged) #paper:not(.script) section.chapter.sheet:last-of-type {
+  padding-bottom: var(--typewriter-sheet, 90px);
+}
 /* focus mode: the manuscript fades back, the neo-focus highlight (set in
    app.js) repaints the current sentence / paragraph / scene at full ink */
 .chapter-body, .chapter-head { transition: color 0.25s ease; }
