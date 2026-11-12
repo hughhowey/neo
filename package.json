@@ -24,6 +24,7 @@
     "test:find": "electron scripts/find.e2e.js",
     "test:script-keys": "electron scripts/script-keys.e2e.js",
     "test:new-script": "electron scripts/new-script.e2e.js",
+    "test:sprint": "electron scripts/sprint.e2e.js",
     "test:danish": "electron scripts/danish.e2e.js",
     "test": "node --test \"scripts/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"scripts/*.test.js\"",

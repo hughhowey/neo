@@ -1519,6 +1519,15 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
   background: var(--accent); border: none; border-radius: 5px;
   padding: 6px 14px; color: #191919; font-size: 12px;
 }
+/* the sprint: how it ends, its two boxes (only the one in use is lit), and
+   under them the chime and how the last sprint went */
+.stats-sprint button { height: 31px; box-sizing: border-box; margin-left: auto; }
+.stats-sprint input { width: 76px; }
+.stats-sprint select { width: 150px; }
+.stats-row input:disabled { opacity: 0.35; }
+.stats-sprint-more { color: var(--muted); font-size: 12px; }
+.stats-sprint-more label { display: flex; align-items: center; gap: 7px; margin: 0; cursor: pointer; }
+.stats-sprint-more input { width: auto; padding: 0; margin: 0; accent-color: var(--accent); }
 #stats-chart { background: #1d1d1d; border-radius: 8px; padding: 10px; margin-top: 8px; }
 /* on a phone the modal is narrower than the chart's 520px: it scales down instead of spilling out */
 @media (max-width: 600px) {

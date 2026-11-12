@@ -204,6 +204,17 @@ Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are 
 
 Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.0-only, and NEO is MIT. Do not add it.
 
+## Sprints
+
+A sprint is started from Goals (the word counter, ⌘,) and lives in `sprint` in `app.js` (GOALS, SPRINTS, AND THE CHART). It is never written into the book.
+
+- A sprint ends after a set time (the default, ten minutes) or at a word count: `sprint.by` is `'time'` or `'words'`. The choice, with the chime, is kept in `library.sprint` and read through `sprintSettings`, which mends anything broken.
+- Words are counted as they are typed (`trackDailyWords`), which also ends a sprint to a word count. A timed sprint is ended by `sprintTick`, a half-second clock that only redraws the counter. The clock compares against `sprint.endsAt`, so a Mac that slept past the end finishes the sprint on waking.
+- `endSprint` says how it went (words, minutes and seconds, words an hour; the time is put together from `{n} mins` and `{n} seconds` so each takes its own plural), plays `sprintChime` (three notes from the Web Audio API, no sound file) unless the writer ended it by hand, and keeps the result in `lastSprint`.
+- `#sprint-again` is made by `showSprintAgain`, not by `index.html`, so Pocket has it too. It shows beside the counter after a sprint, in the book the sprint was in, and starts another with the same settings.
+- A sprint belongs to the book it began in. One that runs out on the shelf ends without a word.
+- `scripts/sprint.test.js`; `npm run test:sprint` (`scripts/sprint.e2e.js`, which moves the clock to its end and waits for nothing).
+
 ## Pocket
 
 `pocket/` is a Capacitor app that runs the desktop editor. Its bridge (`pocket/www/pocket-bridge.js`) implements `window.neo` against the phone's library folder. Android shares `Documents/NEO Library` via sync. iOS uses the app folder, optionally iCloud, with `LibraryHome.swift` locating that folder.
