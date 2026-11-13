@@ -12526,7 +12526,7 @@ function persistChapter(chId, html) {
     let r = await window.neo.writeChapter(bookId, chId, html, diskKnown[key]);
     for (let tries = 0; r && typeof r.conflict === 'string' && tries < 3; tries++) {
       knowDisk(bookId, chId, r.conflict);
-      await keepOtherDeviceVersion(bookId, chId, r.conflict);
+      if (worthKeeping(bookId, chId, r.conflict, html)) await keepOtherDeviceVersion(bookId, chId, r.conflict);
       r = await window.neo.writeChapter(bookId, chId, html, r.conflict);
     }
     if (r && typeof r.conflict === 'string') throw new Error('chapter keeps changing on disk');
@@ -12545,6 +12545,18 @@ function persistChapter(chId, html) {
     writing[chId]--;
     if (chapterChain[key] === p) delete chapterChain[key];
   });
+}
+
+// Is the copy on disk worth a chapter of its own? Only when it holds a word
+// the page doesn't. A sync tool can put this device's own older save back
+// over a newer one (iCloud does, when a file is saved faster than it can
+// upload): that copy has nothing the page lacks, and keeping it as another
+// chapter at every save filled one book with ninety copies of a chapter.
+// Nor is a copy kept twice: one already in the book is enough.
+function worthKeeping(bookId, chId, disk, mine) {
+  if (!wordsBeyond(disk, mine)) return false;
+  if (book && book.id === bookId && book.chapterOrder.some((c) => c !== chId && chapterHTML[c] === disk)) return false;
+  return true;
 }
 
 // Another device's version of a chapter, found on disk when this device
@@ -13538,6 +13550,11 @@ async function refreshFromDisk() {
         knowDisk(bookId, chId, disk);
         wordCache[chId] = null;
         adopted++;
+      } else if (!worthKeeping(bookId, chId, disk, chapterHTML[chId])) {
+        // an older copy (see worthKeeping): the page's words go over it
+        savedHTML[chId] = disk;
+        knowDisk(bookId, chId, disk);
+        persistChapter(chId);
       } else {
         savedHTML[chId] = disk; // what's on disk now; our text goes over it on the next save
         knowDisk(bookId, chId, disk);
