@@ -13035,14 +13035,18 @@ async function renderSnapList() {
       lastGroup = group;
     }
     const when = group === t('Earlier') ? new Date(s.at).toLocaleDateString(NeoI18n.getLocale(), { month: 'short', day: 'numeric' }) + ', ' + snapTime(s.at) : snapTime(s.at);
-    const what = i === 0 ? t('The whole book') : s.changed ? t('{n} chapters changed', { n: s.changed }) : t('No chapters changed');
+    const what = i === 0 ? t('The whole book') : s.changed ? t('{n} chapters changed since previous snapshot', { n: s.changed }) : t('No chapters changed since previous snapshot');
     const on = snapShown && snapShown.name === s.name;
     const b = item(s.kind === SNAP_KEPT ? 'snap-k' : 'snap-a', when, snapWhy(s.kind) + ' · ' + what, on, () => showSnapshot(s.name));
     b.title = t('{n} words', { n: s.words });
-    if (on && snapShown.diff && snapShown.diff.length) {
+    if (on && snapShown.diff) {
       // the chapters that differ from today, to jump to
       const sub = document.createElement('div');
       sub.className = 'snap-chapters';
+      const compared = document.createElement('span');
+      compared.className = 'snap-comparison';
+      compared.textContent = snapShown.diff.length ? t('{n} chapters differ from now', { n: snapShown.diff.length }) : t('Every chapter is the same as now');
+      sub.appendChild(compared);
       for (const c of snapShown.diff) {
         const a = document.createElement('button');
         a.className = 'snap-ch';
