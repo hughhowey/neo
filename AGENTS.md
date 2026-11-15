@@ -212,6 +212,8 @@ Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.
 
 ## Commands
 
+Find's Whole project scope is behind Show More Features (`projectSources`, `runProjectSearch` in `app.js`). It searches live manuscript/chapter titles, book and chapter note pages, outline/loose-card notes, scene notes and Darlings. It is read-only: Replace stays in the current manuscript tab. Note files are read once per search session, with live/pending edits taking precedence; closing Find clears the cache. Results are capped at 200 displayed rows, stale async reads cannot replace a newer query, and failed note reads explicitly mark results incomplete. Selecting a result puts the list away to reveal its source; Results brings it back. `scripts/project-search.e2e.js` covers source navigation, unsaved notes, fault/retry, timing and replacement safety. Desktop/Pocket pages must both supply Find's element ids even though Pocket keeps the current-tab scope.
+
 ```
 npm install
 npm start
