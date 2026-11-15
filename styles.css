@@ -602,6 +602,8 @@ body.night .ps-paper .ps-body.empty::before, body.night .ps-paper .tp-field:empt
 .print-modal label.pm-check { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .print-modal label.pm-check input { display: inline-block; width: auto; margin: 0; }
 body.light .print-modal select, body.light .print-modal textarea { background: #fff; border-color: #cfcac0; color: #1c1a17; }
+#shared-pages-dialog .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+#shared-pages-dialog .shared-error { color: var(--red); }
 
 /* the two button voices every dialog speaks in */
 .btn-gold {

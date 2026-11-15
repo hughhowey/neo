@@ -2473,6 +2473,7 @@ $('#author-chip').onclick = async () => {
   opts.push({ label: t('Rename {name}', { name: escHtml(cur.name) }), value: 'rename' });
   // a second name is behind Show More Features; names already made stay reachable
   if (moreOn()) opts.push({ label: t('Add a pen name…'), desc: t('A separate set of shelves under another name'), value: 'add' });
+  if (moreOn()) opts.push({ label: t('Shared book pages…'), desc: t('Copyright and About the Author for this name’s books'), value: 'shared-pages' });
   if (library.authors.length > 1) {
     opts.push({
       label: t('Remove {name}', { name: escHtml(cur.name) }),
@@ -2482,6 +2483,7 @@ $('#author-chip').onclick = async () => {
   }
   const pick = await optionModal(t('Writing as {name}', { name: escHtml(cur.name) }), null, opts);
   if (!pick) return;
+  if (pick === 'shared-pages') { await sharedPagesDialog(cur.id); return; }
   if (pick.startsWith('sw:')) {
     library.currentAuthorId = pick.slice(3);
   } else if (pick === 'rename') {
@@ -2503,6 +2505,7 @@ $('#author-chip').onclick = async () => {
     const homeId = library.authors[0].id;
     const rest = library.authors.filter((a) => a.id !== cur.id);
     const target = rest[0];
+    archiveSharedPages(cur, target);
     for (const s of library.shelves) {
       if ((s.authorId || homeId) === cur.id) s.authorId = target.id;
     }
@@ -2513,6 +2516,119 @@ $('#author-chip').onclick = async () => {
   await writeLibrary(library);
   renderShelves();
 };
+
+/* ================================================================== */
+/*  SHARED BOOK PAGES                                                  */
+/* ================================================================== */
+
+// Export defaults belong to the pen name that owns the shelf, rather than
+// whichever name is selected now. Existing book pages, even blank ones,
+// override them. No chapter is rewritten when a shared page changes.
+const SHARED_PAGE_KINDS = ['copyright', 'about'];
+function archiveSharedPages(from, into) {
+  const history = [...(from.sharedPagesHistory || [])];
+  if (Object.values(from.sharedPages || {}).some((s) => String(s).trim())) history.push({ at: new Date().toISOString(), pages: { ...from.sharedPages }, name: from.name });
+  if (history.length) into.sharedPagesHistory = [...(into.sharedPagesHistory || []), ...history];
+}
+function bookPageAuthor(meta, shelf) {
+  const authors = library.authors || [];
+  const owner = shelf || (library.shelves || []).find((s) => (s.bookIds || []).includes(meta.id));
+  return owner ? authors.find((a) => a.id === (owner.authorId || (authors[0] && authors[0].id))) : null;
+}
+function sharedPageHtml(text, data) {
+  const values = { title: data.title || '', author: data.author || '', year: String(new Date().getFullYear()) };
+  const filled = String(text || '').replace(/\{(title|author|year)\}/g, (_, key) => values[key]);
+  return filled.trim().split(/\n\s*\n/).filter(Boolean)
+    .map((p) => '<p>' + escHtml(p).replace(/\r?\n/g, '<br>') + '</p>').join('');
+}
+function withSharedBookPages(data, author, ownKinds = []) {
+  const pages = author && author.sharedPages;
+  if (!pages) return data;
+  const missing = (kind) => !ownKinds.includes(kind) && !data.sections.some((s) => s.kind === kind);
+  const make = (kind) => ({ kind, front: kind === 'copyright', heading: kind === 'about' ? kindName(kind) : '',
+    label: kindName(kind), level: 0, paras: parasFromHtml(sharedPageHtml(pages[kind], data)) });
+  const copyright = pages.copyright && missing('copyright') ? make('copyright') : null;
+  const about = pages.about && missing('about') ? make('about') : null;
+  const before = copyright && copyright.paras.length ? [copyright] : [];
+  const after = about && about.paras.length ? [about] : [];
+  if (!before.length && !after.length) return data;
+  const sections = [...before, ...data.sections, ...after].map((s, i) => ({ ...s, num: i + 1 }));
+  const toc = data.toc.map((e) => ({ ...e, num: e.num + before.length }));
+  if (after.length) toc.push({ label: about.heading, num: sections.length, level: 0, type: 'page' });
+  return { ...data, sections, toc };
+}
+
+// Previous wording stays in the same plain library.json as the defaults,
+// and can be put back into the fields before saving. A failed disk write
+// keeps the dialog and its words open, with the old library still in use.
+async function keepSharedPages(authorId, pages, expected) {
+  await refreshFromDisk();
+  const author = (library.authors || []).find((a) => a.id === authorId);
+  if (!author || JSON.stringify(author.sharedPages || {}) !== expected) throw new Error(t('These shared pages changed. Close and reopen this window before saving.'));
+  if (JSON.stringify(pages) === expected) return;
+  const history = [...(author.sharedPagesHistory || [])];
+  if (Object.values(author.sharedPages || {}).some((s) => String(s).trim())) history.push({ at: new Date().toISOString(), pages: { ...author.sharedPages } });
+  const previous = library;
+  const next = { ...library, authors: library.authors.map((a) => a.id === authorId ? { ...a, sharedPages: pages, sharedPagesHistory: history } : a) };
+  library = next;
+  try { await writeLibrary(next); }
+  catch (err) { if (library === next) library = previous; throw err; }
+}
+function sharedPagesDialog(authorId) {
+  if (!moreOn() || document.querySelector('.modal-backdrop:not([hidden])')) return;
+  const author = (library.authors || []).find((a) => a.id === authorId);
+  if (!author) return;
+  const expected = JSON.stringify(author.sharedPages || {});
+  return new Promise((resolve) => {
+    const bd = document.createElement('div');
+    bd.className = 'modal-backdrop';
+    bd.id = 'shared-pages-dialog';
+    bd.innerHTML = `<div class="modal print-modal" role="dialog" aria-modal="true" aria-labelledby="shared-pages-title">
+      <h2 id="shared-pages-title">${escHtml(t('Shared book pages for {name}', { name: author.name }))}</h2>
+      <p class="pm-hint">${escHtml(t('Used in book exports when the book has no page of its own. A book’s own page, even blank, takes priority. Manuscript Format leaves these pages out.'))}</p>
+      ${SHARED_PAGE_KINDS.map((kind) => `<label>${escHtml(kindName(kind))}<textarea data-kind="${kind}" rows="5"></textarea></label>`).join('')}
+      <p class="pm-hint">${escHtml(t('A blank line starts a paragraph. You can use {title}, {author} and {year}; they are filled in for each export.'))}</p>
+      <label class="shared-history" hidden>${escHtml(t('Restore previous wording'))}<select><option value="">${escHtml(t('Choose a previous version…'))}</option></select></label>
+      <p class="shared-error" role="alert" hidden></p>
+      <div class="modal-actions"><button class="btn-quiet m-cancel">${escHtml(t('Cancel'))}</button><button class="btn-gold m-save">${escHtml(t('Save'))}</button></div>
+    </div>`;
+    const put = (pages) => SHARED_PAGE_KINDS.forEach((kind) => { bd.querySelector(`[data-kind="${kind}"]`).value = pages[kind] || ''; });
+    put(author.sharedPages || {});
+    const history = author.sharedPagesHistory || [];
+    const select = bd.querySelector('select');
+    history.forEach((entry, i) => {
+      const option = document.createElement('option');
+      option.value = String(i);
+      option.textContent = new Date(entry.at).toLocaleString(NeoI18n.getLocale()) + (entry.name ? ' · ' + entry.name : '');
+      select.appendChild(option);
+    });
+    bd.querySelector('.shared-history').hidden = !history.length;
+    select.onchange = () => { if (select.value !== '') put(history[+select.value].pages); select.value = ''; };
+    let saving = false;
+    const close = () => { if (saving) return; bd.remove(); $('#author-chip').focus(); resolve(); };
+    bd.querySelector('.m-cancel').onclick = close;
+    bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+    bd.querySelector('.m-save').onclick = async () => {
+      if (saving) return;
+      saving = true;
+      const error = bd.querySelector('.shared-error');
+      error.hidden = true;
+      try {
+        const pages = Object.fromEntries(SHARED_PAGE_KINDS.map((kind) => [kind, bd.querySelector(`[data-kind="${kind}"]`).value]));
+        await keepSharedPages(authorId, pages, expected);
+        saving = false;
+        close();
+      } catch (err) {
+        saving = false;
+        window.neo.logError('shared book pages: ' + ((err && err.stack) || err));
+        error.textContent = t('Couldn’t save shared pages: {error}', { error: String((err && err.message) || err) });
+        error.hidden = false;
+      }
+    };
+    document.body.appendChild(bd);
+    bd.querySelector('textarea').focus();
+  });
+}
 
 /* ================================================================== */
 /*  EDITOR — open / render                                             */
@@ -16089,7 +16205,7 @@ function bookExportData() {
     saveMeta();
   }
   const { sections, toc, contents } = exportChapters();
-  return {
+  return withSharedBookPages({
     id: book.id,
     uuid: book.uuid,
     title: book.title,
@@ -16104,7 +16220,7 @@ function bookExportData() {
     // chapters too (a book of books lists its titles instead)
     contents,
     contentsChapters: true
-  };
+  }, bookPageAuthor(book), book.chapterOrder.map((chId) => chapterKind(chId)));
 }
 
 /* ================================================================== */
@@ -17859,7 +17975,7 @@ async function shelfBookData(shelf, opts = {}) {
     uuid = shelf.binding.uuid;
   }
   const title = opts.title || shelf.name;
-  return {
+  return withSharedBookPages({
     id: cover && cover.coverImage ? cover.id : 'shelf-' + shelf.id,
     uuid,
     title,
@@ -17874,7 +17990,7 @@ async function shelfBookData(shelf, opts = {}) {
     // title that has a Contents page of its own (which lists its chapters)
     contents: titles.length > 1 || (single && (titles[0].chapterOrder || []).some((c) => chapterKind(c, titles[0]) === 'contents')),
     contentsChapters: single
-  };
+  }, bookPageAuthor({}, shelf), metas.map((m) => m.kind));
 }
 
 async function shelfPayload(data, format) {

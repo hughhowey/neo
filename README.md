@@ -75,6 +75,10 @@ Export an industry-format PDF, or a Fountain or Final Draft (.fdx) file. Drop a 
 
 EPUB 3 with a proper table of contents built to KDP's guidelines, Word .docx, PDF with page numbers and bookmarks, HTML, markdown, and plain text. Email a timestamped PDF snapshot to yourself with a SHA-256 fingerprint of the text in the body. Might come in handy someday.
 
+With **Show More Features** on, click your name on the bookshelf and choose **Shared book pages…** to keep one copyright notice and author biography for that pen name's books. Changes appear in future book and shelf exports, without rewriting chapters. A book's own Copyright or About the Author page takes priority; a blank page of that kind leaves the shared one out. Submission manuscripts and chapter-only exports leave shared pages out too.
+
+Shared pages are plain text: a blank line starts a paragraph, and `{title}`, `{author}` and `{year}` are filled in for each export. Earlier wording can be restored in the same dialog. It stays in `library.json`, including when a pen name is removed.
+
 **Import** 
 
 Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks are detected automatically. This is still a bit rough and might require you to tweak things. It will try to grab your title and remove that from the body, and it seems to be working okay.
@@ -110,7 +114,7 @@ The app is very simple: an Electron shell (`main.js`), a preload bridge (`preloa
 
 ## Roadmap (things I'm dreaming up but may never get to):
 
-Chapter version history · manuscript format for agent submissions (Times New Roman, double-spaced, address block, just to make Kristin Nelson happy) · global end matter that updates every book at once (same for copyright pages, bios, etc).
+Chapter version history is available through **Take Snapshot**, with previous chapters and whole books viewable and restorable from Darlings. **Export → Manuscript Format…** writes submission manuscripts in Word or PDF, with double-spaced Times New Roman or Courier, a contact block and running headers. Shared copyright pages and author biographies are available through **Shared book pages…**. More kinds of shared book pages could follow.
 
 ## Contributing
 
