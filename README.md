@@ -91,6 +91,8 @@ Everything lives in `~/Documents/NEO Library` — one folder per book, chapters 
 
 NEO speaks English, French, Spanish, Portuguese, German, Italian, Dutch, Polish, Romanian and Russian. Pick one under **View → Language**; on first launch NEO follows your system language when it has it. Adding a language is a single file, no programming needed: see [TRANSLATING.md](TRANSLATING.md).
 
+With **Show More Features** on, **Edit → Spellcheck Language** applies to the open book. It remembers that book's language for spellcheck, typed punctuation, generated headings and exports, while the interface keeps its own language. Existing words and punctuation are left as written. On the bookshelf the same menu sets the library default; a book without its own choice follows it. Choose **Use library default** inside a book to return to that behaviour.
+
 ## Building from source (for the eggheads):
 
 Requires [Node.js](https://nodejs.org).

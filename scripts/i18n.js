@@ -8,7 +8,7 @@
 //   node scripts/i18n.js check fr-CA   the same for a regional file, which
 //                                      only holds what differs from fr.json
 //
-// Strings are found in t('…'), tk('…') and NeoI18n.t('…') calls in the
+// Strings are found in t('…'), tk('…'), writingText('…') and NeoI18n.t('…') calls in the
 // JavaScript, and in the data-i18n* attributes of index.html. NEO Pocket's
 // own page and bridge count too: they show the same locales/ files.
 
@@ -40,7 +40,7 @@ function collect() {
     if (!keys.has(k)) keys.set(k, new Set());
     keys.get(k).add(f);
   };
-  const call = /(?<![\w$.])(?:NeoI18n\.)?tk?\(\s*'((?:[^'\\\n]|\\.)*)'/g;
+  const call = /(?<![\w$.])(?:(?:NeoI18n\.)?tk?|writingText)\(\s*'((?:[^'\\\n]|\\.)*)'/g;
   for (const f of JS_FILES) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
     for (const m of src.matchAll(call)) add(unescapeJs(m[1]), f);

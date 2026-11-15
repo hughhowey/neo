@@ -497,6 +497,16 @@
       return true;
     },
     setSpellLanguage: async (code) => spellEnsure(code),
+    writingI18n: async (code) => {
+      if (!/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(code)) throw new Error('Invalid language');
+      const read = async (name) => {
+        try { const r = await fetch('locales/' + name + '.json'); return r.ok ? await r.json() : {}; } catch { return {}; }
+      };
+      const base = await read('en');
+      const language = code.split('-')[0];
+      const dict = { ...await read(language), ...(language !== code ? await read(code) : {}) };
+      return { locale: code, dict, base };
+    },
     appVersion: async () => 'Pocket 0.1.0',
     logError: async (msg) => {
       try {
@@ -560,8 +570,10 @@
   }
   const lib = () => (typeof library !== 'undefined' && library) || {}; // app.js's library.json
   function wantedLanguage(codes) {
-    const chosen = lib().spellLanguage;
+    const chosen = typeof writingLanguage === 'function' ? writingLanguage() : lib().spellLanguage;
     if (codes[chosen]) return chosen;
+    if (typeof chosen === 'string' && codes[chosen.split('-')[0]]) return chosen.split('-')[0];
+    if (chosen === 'pt') return 'pt-BR';
     const ui = String((window.neo.i18n && window.neo.i18n.locale) || 'en');
     if (codes[ui]) return ui;
     if (ui === 'pt' || ui === 'pt-BR') return 'pt-BR';

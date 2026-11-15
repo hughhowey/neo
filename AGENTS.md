@@ -202,6 +202,8 @@ node scripts/i18n.js check fr
 
 Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 
+The Spellcheck Language menu changes `book.writingLanguage` when a book is open, or `library.spellLanguage` on the shelf. A missing book property inherits the library and then UI language; Use library default removes the override. `writingLanguage(meta)` accepts an explicit metadata object, so shelf exports and mixed-language anthologies do not borrow the open book's override. `prepareWritingLanguage` caches independent `NeoI18n.create()` translators through the validated `i18n:writing` bridge; it never changes UI translations. Opening, switching, syncing or closing a book selects the corresponding dictionary; main-process switches are ordered. Failed metadata saves restore the previous setting and dictionary. Existing chapter HTML is never rewritten by a language choice. Pocket's bridge follows the same book-first lookup. `scripts/book-language.test.js`, `scripts/book-language.e2e.js` and `scripts/danish.e2e.js` cover these rules.
+
 Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.0-only, and NEO is MIT. Do not add it.
 
 ## Pocket

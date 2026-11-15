@@ -139,6 +139,11 @@ ipcMain.on('i18n:get', (e) => {
   const english = readLocaleFile('en') || {};
   e.returnValue = { locale: uiLanguage, dict: localeDict(uiLanguage), base: english };
 });
+// Book headings use their own translator, without changing menus or settings.
+ipcMain.handle('i18n:writing', (_e, code) => {
+  const locale = resolveLanguage(libName(code)) || 'en';
+  return { locale, dict: localeDict(locale), base: readLocaleFile('en') || {} };
+});
 
 // View → Language: save the choice, redraw the menus, and let the window
 // save its pages before it reloads in the new language
@@ -150,7 +155,7 @@ function setUiLanguage(code) {
   // no dictionary picked yet: spellcheck moves with the interface
   if (!SPELL_LANGUAGES[chosenSpellLanguage()] && defaultSpellLanguage() !== spellLanguage) {
     spellLanguage = defaultSpellLanguage();
-    loadSpellDictionary(spellLanguage);
+    queueSpellDictionary(spellLanguage);
   }
   try { buildMenu(); } catch (err) { logError('menu', err); }
   sendToWindow({ type: 'uiLanguage', value: uiLanguage });
@@ -2678,12 +2683,19 @@ function initSpell() {
   loadSpellDictionary(spellLanguage);
 }
 
-ipcMain.handle('spell:setLanguage', async (_e, code) => {
+let spellLanguageChain = Promise.resolve();
+function queueSpellDictionary(code) {
   if (!SPELL_LANGUAGES[code]) return false;
-  const ok = await loadSpellDictionary(code);
-  if (ok) { try { buildMenu(); } catch (err) { logError('menu', err); } }
-  return ok;
-});
+  const change = async () => {
+    const ok = spellLoaded === code || await loadSpellDictionary(code);
+    if (ok) { try { buildMenu(); } catch (err) { logError('menu', err); } }
+    return ok;
+  };
+  const next = spellLanguageChain.catch(() => {}).then(change);
+  spellLanguageChain = next;
+  return next;
+}
+ipcMain.handle('spell:setLanguage', (_e, code) => queueSpellDictionary(code));
 
 ipcMain.handle('spell:check', async (_e, words) => {
   const res = await spellRequest({ type: 'check', words });
@@ -3015,12 +3027,17 @@ function buildMenu() {
         {
           more: true,
           label: t('Spellcheck Language'),
-          submenu: Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
-            label: lang.label,
-            type: 'radio',
-            checked: spellLanguage === code,
-            click: () => sendToWindow({ type: 'spellLanguage', value: code })
-          }))
+          submenu: [
+            { label: bookOpenState ? t('This book') : t('Library default'), enabled: false },
+            ...(bookOpenState ? [{ label: t('Use library default'), click: () => sendToWindow({ type: 'spellLanguage', value: null }) }] : []),
+            { type: 'separator' },
+            ...Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
+              label: lang.label,
+              type: 'radio',
+              checked: spellLanguage === code,
+              click: () => sendToWindow({ type: 'spellLanguage', value: code })
+            }))
+          ]
         }
       ]
     },

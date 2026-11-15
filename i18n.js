@@ -21,7 +21,7 @@
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NeoI18n = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function createI18n() {
   let locale = 'en';
   let dict = {};      // the chosen language
   let base = {};      // locales/en.json: English plurals and overrides
@@ -70,5 +70,5 @@
   const fmtDate = (d, opts) => new Date(d).toLocaleDateString(locale, opts);
   const getLocale = () => locale;
 
-  return { setLocale, t, fmtNum, fmtDate, getLocale };
+  return { setLocale, t, fmtNum, fmtDate, getLocale, create: createI18n };
 });

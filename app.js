@@ -95,11 +95,11 @@ function kindCount(chId, kind, meta = book) {
 const chapterNumber = (chId, meta = book) => kindCount(chId, 'chapter', meta);
 function chapterName(chId, meta = book) {
   const k = chapterKind(chId, meta);
-  if (k === 'chapter') return t('Chapter {n}', { n: chapterNumber(chId, meta) });
-  if (k === 'part') return partLabel(kindCount(chId, 'part', meta));
+  if (k === 'chapter') return writingText('Chapter {n}', { n: chapterNumber(chId, meta) }, meta);
+  if (k === 'part') return partLabel(kindCount(chId, 'part', meta), meta);
   // an unnumbered chapter is its title
   if (k === 'unnumbered') return ((meta.chapterTitles || {})[chId] || '').trim() || t('Untitled');
-  return kindName(k);
+  return writingKindName(k, meta);
 }
 // the chapter a note sits in, for the notes pane: its name, or for an
 // unnumbered chapter with no title (whose name would be Untitled), its
@@ -116,10 +116,10 @@ function stickyChapterLabel(chId) {
 // language: an en dash where that's how the language sets its dash
 // (KAPITEL 2 – SZENENWECHSEL), the em dash elsewhere (CHAPTER 2 — TITLE)
 const EN_DASH_LANGUAGES = ['de', 'nl', 'pl', 'ro', 'fr', 'it', 'hu'];
-function headingDash() {
-  return EN_DASH_LANGUAGES.includes(writingLanguage().toLowerCase().split('-')[0]) ? '–' : '—';
+function headingDash(meta = book) {
+  return EN_DASH_LANGUAGES.includes(writingLanguage(meta).toLowerCase().split('-')[0]) ? '–' : '—';
 }
-function chapterHeading(chId, meta = book, sep = ' ' + headingDash() + ' ') {
+function chapterHeading(chId, meta = book, sep = ' ' + headingDash(meta) + ' ') {
   const title = ((meta.chapterTitles || {})[chId] || '').trim();
   const k = chapterKind(chId, meta);
   if (k === 'unnumbered') return title;
@@ -1269,7 +1269,7 @@ function roman(n) {
   for (const [v, s] of r) while (n >= v) { out += s; n -= v; }
   return out;
 }
-const partLabel = (n) => t('Part {n}', { n: roman(n) });
+const partLabel = (n, meta = book) => writingText('Part {n}', { n: roman(n) }, meta);
 
 // the name a bound book goes out under: the pen name that owns the shelf
 function shelfAuthorName(shelf) {
@@ -2537,8 +2537,14 @@ async function openBook(bookId) {
   const sideStickies = await window.neo.readJSON(bookId, 'stickies', []);
   const sideDarlings = await window.neo.readJSON(bookId, 'darlings', []);
   if (gen !== openGeneration) return;
+  await prepareWritingLanguage(meta);
+  if (gen !== openGeneration) return;
+  const dictionaryReady = await window.neo.setSpellLanguage(writingDictionary(writingLanguage(meta)));
+  if (gen !== openGeneration) return;
+  bookDictionaryReady = dictionaryReady;
   tabPlaces = {}; // a fresh book starts with fresh places
   book = meta;
+  focusSegmenter = null;
   showWindowTitle();
   forgetSnapshots();
   forgetSpelling();
@@ -2618,6 +2624,7 @@ const PAGE_PROMPTS = { dedication: () => t('For…'), epigraph: () => '…', par
 
 function renderChapters() {
   const wrap = $('#chapters');
+  wrap.lang = writingLanguage();
   wrap.innerHTML = '';
   wordCache = {};
   book.chapterTitles = book.chapterTitles || {};
@@ -5017,8 +5024,38 @@ function singleQuotes(el) {
   if (d === '«') return { open: '‹', close: '›' };
   return { open: '‚', close: '‘' };
 }
-function writingLanguage() {
-  return (library && library.spellLanguage) || NeoI18n.getLocale();
+function writingLanguage(meta = book) {
+  for (const code of [(meta && meta.writingLanguage), (library && library.spellLanguage)]) {
+    if (typeof code !== 'string') continue;
+    try { const canonical = Intl.getCanonicalLocales(code)[0]; if (canonical) return canonical; } catch { /* try the library or interface */ }
+  }
+  try { return Intl.getCanonicalLocales(NeoI18n.getLocale())[0] || 'en'; } catch { return 'en'; }
+}
+const writingTranslators = new Map();
+async function prepareWritingLanguage(meta) {
+  const code = writingLanguage(meta);
+  if (writingTranslators.has(code) || !window.neo.writingI18n || !NeoI18n.create) return;
+  const strings = await window.neo.writingI18n(code);
+  const translator = NeoI18n.create();
+  translator.setLocale(strings.locale, strings.dict, strings.base);
+  writingTranslators.set(code, translator);
+}
+function writingText(key, vars, meta = book) {
+  const translator = writingTranslators.get(writingLanguage(meta));
+  return translator ? translator.t(key, vars) : t(key, vars);
+}
+function writingKindName(kind, meta = book) {
+  const key = { chapter: 'Chapter', unnumbered: 'Unnumbered Chapter', contents: 'Contents', cover: 'Cover',
+    copyright: 'Copyright', dedication: 'Dedication', epigraph: 'Epigraph', prologue: 'Prologue',
+    part: 'Part', epilogue: 'Epilogue', acknowledgments: 'Acknowledgments', about: 'About the Author' }[kind];
+  return key ? writingText(key, null, meta) : kind;
+}
+function writingDictionary(code) {
+  if (code === 'en') return 'en-US';
+  if (code === 'pt') return 'pt-BR';
+  if (SPELL_LANGUAGE_NAMES[code]) return code;
+  const base = code.split('-')[0];
+  return SPELL_LANGUAGE_NAMES[base] ? base : 'en-US';
 }
 function quoteStyle() {
   const code = writingLanguage();
@@ -13363,6 +13400,7 @@ async function refreshFromDisk() {
       return;
     }
     const bookId = book.id;
+    const previousWritingLanguage = writingLanguage();
     if (window.neo.refreshBook) await window.neo.refreshBook(bookId);
     const meta = await window.neo.readBookMeta(bookId);
     if (!book || book.id !== bookId || !meta) return;
@@ -13553,6 +13591,19 @@ async function refreshFromDisk() {
         conflicts++;
       }
     }
+    if (writingLanguage() !== previousWritingLanguage) {
+      const target = book;
+      await prepareWritingLanguage(target);
+      if (book !== target) return;
+      bookDictionaryReady = await window.neo.setSpellLanguage(writingDictionary(writingLanguage()));
+      if (book !== target) return;
+      focusSegmenter = null;
+      spellCache.clear();
+      spellScanned = new Set();
+      spellRanges = new Map();
+      capsRanges.clear();
+      if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-spell');
+    }
     if (restructured || adopted || conflicts) {
       const caret = captureCaret();
       const keepScroll = $('#paper-scroll').scrollTop;
@@ -13560,6 +13611,7 @@ async function refreshFromDisk() {
       wordsFromDisk(); // the words that came in were written elsewhere, or before today (#345)
       $('#paper-scroll').scrollTop = keepScroll;
       if (caret) restoreCaret(caret);
+      if (spellOn && writingLanguage() !== previousWritingLanguage) scanSpellingHere();
       if (restructured) {
         const show = (el, text) => { if (el.textContent !== text) el.textContent = text; };
         show($('#tp-title'), isUntitled(book.title) ? '' : book.title);
@@ -13636,6 +13688,8 @@ async function backToShelf() {
   spEditorMode(); // a script's pane, page and title page go
   spReportState();
   renderShelves();
+  await prepareWritingLanguage(null);
+  if (!book) await window.neo.setSpellLanguage(writingDictionary(writingLanguage(null)));
 }
 $('#back-to-shelf').onclick = backToShelf;
 
@@ -14625,6 +14679,7 @@ $('#import-btn').onclick = importBooks;
    search — and a right-click menu for suggestions. Chapters scan lazily
    as the caret reaches them. */
 let spellOn = false;
+let bookDictionaryReady = true;
 let spellScanned = new Set();
 let spellRanges = new Map();     // key → [Range]
 const spellCache = new Map();    // word → correct?
@@ -14805,6 +14860,7 @@ function forgetSpelling() {
 }
 
 function toggleSpellcheck() {
+  if (!spellOn && !bookDictionaryReady) { toast(t('That dictionary would not load')); return; }
   spellOn = !spellOn;
   if (spellOn) {
     spellScanned = new Set();
@@ -14820,18 +14876,48 @@ function toggleSpellcheck() {
   toast(spellOn ? t('Spellcheck on') : t('Spellcheck off'));
 }
 
-// Edit → Spellcheck Language: swap the dictionary, remember the choice with
-// the library, and re-check whatever is on screen
+// Edit → Spellcheck Language: the open book's choice, or the library default
+// from the shelf. The interface has its own translator throughout.
 const SPELL_LANGUAGE_NAMES = {
   'en-US': t('US English'), 'en-GB': t('UK English'), 'en-CA': t('Canadian English'),
   'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'),
-  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
+  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish'), el: t('Greek')
 };
 async function changeSpellLanguage(code) {
-  const ok = await window.neo.setSpellLanguage(code);
+  const target = book;
+  const previousDictionary = writingDictionary(writingLanguage());
+  const meta = target ? { ...target, writingLanguage: code || undefined } : null;
+  const wanted = code || writingLanguage(meta);
+  await prepareWritingLanguage(target ? meta : { writingLanguage: wanted });
+  if (book !== target) return;
+  const ok = await window.neo.setSpellLanguage(writingDictionary(wanted));
+  if (book !== target) return;
   if (!ok) { toast(t('That dictionary would not load')); return; }
-  library.spellLanguage = code;
-  await writeLibrary(library);
+  bookDictionaryReady = true;
+  if (target) {
+    const previous = target.writingLanguage;
+    if (code) target.writingLanguage = code; else delete target.writingLanguage;
+    try { await saveMeta(); }
+    catch (err) {
+      if (previous === undefined) delete target.writingLanguage; else target.writingLanguage = previous;
+      if (book === target) bookDictionaryReady = await window.neo.setSpellLanguage(previousDictionary);
+      throw err;
+    }
+    if (book !== target) return;
+    const caret = captureCaret();
+    renderChapters();
+    restoreCaret(caret);
+  } else {
+    const previous = library.spellLanguage;
+    library.spellLanguage = code;
+    try { await writeLibrary(library); }
+    catch (err) {
+      if (previous === undefined) delete library.spellLanguage; else library.spellLanguage = previous;
+      if (!book) await window.neo.setSpellLanguage(previousDictionary);
+      throw err;
+    }
+  }
+  focusSegmenter = null;
   spellCache.clear();
   if (spellOn) {
     spellScanned = new Set();
@@ -14840,7 +14926,7 @@ async function changeSpellLanguage(code) {
     CSS.highlights.delete('neo-spell');
     scanSpellingHere();
   }
-  toast(t('Spellcheck: {lang}', { lang: SPELL_LANGUAGE_NAMES[code] || code }));
+  toast(t('Spellcheck: {lang}', { lang: SPELL_LANGUAGE_NAMES[wanted] || wanted }));
 }
 
 // right-click a flagged word for suggestions
@@ -15281,7 +15367,7 @@ function sentenceRange(p) {
   if (!text.trim()) return null;
   const at = caretOffsetIn(p);
   if (!focusSegmenter && window.Intl && Intl.Segmenter) {
-    focusSegmenter = new Intl.Segmenter((library.spellLanguage || 'en').split('-')[0], { granularity: 'sentence' });
+    focusSegmenter = new Intl.Segmenter(writingLanguage(), { granularity: 'sentence' });
   }
   if (!focusSegmenter) return null;
   let hit = null, last = null;
@@ -16056,7 +16142,7 @@ function exportChapters() {
     }
     if (kind === 'acknowledgments' || kind === 'about') {
       if (!paras.length) continue;
-      const sec = push({ kind, heading: kindName(kind), level: 0, paras });
+      const sec = push({ kind, heading: writingKindName(kind), level: 0, paras });
       toc.push({ label: sec.heading, num: sec.num, level: 0, type: 'page' });
       continue;
     }
@@ -16157,9 +16243,9 @@ function manuscriptModel(v, sections) {
   return {
     title: book.title || t('Untitled'), byline: v.byline, headerName: v.headerName, headerTitle: v.headerTitle,
     contact: { name: v.name, lines: [...String(v.address || '').split(/\r?\n/), v.phone, v.email] },
-    wordsText: t('about {n} words', { n: shown.toLocaleString(NeoI18n.getLocale()) }),
-    byText: v.byline ? t('by {name}', { name: v.byline }) : '',
-    endText: v.end ? t('END') : '',
+    wordsText: writingText('about {n} words', { n: shown }),
+    byText: v.byline ? writingText('by {name}', { name: v.byline }) : '',
+    endText: v.end ? writingText('END') : '',
     font: v.font, paper: window.neo.paper || 'Letter', lang: writingLanguage(),
     // one story with no chapters: the short-story layout
     short: sections.length === 1 && chapters.length === 1 && !chapters[0].heading,
@@ -16339,6 +16425,7 @@ const cssString = (s) => '"' + String(s || '').replace(/\\/g, '\\\\').replace(/"
 // one, the story (each chapter on a right-hand page), the pages at the back,
 // then the other books by the same name and a note to the reader.
 function buildPrintHtml(d, o) {
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const trim = PRINT_TRIMS.find((x) => x.id === o.trim) || PRINT_TRIMS[0];
   const [W, H] = PRINT_DIMS[trim.id];
   const esc = (s) => escHtml(String(s || ''));
@@ -16729,6 +16816,7 @@ const plainHeading = (ch) => (ch.partTitle ? `${ch.heading}: ${ch.partTitle}` : 
 
 function buildTxt(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   let out = `${d.title.toUpperCase()}\n`;
   if (d.subtitle) out += `${d.subtitle}\n`;
   out += t('by {author}', { author: d.author }) + '\n\n\n';
@@ -16749,6 +16837,7 @@ function buildTxt(data) {
 
 function buildMd(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   // a title like "Wool *Omnibus*" must not turn into markup (idea: nejcc, #70)
   const mdMeta = (s) => String(s || '').replace(/([\\`*_\[\]#<>])/g, '\\$1');
   // wrap a run in emphasis markers, keeping boundary spaces outside them
@@ -16830,6 +16919,7 @@ const headTag = (ch) => 'h' + Math.min(6, 2 + (ch.level || 0));
 
 function buildHtml(data, opts = {}) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const total = d.sections.filter((ch) => (ch.kind || 'chapter') === 'chapter')
     .reduce((s, ch) => s + ch.paras.reduce((n, p) => n + countWords(p.text || ''), 0), 0);
   const stamp = new Date().toLocaleString(NeoI18n.getLocale());
@@ -17349,6 +17439,7 @@ function docxFootnotesXml(notes) {
 }
 function docxEntriesOf(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const body = [];
   // headings carry Word's own heading styles, so the navigation pane and a
   // table of contents inserted in Word both see the book's shape
@@ -17426,7 +17517,7 @@ function docxEntriesOf(data) {
 <w:pPr><w:keepNext/><w:pageBreakBefore/><w:spacing w:before="1200"/><w:jc w:val="center"/><w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr><w:caps/><w:sz w:val="28"/></w:rPr></w:style>`;
   const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/><w:sz w:val="24"/><w:lang w:val="${escXml(d.language || writingLanguage())}"/></w:rPr></w:rPrDefault>
 <w:pPrDefault><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
 ${para('BodyText', 'Body Text', '<w:ind w:firstLine="480"/>')}
@@ -17565,6 +17656,7 @@ ${paras}
 
 async function buildEpubEntries(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const chapters = d.sections;
   const uuid = 'urn:uuid:' + (d.uuid || crypto.randomUUID());
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -17733,7 +17825,7 @@ async function shelfBookData(shelf, opts = {}) {
   const metas = [];
   for (const id of shelf.bookIds) {
     const m = await window.neo.readBookMeta(id);
-    if (m && (bound || !isPageMeta(m))) metas.push(m);
+    if (m && (bound || !isPageMeta(m))) { await prepareWritingLanguage(m); metas.push(m); }
   }
   const cover = metas.find((m) => m.kind === 'cover') || null;
   const author = (cover && cover.author) || shelfAuthorName(shelf);
@@ -17782,7 +17874,7 @@ async function shelfBookData(shelf, opts = {}) {
         paras.push(...p);
       }
       if (!paras.length) continue;
-      const heading = isUntitled(m.title) ? pageKindName(m.kind) : m.title.trim();
+      const heading = isUntitled(m.title) ? writingKindName(m.kind, m) : m.title.trim();
       const s = push({ kind: 'chapter', role: m.kind, heading, level: 0, paras });
       toc.push({ label: heading, num: s.num, level: 0, type: 'title' });
       inPart = false;
@@ -17829,7 +17921,7 @@ async function shelfBookData(shelf, opts = {}) {
         if (m.restartNumbering) n = 0; // this title numbers its chapters part by part
         const titled = !!(c.paras[0] && !c.paras[0].sceneBreak && !isAttribution(c.paras[0]));
         const partTitle = titled ? c.paras[0].text : '';
-        const s = push({ kind: 'part', heading: partLabel(titleParts), partTitle, level: chLevel, paras: titled ? c.paras.slice(1) : c.paras });
+        const s = push({ kind: 'part', heading: partLabel(titleParts, m), partTitle, level: chLevel, paras: titled ? c.paras.slice(1) : c.paras });
         toc.push({ label: partTitle ? s.heading + ': ' + partTitle : s.heading, num: s.num, level: chLevel, type: 'part' });
         underPart = true;
         continue;
@@ -17840,9 +17932,9 @@ async function shelfBookData(shelf, opts = {}) {
       let heading;
       if (c.kind === 'unnumbered') heading = chTitle || '';
       else {
-        if (role) heading = role === 'prologue' ? t('Prologue') : t('Epilogue');
-        else { n += 1; heading = t('Chapter {n}', { n }); }
-        if (chTitle) heading = library.exportCustomChapterTitles ? chTitle : heading + ' ' + headingDash() + ' ' + chTitle;
+        if (role) heading = writingKindName(role, m);
+        else { n += 1; heading = writingText('Chapter {n}', { n }, m); }
+        if (chTitle) heading = library.exportCustomChapterTitles ? chTitle : heading + ' ' + headingDash(m) + ' ' + chTitle;
       }
       const lv = underPart ? chLevel + 1 : chLevel;
       const s = push({ kind: 'chapter', heading, level: lv, paras: c.paras, role: role || '' });
@@ -18000,6 +18092,8 @@ async function exportFromShelf(bookId, format) {
   for (const chId of meta.chapterOrder) html[chId] = await window.neo.readChapter(bookId, chId);
   if (book) return; // a book was opened meanwhile
   const hadUuid = !!meta.uuid;
+  await prepareWritingLanguage(meta);
+  if (book) return;
   const keep = { chapterHTML, savedHTML };
   shelfExport = true;
   book = meta;
