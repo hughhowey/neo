@@ -15822,6 +15822,55 @@ function applyAlign(value) {
   reportViewState(); // the Format menu's alignment tick
 }
 
+// Format → Align Book Prose: one structural undo, with special pages and
+// deliberately formatted poetry/flush lines left as they were.
+function alignedProseHtml(html, value) {
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  let changed = false;
+  for (const p of holder.querySelectorAll(':scope > p')) {
+    if (p.matches('.scene-break, .ghost, .poetry, .flush') || [...p.classList].some((c) => c.startsWith('sp-'))) continue;
+    const target = value === 'left' ? '' : value;
+    if (p.style.textAlign === target) continue;
+    if (target) p.style.textAlign = target;
+    else p.style.removeProperty('text-align');
+    if (!p.getAttribute('style')) p.removeAttribute('style');
+    changed = true;
+  }
+  return changed ? captureBody(holder) : null;
+}
+function alignBookProse(value) {
+  if (!moreOn() || !book || isScript() || !['left', 'center', 'right', 'justify'].includes(value)) return 0;
+  const changes = [];
+  for (const chId of book.chapterOrder) {
+    if (!STORY_KINDS.includes(chapterKind(chId))) continue;
+    const body = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
+    const html = body ? captureBody(body) : chapterHTML[chId];
+    if (typeof html !== 'string') continue; // a chapter still arriving from sync
+    const next = alignedProseHtml(html, value);
+    if (next !== null) changes.push([chId, next]);
+  }
+  if (!changes.length) return 0;
+  if (currentTab !== 'manuscript') switchTab('manuscript');
+  const caret = captureCaret();
+  const keepScroll = $('#paper-scroll').scrollTop;
+  const releaseDay = holdDay();
+  snapshotStructure('book alignment');
+  for (const [chId, html] of changes) {
+    chapterHTML[chId] = html;
+    wordCache[chId] = null;
+    scheduleChapterSave(chId);
+  }
+  renderChapters();
+  restoreCaret(caret);
+  $('#paper-scroll').scrollTop = keepScroll;
+  releaseDay();
+  sealUndo(undoStack[undoStack.length - 1]);
+  resetNativeUndo();
+  reportViewState();
+  return changes.length;
+}
+
 // Menu accelerators and editor shortcuts, plus NEO's distinct writing gestures.
 // Routine text entry, cursor movement and dialog controls are intentionally omitted.
 function shortcutSections() {
@@ -18343,6 +18392,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'align' && !(book && isScript())) {
     applyAlign(msg.value);
   }
+  if (msg.type === 'alignBook') alignBookProse(msg.value);
   if (msg.type === 'poetry' && !(book && isScript())) togglePoetry();
   if (msg.type === 'flush' && !(book && isScript())) toggleFlush();
   if (msg.type === 'uiLanguage') {
