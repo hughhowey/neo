@@ -2962,8 +2962,9 @@ function wireChapterBody(body, chId) {
     const text = data.getData('text/plain');
     // hyphens set as dialogue dashes, the same as typing them
     const edges = caretEdges(body);
+    const quotes = isScript() ? null : { q: bookQuotes(body), sq: singleQuotes(body) };
     if (html) {
-      document.execCommand('insertHTML', false, cleanPasteHtml(html, { style: dashStyle(), ...edges }));
+      document.execCommand('insertHTML', false, cleanPasteHtml(html, { style: dashStyle(), quotes, ...edges }));
       // the engine wraps inserted HTML (and its neighbours) in style spans
       if (body.querySelector('span:not(.ph-mark):not(.fn)')) {
         const caret = captureCaret();
@@ -2980,7 +2981,8 @@ function wireChapterBody(body, chId) {
         // mid-line ("the " + "big " + "dog"), and goes at a paragraph's edge
         const lead = i === 0 && !edges.start && !edges.spaced && /^\s/.test(p) ? ' ' : '';
         const tail = i === parts.length - 1 && !edges.end && !edges.spacedAfter && /\s$/.test(p) ? ' ' : '';
-        const line = lead + dialogueDashes(p.trim(), dashStyle(), { start: i > 0 || edges.start, end: i < parts.length - 1 || edges.end, spaced: i === 0 && edges.spaced }) + tail;
+        let line = lead + dialogueDashes(p.trim(), dashStyle(), { start: i > 0 || edges.start, end: i < parts.length - 1 || edges.end, spaced: i === 0 && edges.spaced }) + tail;
+        if (quotes) line = incomingQuotes(line, quotes.q, quotes.sq, i === 0 ? edges.before : '');
         // plain text written in Markdown keeps its *italics* and **bold**
         const styled = markdownOff() ? null : markdownInline(line);
         if (styled) {
@@ -4502,7 +4504,7 @@ function caretEdges(body) {
   post.setStart(range.endContainer, range.endOffset);
   const before = pre.toString();
   const after = post.toString();
-  return { start: !before.trim(), end: !after.trim(), spaced: /\s$/.test(before), spacedAfter: /^\s/.test(after) };
+  return { start: !before.trim(), end: !after.trim(), spaced: /\s$/.test(before), spacedAfter: /^\s/.test(after), before };
 }
 
 // Reduce pasted HTML to what a manuscript is made of: paragraphs, bold,
@@ -4568,6 +4570,7 @@ function cleanPasteHtml(html, dashes) {
         end: n !== filled.lastIndexOf(true) || dashes.end,
         spaced: n === filled.indexOf(true) && dashes.spaced
       });
+      if (dashes.quotes) quoteRuns(runs, dashes.quotes.q, dashes.quotes.sq, n === filled.indexOf(true) ? dashes.before : '');
     }
     const inner = runs.map((r) => {
       if (r.fn !== undefined) return runHtml(r);
@@ -4981,6 +4984,27 @@ function quoteOpensAfter(before) {
   while (i > 0 && /[‘“«»›‹]/.test(before[i - 1])) i--;
   if (i === before.length) return before === '' || /[\s([{„‚>]/.test(before[i - 1]);
   return !/[\p{L}\p{N}\p{M}.,;:!?…)\]}’”\u202f]/u.test(before[i - 1] || '');
+}
+
+// Incoming prose follows the same rules as typing. Existing typographic
+// marks stay as written, and the paragraph before a paste supplies context.
+function incomingQuotes(text, q, sq, before = '') {
+  let out = '';
+  for (const key of text) {
+    if (key !== '"' && key !== "'") { out += key; continue; }
+    const prefix = before + out;
+    out += typedQuote(key, prefix, q, sq, (marks, straight) => quoteOpenIn(prefix, marks, straight));
+  }
+  return out;
+}
+// Keep quotation context across bold/italic runs without changing their
+// markup or touching a footnote or placeholder's metadata.
+function quoteRuns(runs, q, sq, before = '') {
+  for (const run of runs) {
+    if (typeof run.text !== 'string' || run.mark !== undefined || run.fn !== undefined) continue;
+    run.text = incomingQuotes(run.text, q, sq, before);
+    before += run.text;
+  }
 }
 
 // The quotation marks of the language being written: the spellcheck
@@ -14518,7 +14542,7 @@ function importedChapterHTML(ch) {
   return ch.paras.map((p) => {
     if (p.scene) return '<p class="scene-break">***</p>';
     // hyphens set as dialogue dashes, the same as typing them
-    return `<p>${importedEmphasis(escHtml(dialogueDashes(p.text || '', dashStyle())))}</p>`;
+    return `<p>${importedEmphasis(escHtml(incomingQuotes(dialogueDashes(p.text || '', dashStyle()), bookQuotes(), singleQuotes())))}</p>`;
   }).join('') || '<p><br></p>';
 }
 

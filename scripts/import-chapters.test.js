@@ -25,6 +25,8 @@ function room(opts = {}) {
   const ctx = vm.createContext({
     book: opts.book === undefined ? { id: 'b1', title: 'My Book', chapterOrder: ['c1', 'c2'], chapterTitles: {} } : opts.book,
     chapterHTML: { c1: '<p>one</p>', c2: '<p>two</p>' },
+    library: null,
+    NeoI18n: { getLocale: () => 'en' },
     undoStack: [],
     currentTab: 'manuscript',
     currentChapterId: opts.currentChapterId || null,
@@ -47,6 +49,7 @@ function room(opts = {}) {
     $: () => ({ hidden: false }),
     window: { neo: { logError: (m) => log.push('logError ' + m), importPick: async () => opts.picked || [] } }
   });
+  vm.runInContext(app.slice(app.indexOf('function quoteOpenIn('), app.indexOf('// A hyphen standing on its own')), ctx);
   vm.runInContext(app.slice(from, to), ctx);
   return ctx;
 }
@@ -54,6 +57,11 @@ const chapter = (title, ...texts) => ({ title, paras: texts.map((t) => (t === '*
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
 describe('importing chapters into the open book', () => {
+  test('imported chapters curve straight quotes while preserving their scene breaks', async () => {
+    const ctx = room();
+    await ctx.importChaptersIntoBook([{ name: 'a', chapters: [chapter('', "'You aren't,' she replied.", '***')] }], null);
+    assert.equal(ctx.chapterHTML[ctx.book.chapterOrder.at(-1)], '<p>‘You aren’t,’ she replied.</p><p class="scene-break">***</p>');
+  });
   test('chapters go in before the chapter named, in file order, with their titles', async () => {
     const ctx = room();
     const n = await ctx.importChaptersIntoBook([
