@@ -386,7 +386,7 @@ function lookUpWord(text) {
 // Safari and Books show (#179). The listener runs in the bubble phase, after the spellcheck menu,
 // and stands down when any other menu already answered the right-click.
 document.addEventListener('contextmenu', (e) => {
-  if (window.neo.platform !== 'darwin' || e.defaultPrevented || !moreOn()) return;
+  if (window.neo.platform !== 'darwin' || e.defaultPrevented || !featureOn('readAloud')) return;
   const editor = e.target.closest && e.target.closest('.chapter-body, #aux-editor');
   if (!editor) return;
   const sel = window.getSelection();
@@ -433,17 +433,6 @@ function typewriterRoom() {
   paper.style.setProperty('--typewriter-room', Math.max(120, Math.ceil(room)) + 'px');
 }
 new ResizeObserver(() => typewriterRoom()).observe($('#chapters'));
-// the soft hyphens' ticks (non-breaking marks) follow anything that moves the words
-new ResizeObserver(() => queueSoftHyphenTicks()).observe($('#chapters'));
-$('#paper-scroll').addEventListener('scroll', () => queueSoftHyphenTicks(false), { passive: true });
-window.addEventListener('resize', () => queueSoftHyphenTicks());
-if (document.fonts) document.fonts.addEventListener('loadingdone', () => queueSoftHyphenTicks());
-// a paragraph's alignment, poetry or flush, and the opening paragraph's
-// marks, are set on it as attributes: the words move, but nothing is typed
-// and no sheet changes size
-new MutationObserver((records) => {
-  if (records.some((r) => r.target.closest('.chapter-body, .chapter-head') || r.target.matches('.chapter'))) queueSoftHyphenTicks();
-}).observe($('#chapters'), { subtree: true, attributes: true, attributeFilter: ['style', 'class', 'dir', 'data-first', 'data-speech'] });
 window.addEventListener('resize', typewriterRoom);
 function applyNbspMarks() {
   if (window.neo.nbspMarksState) window.neo.nbspMarksState(nbspMarksEnabled); // the Format menu's tick

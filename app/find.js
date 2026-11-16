@@ -305,11 +305,6 @@ const escAttr = (s) => escHtml(s).replace(/"/g, '&quot;');
 // Turn parsed manuscripts into books on a shelf — used by the file picker
 // and by dropping files from Finder straight onto a shelf.
 async function addImportedBooks(results, shelf) {
-  // a Fountain or Final Draft file is a script: behind Show More Features
-  if (!moreOn()) {
-    results = results.filter((r) => !r.script);
-    if (!results.length) { toast(t('No .docx, .txt, or .md files in that drop')); return; }
-  }
   shelf = shelf || shelvesFor(currentAuthor().id)[0] || library.shelves[0];
   let ok = 0;
   let scripts = 0;

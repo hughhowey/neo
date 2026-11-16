@@ -294,7 +294,7 @@ function navDropInd() {
 }
 // files from Finder dropped on the pane become chapters where they land
 // (documents dropped in as chapters are behind Show More Features)
-const navFileDrag = (e) => e.dataTransfer.types.includes('Files') && !!book && !isScript() && moreOn();
+const navFileDrag = (e) => e.dataTransfer.types.includes('Files') && !!book && !isScript() && featureOn('exports');
 navList.addEventListener('dragover', (e) => {
   if (!e.dataTransfer.types.includes('application/x-neo-chapter') && !navFileDrag(e)) return;
   e.preventDefault();
@@ -453,7 +453,7 @@ let notesPeeksBook = '';
 const notesKind = (page) => (page === 'book' ? 'notes' : 'notes-' + page);
 // a chapter's own page is behind Show More Features; one with notes on it
 // already stays open to the writer
-const notesPageOk = (page) => page === 'book' || (!!book && book.chapterOrder.includes(page) && isStory(page) && (moreOn() || !!notesPeeks[page]));
+const notesPageOk = (page) => page === 'book' || (!!book && book.chapterOrder.includes(page) && isStory(page) && (featureOn('notesPages') || !!notesPeeks[page]));
 
 // what a page holds: the text waiting to be saved, else the file
 function readNotesPage(bookId, page) {
@@ -544,7 +544,7 @@ function renderNotesNav() {
   };
   row('book', t('The Book'), notesPeeksBook);
   // simple NEO lists only the chapter pages that have notes on them
-  const shown = (chId) => moreOn() || !!notesPeeks[chId];
+  const shown = (chId) => featureOn('notesPages') || !!notesPeeks[chId];
   if (!book.chapterOrder.some((c) => isStory(c) && shown(c))) return;
   const sep = document.createElement('div');
   sep.className = 'notes-sep';
@@ -552,7 +552,7 @@ function renderNotesNav() {
   let parts = 0;
   for (const chId of book.chapterOrder) {
     const kind = chapterKind(chId);
-    if (kind === 'part' && moreOn()) {
+    if (kind === 'part' && featureOn('notesPages')) {
       parts += 1;
       const p = document.createElement('div');
       p.className = 'notes-part';

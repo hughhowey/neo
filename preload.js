@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('neo', {
   spellLearn: (word) => ipcRenderer.invoke('spell:learn', word),
   setSpellLanguage: (code) => ipcRenderer.invoke('spell:setLanguage', code),
   appVersion: () => ipcRenderer.invoke('app:version'),
+  isPackaged: () => ipcRenderer.sendSync('app:packaged'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),
@@ -78,7 +79,10 @@ contextBridge.exposeInMainWorld('neo', {
   reloadForLanguage: () => ipcRenderer.invoke('i18n:reload'),
 
   writingStyleState: (st) => ipcRenderer.send('style:state', st),
-  moreState: (on) => ipcRenderer.send('more:state', on),
+  featuresState: (on) => ipcRenderer.send('features:state', on),
+  uiLanguages: () => ipcRenderer.invoke('i18n:languages'),
+  setUiLanguage: (code) => ipcRenderer.send('i18n:set', code),
+  setPressHold: (on) => ipcRenderer.send('pressHold:set', on),
   viewState: (st) => ipcRenderer.send('view:state', st),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });

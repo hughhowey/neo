@@ -28,7 +28,7 @@ for (const f of files) {
   const args = [path.join(dir, f), ...extra];
   const started = Date.now();
   const run = xvfb
-    ? spawnSync('xvfb-run', ['-a', electron, ...args], { encoding: 'utf8', timeout: 600000 })
+    ? spawnSync('xvfb-run', ['-a', '-s', '-screen 0 1920x1200x24', electron, ...args], { encoding: 'utf8', timeout: 600000 })
     : spawnSync(electron, args, { encoding: 'utf8', timeout: 600000 });
   const out = (run.stdout || '') + (run.stderr || '');
   const summary = (out.match(/^\d+ passed, \d+ failed$/m) || [''])[0];

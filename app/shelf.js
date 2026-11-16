@@ -27,7 +27,7 @@ async function loadLibrary() {
   const untouched = (library.shelves || []).filter((s) => s.name === DEFAULT_SHELF && own !== DEFAULT_SHELF);
   for (const s of untouched) s.name = own;
   if (untouched.length) await writeLibrary(library);
-  await decideMoreFeatures();
+  await setupFeatures();
   if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
   const existing = !!library.firstRunDone;
   if (!existing) {
@@ -296,7 +296,7 @@ async function renderShelves() {
       e.preventDefault();
       if (isBound(shelf)) { await boundShelfMenu(shelf); return; }
       const choice = await optionModal(escHtml(t('Shelf “{name}”', { name: shelf.name })), null, [
-        ...(moreOn() ? [{
+        ...(featureOn('penNames') ? [{
           label: t('Bind into one book'),
           desc: t('Its titles become one book, with a cover, front and back pages, and one table of contents.'),
           value: 'bind'
@@ -1247,7 +1247,7 @@ function bookTile(meta, opts = {}) {
     const script = isScript(meta);
     const trashLabel = window.Capacitor ? t('Delete book')
       : navigator.platform.toLowerCase().includes('win') ? t('Move to Recycle Bin') : t('Move to Trash');
-    const canCopy = !!window.neo.duplicateBook && !isPageMeta(meta) && moreOn();
+    const canCopy = !!window.neo.duplicateBook && !isPageMeta(meta) && featureOn('penNames');
     // the cover's own choices, gathered in one place
     const coverItems = script ? [] : [
       ...(NO_HOVER ? [] : [{ label: meta.coverImage ? t('Replace cover art…') : t('Set cover art…'), value: 'cover' }]),
@@ -1257,17 +1257,17 @@ function bookTile(meta, opts = {}) {
     ];
     let choice;
     // (a book's word goal is set in Goals, inside the book)
-    if (NO_HOVER || window.Capacitor || !moreOn()) {
+    if (NO_HOVER || window.Capacitor) {
       // a touch screen, and simple NEO: the larger cards, each saying what it
       // does. Simple NEO has no cover menu: art is dragged onto the book, and
       // New cover and Remove cover art stand with the rest.
       const options = [];
       if (startPart) options.push({ label: t('Start a part here'), desc: t('A part page goes in before “{title}”.', { title: escHtml(shownTitle(meta.title)) }), value: 'part' });
       options.push(window.Capacitor
-        ? { label: t('Export…'), desc: script ? t('PDF, Fountain or Final Draft, through the share sheet.') : moreOn() ? t('Text, Markdown, HTML, PDF, Word or EPUB, through the share sheet.') : t('PDF, Word or EPUB, through the share sheet.'), value: 'export' }
-        : { label: t('Export…'), desc: script || moreOn() || isPageMeta(meta) ? '' : t('PDF, Word, EPUB, or a paperback for KDP.'), value: 'export' });
+        ? { label: t('Export…'), desc: script ? t('PDF, Fountain or Final Draft, through the share sheet.') : featureOn('exports') ? t('Text, Markdown, HTML, PDF, Word or EPUB, through the share sheet.') : t('PDF, Word or EPUB, through the share sheet.'), value: 'export' }
+        : { label: t('Export…'), desc: script || featureOn('exports') || isPageMeta(meta) ? '' : t('PDF, Word, EPUB, or a paperback for KDP.'), value: 'export' });
       if (canCopy) options.push({ label: t('Duplicate'), desc: t('A copy of the whole book on this shelf, to keep as a backup or try another version.'), value: 'duplicate' });
-      if (coverItems.length && moreOn()) options.push({ label: t('Cover'), desc: t('A new cover, your own art, or a saved image.'), value: 'coverMenu' });
+      if (coverItems.length && featureOn('covers')) options.push({ label: t('Cover'), desc: t('A new cover, your own art, or a saved image.'), value: 'coverMenu' });
       else if (coverItems.length) {
         options.push({ label: t('New cover'), desc: t('A fresh abstract and a different title style.'), value: 'refresh' });
         if (meta.coverImage) options.push({ label: t('Remove cover art'), desc: t('Deletes the image from the book folder. (To just hide it, use the ↻ on the book.)'), danger: true, value: 'uncover' });
@@ -1307,7 +1307,7 @@ function bookTile(meta, opts = {}) {
       await doExport(fmt);
     } else if (choice === 'export') {
       const fmt = await optionModal(t('Export “{title}”', { title: escHtml(shownTitle(meta.title)) }), null, [
-        ...(moreOn() ? [{ label: t('Text (.txt)'), value: 'txt' }, { label: t('Markdown (.md)'), value: 'md' }, { label: t('HTML (.html)'), value: 'html' }] : []),
+        ...(featureOn('exports') ? [{ label: t('Text (.txt)'), value: 'txt' }, { label: t('Markdown (.md)'), value: 'md' }, { label: t('HTML (.html)'), value: 'html' }] : []),
         { label: 'PDF (.pdf)', value: 'pdf' },
         { label: t('Word (.docx)'), value: 'docx' }, { label: t('EPUB (.epub)'), value: 'epub' },
         ...(window.Capacitor || isPageMeta(meta) ? [] : [{ label: t('Paperback for KDP…'), value: 'paperback' }])
@@ -1507,7 +1507,7 @@ async function refreshCover(meta, el) {
   const enough = (meta.wordCount || 0) >= PAINT_AT;
   // a bound book's cover has no text of its own to paint from
   // (painting is behind Show More Features; a painting already made still shows)
-  const hasKey = meta.kind !== 'cover' && moreOn() && await window.neo.hasSecret(coverProvider());
+  const hasKey = meta.kind !== 'cover' && featureOn('covers') && await window.neo.hasSecret(coverProvider());
   const options = [];
   if (meta.coverImage && mode !== 'image') options.push({ label: t('Show your cover art'), desc: t('The image you gave this book.'), value: 'image' });
   if (hasPainting(meta) && mode !== 'painted') options.push({ label: t('Show NEO’s painting'), desc: t('The cover painted from the text.'), value: 'painted' });
@@ -1741,7 +1741,7 @@ $('#author-chip').onclick = async () => {
   }
   opts.push({ label: t('Rename {name}', { name: escHtml(cur.name) }), value: 'rename' });
   // a second name is behind Show More Features; names already made stay reachable
-  if (moreOn()) opts.push({ label: t('Add a pen name…'), desc: t('A separate set of shelves under another name'), value: 'add' });
+  if (featureOn('penNames')) opts.push({ label: t('Add a pen name…'), desc: t('A separate set of shelves under another name'), value: 'add' });
   if (library.authors.length > 1) {
     opts.push({
       label: t('Remove {name}', { name: escHtml(cur.name) }),

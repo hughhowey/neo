@@ -35,7 +35,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
 
-The window's files, in load order: `core` (state, helpers, the library), `shelf` (bookshelf, bound shelves), `editor` (open, render), `typing`, `paragraphs` (poetry, flush), `litrpg`, `typing-rules` (scene breaks, the opening line, paste, emphasis, capitals, quotes, dashes), `vim`, `screenplay`, `footnotes` (and placeholders, stickies), `nav` (and notes pages), `tabs` (and the structured outline), `cards`, `saving` (counters, saving, snapshots, refresh), `undo` (and read aloud), `find` (and import), `spellcheck` (and typewriter, focus, goals, cover art settings), `menu`, `export` (and manuscript format), `print` (paperback, the export builders), `startup` (safety net, fonts, accessibility, simple NEO). Inside each, section banners look like `/*  SAVING  */`.
+The window's files, in load order: `core` (state, helpers, the library), `shelf` (bookshelf, bound shelves), `editor` (open, render), `typing`, `paragraphs` (poetry, flush), `litrpg`, `typing-rules` (scene breaks, the opening line, paste, emphasis, capitals, quotes, dashes), `vim`, `screenplay`, `footnotes` (and placeholders, stickies), `nav` (and notes pages), `tabs` (and the structured outline), `cards`, `saving` (counters, saving, snapshots, refresh), `undo` (and read aloud), `find` (and import), `spellcheck` (and typewriter, focus, goals, cover art settings), `menu`, `options` (features and the Options window), `export` (and manuscript format), `print` (paperback, the export builders), `startup` (safety net, fonts, accessibility, launch). Inside each, section banners look like `/*  SAVING  */`.
 
 - Code that runs while a file loads (not inside a function that waits for the writer) may only call what earlier files define: a later file isn't there yet. Event handlers, menu messages and anything after the library loads are free to call anything.
 - A `let` shared between files must stay `let` (lint can't see another file's assignment, so `prefer-const` and `no-unused-vars` are off for `app/`).
@@ -43,20 +43,19 @@ The window's files, in load order: `core` (state, helpers, the library), `shelf`
 
 Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app/menu.js` and the others handle it on `window.neo.onMenu`.
 
-## Simple NEO and Show More Features
+## Features and Options
 
-NEO opens simple. File → Show More Features (`library.moreFeatures`) brings back the rest: SIMPLE NEO in `app/startup.js`, and `moreState` / `simpleTemplate` in `main.js`.
+One NEO for everyone. NEO → Options… (File → Options… off the Mac; FEATURES & OPTIONS in `app/options.js`) turns NEO's features on and off and holds the settings that used to be menu ticks. The features are `FEATURES` in `app/core.js`; `featureOn(key)` asks whether one is on (`library.features`, in library.json, so every device of the library follows it).
 
-- A menu item behind the switch carries `more: true` in `buildMenu()`; `simpleTemplate` leaves it (and the separators it would strand) out. A key, right-click choice or pane behind it asks `moreOn()` in `app/`.
-- Behind the switch now: alignment, poetry paragraphs, footnotes (⌘⇧N), Markdown emphasis (*italic* typed; off in simple NEO), Other Font…, non-breaking marks, pages views, page width, interface size, focus mode, vim keys, read aloud, Look Up, the tab keys, chapter notes pages, outline cards (loose cards, cards beside the page), New Books Open To, painted covers and Cover Art…, pen names, binding shelves, duplicate, Reshelve, scripts and Fountain/Final Draft import, Import Chapters, txt/md/html exports, Chapter Titles Only, the shelf anthology, Manuscript Format, and the two language menus.
-- Simple NEO treats those settings as NEO's defaults (`applyLook`) and never erases them: the writer's choices wait in library.json for the switch.
-- Simple NEO's own, because the writer's eyes decide them: the page (View → Page: Night, Paper, Light) and Brighter Interface. Both are in the menu without the switch and in Pocket's ⋯ sheet, and `brightNow` never asks `moreOn()`. A library with a brighter interface set is no sign of more (`usesMoreFeatures`).
-- Nothing a book already holds is hidden. A script, footnote, poetry paragraph, bound shelf, painted cover, loose card or chapter notes page with notes on it opens and exports as before, and other pen names stay reachable.
-- A book's right-click in simple NEO is the larger cards (`optionModal`), with no cover menu: art is dragged onto the book; New cover and Remove cover art stand with the rest. Word goals are set in Goals, inside the book, never from the shelf.
-- The shortcuts window (`bookShortcutSections`) lists a key only when its feature is showing.
-- A library from before the switch is decided once (`decideMoreFeatures`): on when it uses something behind it, off otherwise (with one toast saying where things went).
-- Pocket (Android and iOS) is always simple and has no switch; its ⋯ sheet in `pocket/www/index.html` offers only simple NEO's choices.
-- A new feature goes behind the switch unless Hugh says it belongs in simple NEO. `scripts/simple-neo.test.js`, `npm run test:simple`.
+- A menu item that belongs to a feature carries `feature: '<key>'` in `buildMenu()`; `featureTemplate` leaves it out (and the separators it would strand) while that feature is off. The window reports the features with `window.neo.featuresState` (`reportFeatures`). A key, right-click choice or pane asks `featureOn('<key>')`.
+- The features: `cards` (outline cards, loose cards, cards beside the page), `notesPages` (chapter notes pages), `poetry`, `footnotes`, `formatting` (alignment, Align Book Prose, Other Font…), `penNames` (pen names, binding shelves, the anthology, Duplicate, Reshelve), `covers` (painted covers, Cover Art…), `pages` (Show Pages, two pages, page width), `focus`, `readAloud` (and Look Up), `vim`, `exports` (Manuscript Format, txt/md/html, Import Chapters). Scripts, LitRPG boxes, the tab keys and Fountain/Final Draft import are for everyone.
+- The settings in Options: Markdown emphasis (`library.markdownOff`), non-breaking marks, press and hold for accents (Mac), new books open to, chapter titles only (with More exports), the interface and spellcheck languages, the interface size. Menus hold actions; Options holds settings. The page (Night, Paper, Light), Brighter Interface, Typewriter Scrolling, the fonts and drop cap stay in the menus: the writer's eyes decide them while writing.
+- A feature that's off takes NEO's defaults (`applyLook`) and never erases the writer's choices: they wait in library.json for its return.
+- Nothing a book already holds is hidden. A footnote, poetry paragraph, bound shelf, painted cover, loose card or chapter notes page with notes on it opens and exports as before, and other pen names stay reachable.
+- A new library starts with every feature off and Markdown typing off. A library from before 2.0 is set up once (`setupFeatures`): Show More Features on → every feature on (vim keys only if they were on); off → every feature off and simple NEO's quiet defaults written in; older still → judged by what it uses.
+- Pocket shows a feature only where its `FEATURES` entry says `pocket: true`.
+- The shortcuts window (`bookShortcutSections`) lists a key only when its feature is on.
+- A new feature gets an entry in `FEATURES` (off for a new library) unless Hugh says it's for everyone. `scripts/features.test.js`, `npm run test:options`.
 
 ## Outline cards
 
@@ -91,7 +90,7 @@ A book whose `book.json` says `"format": "screenplay"` is a script. Right-click 
 
 ## LitRPG boxes
 
-`[[` typed at the very start of a line makes it a box line: `<p class="litrpg">` (LITRPG BOXES in `app/`, `litrpgKey` from `smartKeys`, so Pocket's typed keys reach it too). No menu item and no Show More Features switch: the brackets are the whole door (Hugh's call, Nov 2026). ⌘Z right after brings the `[[` back.
+`[[` typed at the very start of a line makes it a box line: `<p class="litrpg">` (LITRPG BOXES in `app/`, `litrpgKey` from `smartKeys`, so Pocket's typed keys reach it too). No menu item and no feature switch: the brackets are the whole door (Hugh's call, Nov 2026). ⌘Z right after brings the `[[` back.
 
 - Lines in a row are one box. Enter is the box's next line; Enter on the box's empty last line ends it, and that line is prose; ⇧Enter is always another line in the box (a blank one, never the end); an empty line inside a box stays. Backspace at the start of a box's first line makes it prose.
 - Inside a box the smart typing stands aside (quotes, dashes, ellipsis, capitals, Markdown emphasis), and every space is kept, for columns. A box is never the opening paragraph: the drop cap goes to the first prose line (`openingPara`).

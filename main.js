@@ -2378,7 +2378,7 @@ ipcMain.handle('import:pick', async (_e, opts) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     title: chapters ? t('Bring chapters into this book') : t('Bring your manuscripts home'),
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: t('Manuscripts'), extensions: chapters || !moreState ? ['docx', 'txt', 'md'] : ['docx', 'txt', 'md', 'fountain', 'fdx'] }] // scripts: Show More Features
+    filters: [{ name: t('Manuscripts'), extensions: chapters ? ['docx', 'txt', 'md'] : ['docx', 'txt', 'md', 'fountain', 'fdx'] }]
   });
   if (canceled || !filePaths.length) return [];
   const out = [];
@@ -2880,21 +2880,26 @@ ipcMain.on('style:state', (_e, style) => {
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 
-// File → Show More Features: off, simple NEO leaves out the menu items
-// marked `more` (the window keeps their keys and choices out of sight too)
-let moreState = false;
-ipcMain.on('more:state', (_e, on) => {
-  on = !!on;
-  if (on === moreState) return;
-  moreState = on;
+// Options (the window's FEATURES): an item marked `feature: 'cards'` shows
+// only while that feature is on (the window keeps its keys and choices out
+// of sight too). Until the window reports, nothing behind a feature shows.
+let featuresState = {};
+ipcMain.on('features:state', (_e, on) => {
+  const next = on && typeof on === 'object' ? { ...on } : {};
+  if (JSON.stringify(next) === JSON.stringify(featuresState)) return;
+  featuresState = next;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
-// a template without the `more` items, and without the separators they leave
-// at an end or side by side
-function simpleTemplate(items, more) {
-  const kept = items.filter((it) => more || !it.more).map((it) => {
-    const { more: _, ...item } = it;
-    return Array.isArray(item.submenu) ? { ...item, submenu: simpleTemplate(item.submenu, more) } : item;
+// the menu bar's Options items and the window's own controls
+ipcMain.handle('i18n:languages', () => ({ list: listLanguages(), current: uiLanguage }));
+ipcMain.on('i18n:set', (_e, code) => { if (typeof code === 'string') setUiLanguage(code); });
+ipcMain.on('pressHold:set', (_e, on) => setPressAndHold(!!on));
+// a template without the items of features that are off, and without the
+// separators they leave at an end or side by side
+function featureTemplate(items, features) {
+  const kept = items.filter((it) => !it.feature || !!features[it.feature]).map((it) => {
+    const { feature: _, ...item } = it;
+    return Array.isArray(item.submenu) ? { ...item, submenu: featureTemplate(item.submenu, features) } : item;
   });
   const shown = (it) => it.visible !== false;
   return kept.filter((it, i) => {
@@ -2942,6 +2947,8 @@ function buildMenu() {
       submenu: [
         { role: 'about', label: t('About NEO') },
         { type: 'separator' },
+        { label: t('Options…'), click: () => sendToWindow({ type: 'options' }) },
+        { type: 'separator' },
         { role: 'services', label: t('Services') },
         { type: 'separator' },
         { role: 'hide', label: t('Hide NEO') },
@@ -2961,24 +2968,15 @@ function buildMenu() {
             { label: 'Fountain (.fountain)', click: () => sendToWindow({ type: 'export', format: 'fountain' }) },
             { label: 'Final Draft (.fdx)', click: () => sendToWindow({ type: 'export', format: 'fdx' }) }
           ] : [
-            { more: true, label: t('Plain Text (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
-            { more: true, label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
-            { more: true, label: t('Web Page (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
+            { feature: 'exports', label: t('Plain Text (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
+            { feature: 'exports', label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
+            { feature: 'exports', label: t('Web Page (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
             { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
             { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
             { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) },
             { type: 'separator' },
             { label: t('Paperback for KDP…'), click: () => sendToWindow({ type: 'export', format: 'paperback' }) },
-            { more: true, label: t('Manuscript Format…'), click: () => sendToWindow({ type: 'export', format: 'manuscript' }) },
-            { type: 'separator' },
-            {
-              more: true,
-              id: 'export-custom-chapter-titles',
-              label: t('Chapter Titles Only'),
-              type: 'checkbox',
-              checked: !!readJSON(LIBRARY_FILE, {}).exportCustomChapterTitles,
-              click: (item) => sendToWindow({ type: 'exportCustomChapterTitles', checked: item.checked })
-            }
+            { feature: 'exports', label: t('Manuscript Format…'), click: () => sendToWindow({ type: 'export', format: 'manuscript' }) }
           ]
         },
         { type: 'separator' },
@@ -2993,19 +2991,11 @@ function buildMenu() {
         // same in Pocket with a keyboard and never fires twice
         { label: t('Take Snapshot'), accelerator: 'CmdOrCtrl+S', registerAccelerator: false, click: () => sendToWindow({ type: 'snapshot' }) },
         { type: 'separator' },
-        { more: true, label: t('Cover Art…'), click: () => sendToWindow({ type: 'coverArt' }) },
+        { feature: 'covers', label: t('Cover Art…'), click: () => sendToWindow({ type: 'coverArt' }) },
         {
           label: t('Goals…'),
           accelerator: 'CmdOrCtrl+,',
           click: () => sendToWindow({ type: 'stats' })
-        },
-        {
-          more: true,
-          label: t('New Books Open To'),
-          submenu: [
-            { label: t('Blank Page'), type: 'radio', checked: writingStyle !== 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'pantser' }) },
-            { label: t('Outline First'), type: 'radio', checked: writingStyle === 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'plotter' }) }
-          ]
         },
         { type: 'separator' },
         {
@@ -3014,21 +3004,15 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'import' })
         },
         {
-          more: true,
+          feature: 'exports',
           label: t('Import Chapters…'),
           enabled: bookOpenState && !scriptState.on,
           click: () => sendToWindow({ type: 'importChapters' })
         },
-        { more: true, label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
+        { feature: 'penNames', label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
         { label: t('Library Folder…'), click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
         { type: 'separator' },
-        {
-          label: t('Show More Features'),
-          type: 'checkbox',
-          checked: moreState,
-          click: (item) => sendToWindow({ type: 'moreFeatures', checked: item.checked })
-        },
-        { type: 'separator' },
+        ...(isMac ? [] : [{ label: t('Options…'), click: () => sendToWindow({ type: 'options' }) }, { type: 'separator' }]),
         ...(isMac ? [{ role: 'close', label: t('Close Window') }] : [{ role: 'quit', label: t('Quit') }])
       ]
     },
@@ -3057,16 +3041,6 @@ function buildMenu() {
           // key and one press did both (#282).
           registerAccelerator: false,
           click: () => sendToWindow({ type: 'spellcheck' })
-        },
-        {
-          more: true,
-          label: t('Spellcheck Language'),
-          submenu: Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
-            label: lang.label,
-            type: 'radio',
-            checked: spellLanguage === code,
-            click: () => sendToWindow({ type: 'spellLanguage', value: code })
-          }))
         }
       ]
     },
@@ -3095,7 +3069,7 @@ function buildMenu() {
               click: () => sendToWindow({ type: 'bodyFont', value: f })
             })),
             { type: 'separator' },
-            { more: true, label: t('Other Font…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
+            { feature: 'formatting', label: t('Other Font…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
           ]
         },
         {
@@ -3112,7 +3086,7 @@ function buildMenu() {
           ]
         },
         {
-          more: true,
+          feature: 'formatting',
           visible: !scriptState.on, // a script's elements are placed where they print
           label: t('Align Paragraph'),
           submenu: [
@@ -3123,7 +3097,7 @@ function buildMenu() {
           ]
         },
         {
-          more: true,
+          feature: 'formatting',
           visible: !scriptState.on,
           enabled: bookOpenState,
           label: t('Align Book Prose'),
@@ -3137,7 +3111,7 @@ function buildMenu() {
         { label: t('Reset Text Size'), accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
         { type: 'separator', visible: !scriptState.on },
         {
-          more: true,
+          feature: 'pages',
           visible: !scriptState.on, // a script has its own pages
           label: t('Show Pages'),
           type: 'checkbox',
@@ -3145,7 +3119,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'pagedView' })
         },
         {
-          more: true,
+          feature: 'pages',
           visible: !scriptState.on,
           label: t('Two Pages Side by Side'),
           type: 'checkbox',
@@ -3154,7 +3128,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'twoPageView' })
         },
         {
-          more: true,
+          feature: 'pages',
           visible: !scriptState.on, // a script is set to its own page
           label: t('Page Width'),
           submenu: [['regular', t('Regular')], ['wide', t('Wide')], ['wider', t('Wider')]].map(([value, label]) => ({
@@ -3171,13 +3145,6 @@ function buildMenu() {
           type: 'checkbox',
           checked: typewriterState,
           click: () => sendToWindow({ type: 'typewriter' })
-        },
-        {
-          more: true,
-          label: t('Non-Breaking Marks'),
-          type: 'checkbox',
-          checked: nbspMarksState,
-          click: () => sendToWindow({ type: 'nbspMarks' })
         },
         { type: 'separator' },
         // tick when the caret sits in one; the keys are the editor's own
@@ -3207,22 +3174,12 @@ function buildMenu() {
           checked: flushState
         },
         {
-          more: true,
+          feature: 'poetry',
           visible: !scriptState.on,
           label: t('Poetry Paragraph'),
           ...pageKey('CmdOrCtrl+Shift+Enter', () => sendToWindow({ type: 'poetry' })),
           type: 'checkbox',
           checked: poetryState
-        },
-        { type: 'separator' },
-        // *italic* and **bold** as you type or paste; off for writers who
-        // keep literal asterisks
-        {
-          more: true,
-          label: t('Markdown Emphasis'),
-          type: 'checkbox',
-          checked: !readJSON(LIBRARY_FILE, {}).markdownOff,
-          click: (item) => sendToWindow({ type: 'markdownEmphasis', checked: item.checked })
         }
       ]
     },
@@ -3245,7 +3202,7 @@ function buildMenu() {
           }
         },
         {
-          more: true,
+          feature: 'focus',
           label: t('Focus Mode'),
           submenu: [
             { label: t('Cycle'), accelerator: 'CmdOrCtrl+Shift+O', click: () => sendToWindow({ type: 'focusCycle' }) },
@@ -3255,20 +3212,6 @@ function buildMenu() {
             { label: t('Off'), type: 'radio', checked: viewState.focus === 'off', click: () => sendToWindow({ type: 'focus', value: 'off' }) }
           ]
         },
-        {
-          more: true,
-          label: t('Vim Keys'),
-          type: 'checkbox',
-          checked: vimState,
-          click: () => sendToWindow({ type: 'vim' })
-        },
-        ...(isMac ? [{
-          more: true,
-          label: t('Press and hold for accents'),
-          type: 'checkbox',
-          checked: pressAndHoldOn(),
-          click: (item) => setPressAndHold(item.checked)
-        }] : []),
         { type: 'separator' },
         {
           label: t('Page'),
@@ -3284,29 +3227,6 @@ function buildMenu() {
           type: 'checkbox',
           checked: viewState.uiBright,
           click: () => sendToWindow({ type: 'uiBright' })
-        },
-        {
-          more: true,
-          // the size in use rides on the label; the steps are a tenth (#364),
-          // from 90% up to the page zoom's own 300%
-          label: t('Interface Size') + (uiZoomState === 1 ? '' : ' — ' + new Intl.NumberFormat(uiLanguage || 'en', { style: 'percent' }).format(uiZoomState)),
-          submenu: [
-            { label: t('Larger'), click: () => sendToWindow({ type: 'uiZoomStep', value: 1 }) },
-            { label: t('Smaller'), click: () => sendToWindow({ type: 'uiZoomStep', value: -1 }) },
-            { type: 'separator' },
-            { label: t('Reset'), click: () => sendToWindow({ type: 'uiZoomStep', value: 0 }) }
-          ]
-        },
-        { type: 'separator' },
-        {
-          more: true,
-          label: t('Language'),
-          submenu: listLanguages().map((lang) => ({
-            label: lang.name,
-            type: 'radio',
-            checked: uiLanguage === lang.code,
-            click: () => setUiLanguage(lang.code)
-          }))
         }
       ]
     },
@@ -3348,7 +3268,7 @@ function buildMenu() {
       ]
     }
   ];
-  const menu = Menu.buildFromTemplate(simpleTemplate(template, moreState));
+  const menu = Menu.buildFromTemplate(featureTemplate(template, featuresState));
   editMenuState.edit = null; // the old menu bar is going: forget its Edit menu first
   Menu.setApplicationMenu(menu);
   if (isMac) {
@@ -3517,6 +3437,8 @@ function compareVersions(a, b) {
 // toggling at the session level forces the engine to re-scan visible text —
 // newer Chromium ignores attribute changes on text it has already looked at
 ipcMain.handle('app:version', () => app.getVersion());
+// a packaged NEO (not `npm start`, `npm run try` or a test): What's New shows itself only there
+ipcMain.on('app:packaged', (e) => { e.returnValue = app.isPackaged; });
 
 // Updating
 //

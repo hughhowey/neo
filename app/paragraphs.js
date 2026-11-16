@@ -66,7 +66,7 @@ function handlePoetry(e, body, chId) {
   if (!mod && !block.classList.contains('poetry')) return false; // ⇧Enter alone: a flush paragraph
   e.preventDefault();
   // a new poetry paragraph is behind Show More Features; one already there goes on
-  if (!moreOn() && !block.classList.contains('poetry')) return true;
+  if (!featureOn('poetry') && !block.classList.contains('poetry')) return true;
   if (block.classList.contains('scene-break')) return true;
 
   if (block.classList.contains('poetry')) {

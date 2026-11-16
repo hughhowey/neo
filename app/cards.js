@@ -15,7 +15,7 @@
 /* ================================================================== */
 
 // (simple NEO's Outline is the list; the cards are behind Show More Features)
-const outlineCardsOn = () => !!book && (isScript() || (moreOn() && (library.outlineView || 'cards') === 'cards'));
+const outlineCardsOn = () => !!book && (isScript() || (featureOn('cards') && (library.outlineView || 'cards') === 'cards'));
 const chapterBodyEl = (chId) => document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
 const newSectionId = () => 'sec-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
@@ -132,7 +132,7 @@ const PAGES_GAP = 28; // px between pages at 100%: styles.css --pg-gap-base
 // Per device, like the zoom.
 const PAGE_WIDTHS = { regular: { f: 1, pad: 72 }, wide: { f: 1.25, pad: 56 }, wider: { f: 1.5, pad: 40 } };
 function applyPageWidth() {
-  const key = moreOn() && PAGE_WIDTHS[library.pageWidth] ? library.pageWidth : 'regular';
+  const key = featureOn('pages') && PAGE_WIDTHS[library.pageWidth] ? library.pageWidth : 'regular';
   const w = PAGE_WIDTHS[key];
   document.documentElement.style.setProperty('--page-wf', w.f);
   document.documentElement.style.setProperty('--page-pad-x', w.pad + 'px');
@@ -356,7 +356,7 @@ function viewSwitch() {
 function showOutlineView() {
   const sw = viewSwitch();
   const cards = outlineCardsOn();
-  sw.hidden = !book || isScript() || !moreOn(); // a script has only the cards
+  sw.hidden = !book || isScript() || !featureOn('cards'); // a script has only the cards
   for (const b of sw.querySelectorAll('button')) {
     const on = b.dataset.view === (cards ? 'cards' : 'list');
     b.classList.toggle('on', on);
@@ -2146,7 +2146,7 @@ function renderLooseCards() {
   add.className = 'loose-add';
   add.textContent = t('+ card');
   add.onclick = () => addLooseCard();
-  if (moreOn() || isScript()) list.appendChild(add);
+  if (featureOn('cards') || isScript()) list.appendChild(add);
   if (!(book.looseCards || []).length) {
     const tip = document.createElement('div');
     tip.className = 'loose-tip';
@@ -2353,7 +2353,7 @@ function sidePaneForTab(name) {
   $('#editor-view').classList.toggle('notes-tab', notes);
   if (notes) { renderNotesNav(); renderNotesSide(); }
   // loose cards are behind Show More Features; a book that has some keeps them in view
-  const outline = name === 'outline' && !!book && (moreOn() || isScript() || !!(book.looseCards || []).length);
+  const outline = name === 'outline' && !!book && (featureOn('cards') || isScript() || !!(book.looseCards || []).length);
   $('#editor-view').classList.toggle('outline-tab', outline);
   if (outline) renderLooseCards();
   // on Darlings the pane holds the book's snapshots, and stays open
@@ -2448,7 +2448,7 @@ function queueSideCards() {
 function sideCardsUpdate(force) {
   const box = sideCardsBox();
   // (the cards beside the page are behind Show More Features)
-  if (!book || currentTab !== 'manuscript' || !moreOn()) { if (sideCardsKey) { box.innerHTML = ''; sideCardsKey = ''; } return; }
+  if (!book || currentTab !== 'manuscript' || !featureOn('cards')) { if (sideCardsKey) { box.innerHTML = ''; sideCardsKey = ''; } return; }
   if (box.contains(document.activeElement)) return; // being typed on
   const sel = window.getSelection();
   let el = sel.rangeCount ? sel.anchorNode : null;

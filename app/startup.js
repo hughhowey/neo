@@ -246,68 +246,6 @@ $('#nav-list').addEventListener('keydown', (e) => {
   if (rows[i]) rows[i].focus();
 });
 
-/* ================================================================== */
-/*  SIMPLE NEO — File → Show More Features                             */
-/*  NEO opens simple. The switch brings back everything else: the      */
-/*  menu items main.js marks `more`, and the keys and right-click      */
-/*  choices here that ask moreOn(). A library from before the switch   */
-/*  is decided once: on for a writer already using something behind    */
-/*  it, so nothing they rely on goes out of sight; off for the rest,   */
-/*  who are told once where it went. A new library starts simple.      */
-/* ================================================================== */
-
-// what a library's own settings show the writer chose (the books are
-// looked at separately: a script, a painted cover)
-function usesMoreFeatures(lib) {
-  if (!lib) return false;
-  const lang = (code) => String(code || '').split('-')[0];
-  return (lib.authors || []).length > 1 ||
-    (lib.shelves || []).some((s) => isBound(s)) ||
-    !!lib.vimKeys || !!lib.nbspMarks || !!lib.pagedView ||
-    (!!lib.pageWidth && lib.pageWidth !== 'regular') ||
-    (lib.uiZoom !== undefined && snapZoom(lib.uiZoom) !== 1) ||
-    (!!lib.focus && lib.focus !== 'off') ||
-    !!lib.markdownOff || !!lib.exportCustomChapterTitles ||
-    (!!lib.spellLanguage && lang(lib.spellLanguage) !== lang(NeoI18n.getLocale()));
-}
-
-async function decideMoreFeatures() {
-  if (IS_POCKET || typeof library.moreFeatures === 'boolean') { reportMore(); return; }
-  let more = false;
-  if (library.firstRunDone) {
-    more = usesMoreFeatures(library);
-    for (const s of more ? [] : library.shelves || []) {
-      for (const id of s.bookIds || []) {
-        const meta = await shelfMeta(id);
-        if (meta && (isScript(meta) || hasPainting(meta))) { more = true; break; }
-      }
-      if (more) break;
-    }
-    if (!more) more = !!(await window.neo.hasSecret(coverProvider()).catch(() => false));
-    if (!more) setTimeout(() => toast(t('NEO is simpler now. File → Show More Features brings back the rest.'), 9000), 1500);
-  }
-  library.moreFeatures = more;
-  await writeLibrary(library);
-  reportMore();
-}
-
-function reportMore() {
-  if (window.neo.moreState) window.neo.moreState(moreOn());
-}
-
-async function setMoreFeatures(on) {
-  if (IS_POCKET || on === moreOn()) return; // (Pocket is always simple)
-  library.moreFeatures = on;
-  await writeLibrary(library);
-  reportMore();
-  applyLook();
-  if (book && !$('#editor-view').hidden) {
-    if (currentTab === 'manuscript') queueSideCards();
-    else switchTab(currentTab); // the Outline's view, the Notes pages, the right-hand pane
-  }
-  toast(on ? t('More features on') : t('Simple NEO. File → Show More Features brings back the rest.'));
-}
-
 loadLibrary().then(() => {
   applyLook();
   typewriterEnabled = !!library.typewriter;
@@ -317,21 +255,20 @@ loadLibrary().then(() => {
   try { if (window.speechSynthesis) window.speechSynthesis.getVoices(); } catch { /* none to ask */ }
 });
 
-// The look that Show More Features governs: at launch, and again whenever
-// the switch turns. Simple NEO takes NEO's defaults for these and leaves
-// the writer's own choices in the library for the switch's return.
+// The look the features and settings govern: at launch, and again whenever
+// Options turns a feature on or off. A feature that's off takes NEO's
+// defaults and leaves the writer's own choices in the library for its return.
 function applyLook() {
-  const more = moreOn();
   applyFonts(); // the interface size and brightness
-  nbspMarksEnabled = more && !!library.nbspMarks;
+  nbspMarksEnabled = !!library.nbspMarks;
   applyNbspMarks();
   applyPageWidth();
-  pagedEnabled = more && !!library.pagedView;
-  twoPageEnabled = more && !!library.twoPageView;
+  pagedEnabled = featureOn('pages') && !!library.pagedView;
+  twoPageEnabled = featureOn('pages') && !!library.twoPageView;
   applyPageZoom(); // the page zoom's range depends on the pages
   applyPaged();
-  vimEnabled = more && !!library.vimKeys;
+  vimEnabled = featureOn('vim');
   applyVim();
-  focusLevel = more && FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';
+  focusLevel = featureOn('focus') && FOCUS_LEVELS.includes(library.focus) ? library.focus : 'off';
   applyFocus();
 }

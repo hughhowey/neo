@@ -11,7 +11,7 @@ const path = require('path');
 const APP_FILES = [
   'core', 'shelf', 'editor', 'typing', 'paragraphs', 'litrpg', 'typing-rules', 'vim',
   'screenplay', 'footnotes', 'nav', 'tabs', 'cards', 'saving', 'undo', 'find',
-  'spellcheck', 'menu', 'export', 'print', 'startup'
+  'spellcheck', 'menu', 'options', 'export', 'print', 'startup'
 ].map((name) => `app/${name}.js`);
 
 // the whole window's source in one string, for tests that pick functions out

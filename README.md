@@ -79,7 +79,7 @@ EPUB 3 with a proper table of contents built to KDP's guidelines, Word .docx, PD
 
 Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks are detected automatically. This is still a bit rough and might require you to tweak things. It will try to grab your title and remove that from the body, and it seems to be working okay.
 
-For a manuscript with many chapters, turn on **Show More Features** and use **Format → Align Book Prose → Justify** (or Left, Center, Right) to align the story in one move. Poetry, flush lines, scene breaks and special pages keep their formatting. One Undo puts the book back.
+For a manuscript with many chapters, turn on **Alignment and other fonts** in **Options** and use **Format → Align Book Prose → Justify** (or Left, Center, Right) to align the story in one move. Poetry, flush lines, scene breaks and special pages keep their formatting. One Undo puts the book back.
 
 **Backups** 
 

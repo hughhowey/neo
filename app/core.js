@@ -285,17 +285,36 @@ const NO_HOVER = !!(window.matchMedia && window.matchMedia('(hover: none)').matc
 // NEO Pocket (the Android and iOS shell)
 const IS_POCKET = !!window.Capacitor;
 
-// Simple NEO, and File → Show More Features (library.moreFeatures). Simple is
-// the default: the features behind the switch keep their menu items, keys
-// and right-click choices out of sight, and their settings act as NEO's own
-// defaults while the writer's choices wait in library.json for the switch to
-// go back on. Nothing a book already holds is hidden: a script, a footnote,
-// a bound shelf, a painted cover open and export as before. Pocket (Android
-// and iOS) is always simple and has no switch. SIMPLE NEO near the end of
-// this file decides the switch for a library that predates it.
-const moreOn = () => !IS_POCKET && !!(library && library.moreFeatures);
-// *italic* and **bold** typed as Markdown are behind the switch too
-const markdownOff = () => !!library && (!moreOn() || !!library.markdownOff);
+// NEO's features, each turned on or off in Options (library.features, kept
+// in library.json, so every device of the library follows the writer's
+// choice). A feature that's off keeps its menu items, keys and right-click
+// choices out of sight. Nothing a book already holds is hidden: a footnote,
+// a poetry paragraph, a bound shelf, a painted cover open and export as
+// before. A new library starts with all of them off. FEATURES & OPTIONS in
+// app/options.js turns them on and off, and sets up a library from before.
+// `pocket`: whether NEO Pocket shows the feature too.
+const FEATURES = [
+  { key: 'cards', label: 'Outline cards', desc: 'The outline as index cards, loose cards, and the cards beside the page.', pocket: false },
+  { key: 'notesPages', label: 'Chapter notes pages', desc: 'A notes page for each chapter, beside the book’s own.', pocket: false },
+  { key: 'poetry', label: 'Poetry paragraphs', desc: 'Lines set in from the margins, in italic.', pocket: false },
+  { key: 'footnotes', label: 'Footnotes', desc: 'Numbered notes at the foot of the page.', pocket: false },
+  { key: 'formatting', label: 'Alignment and other fonts', desc: 'Center, right-align or justify paragraphs or the whole book, and use any font on your computer.', pocket: false },
+  { key: 'penNames', label: 'Pen names and bound shelves', desc: 'Shelves under other names, a shelf bound into one book, anthologies, Duplicate and Reshelve.', pocket: false },
+  { key: 'covers', label: 'Painted covers', desc: 'Covers painted from your story with your own OpenAI key.', pocket: false },
+  { key: 'pages', label: 'Page views', desc: 'See the book as printed pages, two side by side, and choose the page width.', pocket: false },
+  { key: 'focus', label: 'Focus mode', desc: 'Dim everything but the sentence or paragraph you’re writing.', pocket: false },
+  { key: 'readAloud', label: 'Read aloud and Look Up', desc: 'Hear your words in your computer’s voice; look up a selected word.', pocket: false },
+  { key: 'vim', label: 'Vim keys', desc: 'Move around the page with h j k l and friends, the vim way.', pocket: false },
+  { key: 'exports', label: 'More exports', desc: 'Manuscript Format, plain text, Markdown and web page, and Import Chapters.', pocket: false }
+];
+const featureOn = (key) => {
+  if (!library || !library.features || !library.features[key]) return false;
+  if (!IS_POCKET) return true;
+  const f = FEATURES.find((x) => x.key === key);
+  return !!(f && f.pocket);
+};
+// *italic* and **bold** typed as Markdown: a setting in Options
+const markdownOff = () => !!library && !!library.markdownOff;
 
 // Touch has no right-click: a long press on a book, a shelf name or a chapter
 // heading opens the same menu. Not inside the text itself — there a long

@@ -1051,7 +1051,7 @@ const TAB_ORDER = ['manuscript', 'notes', 'outline', 'darlings'];
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
   const cmd = IS_POCKET ? (e.metaKey !== e.ctrlKey) : (IS_MAC ? e.metaKey : e.ctrlKey);
-  if (!cmd || !e.altKey || e.shiftKey || e.isComposing || !moreOn()) return;
+  if (!cmd || !e.altKey || e.shiftKey || e.isComposing) return;
   if ($('#editor-view').hidden || document.querySelector('.modal-backdrop:not([hidden])')) return;
   e.preventDefault();
   e.stopPropagation();
@@ -1171,7 +1171,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (cmd && e.shiftKey && !e.altKey && keyLetter(e) === 'n') {
     e.preventDefault();
-    if (currentTab === 'manuscript' && !fnBox && moreOn()) insertFootnote();
+    if (currentTab === 'manuscript' && !fnBox && featureOn('footnotes')) insertFootnote();
   }
   // ⌘S takes a snapshot of the book (SNAPSHOTS)
   if (cmd && !e.altKey && !e.shiftKey && keyLetter(e) === 's') {

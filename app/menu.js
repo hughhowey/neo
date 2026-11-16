@@ -47,7 +47,7 @@ function applyFonts() {
   // chooses in the View menu
   applyBright();
   // View → Interface Size: everything but the page, in tenths (#364)
-  const uiZoom = moreOn() ? snapZoom(library.uiZoom) : 1;
+  const uiZoom = snapZoom(library.uiZoom);
   document.documentElement.style.setProperty('--ui-zoom', uiZoom);
   document.documentElement.classList.toggle('ui-zoomed', uiZoom > 1);
   if (window.neo.uiZoomState) window.neo.uiZoomState(uiZoom);
@@ -264,7 +264,7 @@ function alignedProseHtml(html, value) {
   return changed ? captureBody(holder) : null;
 }
 function alignBookProse(value) {
-  if (!moreOn() || !book || isScript() || !['left', 'center', 'right', 'justify'].includes(value)) return 0;
+  if (!featureOn('formatting') || !book || isScript() || !['left', 'center', 'right', 'justify'].includes(value)) return 0;
   const changes = [];
   for (const chId of book.chapterOrder) {
     if (!STORY_KINDS.includes(chapterKind(chId))) continue;
@@ -315,25 +315,25 @@ function shortcutSections() {
   return bookShortcutSections();
 }
 function bookShortcutSections() {
-  // the keys of features behind File → Show More Features show with them
-  const more = moreOn();
+  // a feature's keys show while the feature is on (Options)
+  const on = featureOn;
   return [
     { title: tk('Writing'), rows: [
       [tk('Enter ×2'), tk('Insert a section break')],
       [tk('Enter ×3'), tk('Start a new chapter')],
       [K('⇧Enter', 'Shift+Enter'), tk('A paragraph with no indent'), tk('Again for another; Enter goes back to prose.')],
-      ...(more ? [[K('⌘⇧Enter', 'Ctrl+Shift+Enter'), tk('Start or continue a poetry paragraph'), tk('Also works from a chapter heading.')]] : []),
-      ...(more ? [[['[['], tk('At the start of a line: a LitRPG box'), tk('For rolls, stats and system messages. Enter on an empty last line ends the box.')]] : []),
+      ...(on('poetry') ? [[K('⌘⇧Enter', 'Ctrl+Shift+Enter'), tk('Start or continue a poetry paragraph'), tk('Also works from a chapter heading.')]] : []),
+      [['[['], tk('At the start of a line: a LitRPG box'), tk('For rolls, stats and system messages. Enter on an empty last line ends the box; ⇧Enter adds a blank line inside it.')],
       [KPH, tk('Insert a placeholder note')],
-      ...(more ? [[KFN, tk('Add a footnote'), tk('Type the note, then Enter to go back to writing. Click its number to change it.')]] : []),
+      ...(on('footnotes') ? [[KFN, tk('Add a footnote'), tk('Type the note, then Enter to go back to writing. Click its number to change it.')]] : []),
       [KDA, tk('Move selected text to Darlings')],
-      ...(more ? [[K('⌘⇧U', IS_LINUX ? 'Ctrl+Shift+K' : 'Ctrl+Shift+U'), tk('Read aloud from the cursor'), tk('Again, Esc or any key stops it. Uses your computer’s own voice.')]] : [])
+      ...(on('readAloud') ? [[K('⌘⇧U', IS_LINUX ? 'Ctrl+Shift+K' : 'Ctrl+Shift+U'), tk('Read aloud from the cursor'), tk('Again, Esc or any key stops it. Uses your computer’s own voice.')]] : [])
     ] },
     { title: tk('Formatting'), rows: [
-      ...(more ? [[['*…*', '**…**', '***…***'], tk('Italic, bold, the Markdown way'), tk('Typed around a word (or pasted). Undo right after keeps the asterisks. Format → Markdown Emphasis turns it off.')]] : []),
+      ...(!markdownOff() ? [[['*…*', '**…**', '***…***'], tk('Italic, bold, the Markdown way'), tk('Typed around a word (or pasted). Undo right after keeps the asterisks. Options turns it off.')]] : []),
       [K('⌘U', 'Ctrl+U'), tk('Underline')],
-      [K('⌘⇧S', 'Ctrl+Shift+S'), tk('Strikethrough'), more ? tk('Or ~~…~~ around the words.') : undefined],
-      ...(more ? [
+      [K('⌘⇧S', 'Ctrl+Shift+S'), tk('Strikethrough'), !markdownOff() ? tk('Or ~~…~~ around the words.') : undefined],
+      ...(on('formatting') ? [
         [K('⌘⇧L', 'Ctrl+Shift+L'), tk('Align paragraph left')],
         [K('⌘⇧C', 'Ctrl+Shift+C'), tk('Center paragraph')],
         [K('⌘⇧R', 'Ctrl+Shift+R'), tk('Align paragraph right')],
@@ -362,20 +362,18 @@ function bookShortcutSections() {
     { title: tk('View & window'), rows: [
       [[K('⌘⇧F', 'Ctrl+Shift+F'), K('⌘Enter', 'Ctrl+Enter'), ...(IS_MAC ? [] : ['F11'])], tk('Toggle full screen')],
       [K('⌘⇧T', 'Ctrl+Shift+T'), tk('Toggle typewriter scrolling')],
-      ...(more ? [[K('⌘⇧O', 'Ctrl+Shift+O'), tk('Cycle focus mode'), tk('Off → paragraph → sentence → off.')]] : []),
+      ...(on('focus') ? [[K('⌘⇧O', 'Ctrl+Shift+O'), tk('Cycle focus mode'), tk('Off → paragraph → sentence → off.')]] : []),
       [IS_MAC ? '⌥⌘↓' : ['Ctrl+Alt+↓', 'Ctrl+Page Down'], tk('Go to the next chapter')],
       [IS_MAC ? '⌥⌘↑' : ['Ctrl+Alt+↑', 'Ctrl+Page Up'], tk('Go to the previous chapter')],
-      ...(more ? [
-        [K('⌥⌘→', 'Ctrl+Alt+→'), tk('Go to the next tab'), tk('Manuscript, Notes, Outline, Darlings, then round again.')],
-        [K('⌥⌘←', 'Ctrl+Alt+←'), tk('Go to the previous tab')]
-      ] : []),
+      [K('⌥⌘→', 'Ctrl+Alt+→'), tk('Go to the next tab'), tk('Manuscript, Notes, Outline, Darlings, then round again.')],
+      [K('⌥⌘←', 'Ctrl+Alt+←'), tk('Go to the previous tab')],
       [['F6', K('⌃Tab', 'Ctrl+Tab')], tk('Move between the page, the chapters, the notes and the bottom bar'), tk('Add Shift to go back. Esc returns to the page. On the shelf: the books, then the header.')],
       ...(IS_MAC ? [
         ['⌘H', tk('Hide NEO')],
         ['⌘⌥H', tk('Hide other apps')]
       ] : [])
     ] },
-    // only for writers who turned them on (View → Vim Keys)
+    // only for writers who turned them on (Options)
     ...(vimEnabled ? [{ title: tk('Vim keys'), rows: [
       ['Esc', tk('Stop writing and move around the page'), tk('i, a or o goes back to writing.')],
       ['h j k l', tk('Left, down, up, right')],

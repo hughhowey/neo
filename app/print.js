@@ -2014,7 +2014,8 @@ async function showAbout() {
 // with NEO so they're there offline. A writer who updates sees the notes
 // for the releases since the one they last saw, once, at launch: before a
 // word is typed, never in the middle of one. A fresh install skips them
-// (the welcome is enough), and so does Pocket, which has its own versions.
+// (the welcome is enough), and so does Pocket, which has its own versions,
+// and so does NEO run from its folder (npm start, npm run try, the tests).
 const WHATS_NEW_SEEN = 'neo.whatsNewSeen';
 async function whatsNewNotes() {
   try { return await (await fetch(new URL('whats-new.json', location.href))).json(); } catch { return []; }
@@ -2026,7 +2027,7 @@ function versionNewer(a, b) {
   return false;
 }
 async function whatsNewAtLaunch(existing) {
-  if (IS_POCKET || !window.neo.appVersion) return;
+  if (IS_POCKET || !window.neo.appVersion || !window.neo.isPackaged || !window.neo.isPackaged()) return;
   const now = await window.neo.appVersion();
   let seen = null;
   try { seen = localStorage.getItem(WHATS_NEW_SEEN); } catch { /* storage off: show nothing */ return; }
@@ -2087,7 +2088,7 @@ window.neo.onMenu(async (msg) => {
   if ($('#keyboard-shortcuts') && msg.type !== 'help') return;
   // a window the menu opens (⌘, for Goals, say) never stacks on one that's
   // already open: pressing it again used to pile up overlays
-  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate'];
+  const WINDOWS = ['stats', 'about', 'emailSettings', 'coverArt', 'reshelve', 'checkUpdate', 'options'];
   if (WINDOWS.includes(msg.type) && document.querySelector('.modal-backdrop:not([hidden])')) {
     if (msg.type === 'checkUpdate' && updateDialog) updateDialog.focus();
     return;
@@ -2101,7 +2102,7 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'scriptElement' && book && isScript()) spSetElement(msg.value);
   if (msg.type === 'scriptStyle') spToggleStyle(msg.value);
   if (msg.type === 'scriptPageBreak') spTogglePageBreak();
-  if (msg.type === 'moreFeatures') await setMoreFeatures(!!msg.checked);
+  if (msg.type === 'options') openOptions();
   if (msg.type === 'markdownEmphasis') {
     if (msg.checked) delete library.markdownOff; else library.markdownOff = true;
     await writeLibrary(library);
@@ -2123,7 +2124,6 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'pagedView') togglePaged();
   if (msg.type === 'pageWidth') setPageWidth(msg.value);
   if (msg.type === 'twoPageView') toggleTwoPage();
-  if (msg.type === 'vim') toggleVim();
   if (msg.type === 'pressHold') pressHoldOn = !!msg.value;
   if (msg.type === 'focus') setFocus(msg.value);
   if (msg.type === 'focusCycle') cycleFocus();
@@ -2195,3 +2195,17 @@ window.neo.onMenu(async (msg) => {
     applyFonts();
   }
 });
+
+// (set up here, at the end of the file that defines queueSoftHyphenTicks:
+// an observer can fire before a later file has loaded)
+// the soft hyphens' ticks (non-breaking marks) follow anything that moves the words
+new ResizeObserver(() => queueSoftHyphenTicks()).observe($('#chapters'));
+$('#paper-scroll').addEventListener('scroll', () => queueSoftHyphenTicks(false), { passive: true });
+window.addEventListener('resize', () => queueSoftHyphenTicks());
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => queueSoftHyphenTicks());
+// a paragraph's alignment, poetry or flush, and the opening paragraph's
+// marks, are set on it as attributes: the words move, but nothing is typed
+// and no sheet changes size
+new MutationObserver((records) => {
+  if (records.some((r) => r.target.closest('.chapter-body, .chapter-head') || r.target.matches('.chapter'))) queueSoftHyphenTicks();
+}).observe($('#chapters'), { subtree: true, attributes: true, attributeFilter: ['style', 'class', 'dir', 'data-first', 'data-speech'] });

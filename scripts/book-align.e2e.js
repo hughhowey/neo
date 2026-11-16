@@ -100,9 +100,9 @@ async function main() {
     console.log('ok Undo protects words written after the alignment action in Darlings');
     const sample = '<p class="ghost">An outline note.</p><p class="poetry">Verse</p><p class="flush">Flush</p><p class="scene-break">***</p>';
     assert.equal(await js(`alignedProseHtml(${JSON.stringify(sample)}, 'justify')`), null);
-    await js('library.moreFeatures = false');
+    await js('library.features.formatting = false');
     assert.equal(await js("alignBookProse('center')"), 0);
-    await js("library.moreFeatures = true; book.format = 'screenplay'");
+    await js("library.features.formatting = true; book.format = 'screenplay'");
     assert.equal(await js("alignBookProse('center')"), 0);
     console.log('ok notes, poetry, flush and breaks stay untouched; simple NEO and scripts stand down');
   } catch (err) { failed = true; console.error(err); }

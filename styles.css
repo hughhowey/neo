@@ -584,6 +584,29 @@ body.night .ps-paper .ps-body.empty::before, body.night .ps-paper .tp-field:empt
 }
 .modal input:focus { outline: none; border-color: var(--accent); }
 
+/* NEO → Options… (File → Options… off the Mac): the features, then the settings */
+.modal.options-modal { width: 540px; padding: 30px 34px 22px; display: flex; flex-direction: column; max-height: calc(88vh / var(--ui-zoom, 1)); overflow: hidden; }
+.options-modal .opt-panel { overflow-y: auto; margin: 0 -10px; padding: 0 10px; outline: none; }
+.options-modal section { padding: 4px 0 14px; border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent); margin-bottom: 12px; }
+.options-modal section:last-child { border-bottom: 0; }
+.options-modal h3 { font-weight: 400; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin: 6px 0 10px; }
+.options-modal .opt-head { display: flex; align-items: baseline; justify-content: space-between; }
+.options-modal .opt-note { font-size: 13px; color: var(--muted); margin: -4px 0 10px; }
+.options-modal .opt-row { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 7px 8px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.options-modal .opt-row:hover { background: color-mix(in srgb, currentColor 5%, transparent); }
+.options-modal .opt-row input[type="checkbox"] { display: inline-block; width: 15px; height: 15px; margin: 2px 0 0; padding: 0; flex: none; accent-color: var(--accent); cursor: pointer; }
+.options-modal .opt-label { display: block; }
+.options-modal .opt-desc { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 2px; }
+.options-modal .opt-select { align-items: center; justify-content: space-between; cursor: default; }
+.options-modal select { background: var(--bg); color: inherit; border: 1px solid #3a3a3a; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; max-width: 60%; }
+.options-modal select:focus { outline: none; border-color: var(--accent); }
+.options-modal .opt-steps { display: flex; align-items: center; gap: 6px; }
+.options-modal .opt-steps button:not(.btn-link) { width: 28px; height: 26px; border-radius: 6px; border: 1px solid #3a3a3a; background: var(--bg); color: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
+.options-modal .opt-zoom { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+.options-modal .btn-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 4px; }
+.options-modal .opt-foot { text-align: right; padding-top: 12px; }
+body.light .options-modal select, body.light .options-modal .opt-steps button:not(.btn-link) { border-color: #cfc9bd; }
+
 /* File → Export → Paperback for KDP… */
 .print-modal { max-height: calc(100vh - 48px); overflow-y: auto; }
 .print-modal .pm-review-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

@@ -31,13 +31,6 @@ function applyVim() {
   document.body.classList.toggle('vim-nav', vimNav);
   if (window.neo.vimState) window.neo.vimState(vimEnabled); // the View menu's tick
 }
-function toggleVim() {
-  vimEnabled = !vimEnabled;
-  library.vimKeys = vimEnabled;
-  writeLibrary(library);
-  applyVim();
-  toast(vimEnabled ? t('Vim keys on — Esc to move, i to write') : t('Vim keys off'));
-}
 const vimEditor = (el) => el && el.closest && el.closest('.chapter-body, #aux-editor');
 // With vim keys on, the page rests in moving mode, as vim starts: a book
 // opens that way, and so does the Manuscript or Notes tab when you come back

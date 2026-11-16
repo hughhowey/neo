@@ -509,7 +509,7 @@ document.addEventListener('keydown', (e) => {
   // on Linux, Ctrl+Shift+U belongs to the input method (it types a Unicode
   // character by its code), so Read Aloud there is Ctrl+Shift+K (#287)
   if (cmd && e.shiftKey && !e.altKey && keyLetter(e) === (IS_LINUX ? 'k' : 'u')) {
-    if (!book || $('#editor-view').hidden || !moreOn()) return;
+    if (!book || $('#editor-view').hidden || !featureOn('readAloud')) return;
     e.preventDefault();
     e.stopPropagation();
     toggleReadAloud();
