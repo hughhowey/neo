@@ -1623,7 +1623,7 @@ async function shelfBookData(shelf, opts = {}) {
     uuid = shelf.binding.uuid;
   }
   const title = opts.title || shelf.name;
-  return {
+  return withSharedBookPages({
     id: cover && cover.coverImage ? cover.id : 'shelf-' + shelf.id,
     uuid,
     title,
@@ -1638,7 +1638,7 @@ async function shelfBookData(shelf, opts = {}) {
     // title that has a Contents page of its own (which lists its chapters)
     contents: titles.length > 1 || (single && (titles[0].chapterOrder || []).some((c) => chapterKind(c, titles[0]) === 'contents')),
     contentsChapters: single
-  };
+  }, bookPageAuthor({}, shelf), metas.map((m) => m.kind));
 }
 
 async function shelfPayload(data, format) {

@@ -131,6 +131,12 @@ Export → Paperback for KDP… (also on the shelf's right-click Export) writes 
 - The daily backup zip leaves `snapshots/` out. `scripts/snapshots.test.js` covers the names, the fingerprint, thinning, where a chapter's text is and the marks.
 - The snapshot on the page and the list belong to the open book: `openBook` and `backToShelf` clear both (`forgetSnapshots`), another tab only the page (`hideSnapshot`). A snapshot's chapters are `.chapter-body` too, inside `#snap-view` rather than a `.chapter`, so code that walks every `.chapter-body` must pass over them.
 
+## Shared book pages
+
+The pen-name menu on the shelf, with the `penNames` feature on, opens Shared book pages. `author.sharedPages` in `library.json` holds plain-text `copyright` and `about` defaults; `sharedPagesHistory` keeps previous wording, restorable in the dialog. Removing a pen name archives its defaults and history with the remaining name. Save failures keep the fields open and roll back the in-memory library.
+
+`bookExportData` and `shelfBookData` pass their models through `withSharedBookPages`, using the shelf's author, not the selected name. Defaults fill only missing pages; an existing page, even blank, suppresses that default. Copyright goes first, biography last, and section and contents numbers are adjusted together. The text is escaped, with optional `{title}`, `{author}`, `{year}` placeholders. Chapters are never rewritten. Manuscript Format and chapter-only exports exclude these pages. `scripts/shared-pages.test.js` and `scripts/shared-pages.e2e.js` cover the model, recovery, dialog and actual export files.
+
 ## Per device
 
 How NEO looks belongs to each device: `DEVICE_LOOK` in `app/` (page theme, brightness, zoom, type size, page width, typewriter, non-breaking marks, pages view, focus, counters, outline view, vim keys). Every library write also keeps them in this device's `localStorage`; every library read takes them back from there (`applyDeviceLook`). The library's copy is the last device's, which is what a device new to the library starts with. Zoom is per device and per view: the page per mode, the cards, and the shelf (`neo.shelfZoom`, ⌘+/− and pinch on the shelf), each in `localStorage`; the page moves in tenths. The desktop also keeps its page theme in `settings.json` for the window's color at launch, and `exportFolder` there, so save dialogs open where the last export went.

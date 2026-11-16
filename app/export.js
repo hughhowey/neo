@@ -135,7 +135,7 @@ function bookExportData() {
     saveMeta();
   }
   const { sections, toc, contents } = exportChapters();
-  return {
+  return withSharedBookPages({
     id: book.id,
     uuid: book.uuid,
     title: book.title,
@@ -150,7 +150,7 @@ function bookExportData() {
     // chapters too (a book of books lists its titles instead)
     contents,
     contentsChapters: true
-  };
+  }, bookPageAuthor(book), book.chapterOrder.map((chId) => chapterKind(chId)));
 }
 
 /* ================================================================== */
