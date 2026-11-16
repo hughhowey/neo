@@ -267,7 +267,6 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     if (twoPageEnabled) toggleTwoPage();
     if (!typewriterEnabled) toggleTypewriter();
     const body = document.querySelector('.chapter-body');
-    const top2 = () => [...body.getClientRects()][1].top;
     const foot1 = [...body.getClientRects()][0].bottom;
     const across = [...body.children].filter((p) => p.getClientRects()[0].top < foot1 - 350).pop();
     // long enough to run onto the next page whatever the fonts measure (a
@@ -276,7 +275,9 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     across.textContent = sentence.repeat(8);
     for (let i = 0; i < 40 && across.getClientRects().length < 2; i++) across.textContent += sentence;
     across.textContent += sentence.repeat(2); // a couple of lines onto the second page
-    const line = top2();
+    // the paragraph's own second piece is the top of the next page (the
+    // body's boxes aren't one to a page everywhere: a Mac's run differently)
+    const line = across.getClientRects()[1].top;
     const w = document.createTreeWalker(across, NodeFilter.SHOW_TEXT);
     const text = w.nextNode();
     let at = 0;
