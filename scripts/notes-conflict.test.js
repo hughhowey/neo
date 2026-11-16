@@ -6,13 +6,10 @@
 // page at a time, and a clean page taking the other device's words.
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
-const root = path.join(__dirname, '..');
-const appSrc = fs.readFileSync(path.join(root, 'app.js'), 'utf8').replace(/\r\n/g, '\n');
+const appSrc = require('./app-files').appSource().replace(/\r\n/g, '\n');
 const from = appSrc.indexOf('const auxPending = {};');
 const to = appSrc.indexOf('// The same promise for the JSON beside a book');
 if (from < 0 || to <= from) throw new Error('app.js: the notes save block moved; update this test');

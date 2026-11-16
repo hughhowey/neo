@@ -108,7 +108,7 @@ npm start
 
 To build installers: `npm install electron-builder --save-dev`, then `npm run package` (macOS, also `npm run package:mac`), `npm run package:win` (Windows), or `npm run package:all`. Output lands in `dist/`.
 
-The app is very simple: an Electron shell (`main.js`), a preload bridge (`preload.js`), and a renderer (`app.js` + `styles.css` + `index.html`). If you know JavaScript, you can change NEO. Have at it.
+The app is very simple: an Electron shell (`main.js`), a preload bridge (`preload.js`), and a renderer (`app/` + `styles.css` + `index.html`). If you know JavaScript, you can change NEO. Have at it.
 
 ## Roadmap (things I'm dreaming up but may never get to):
 

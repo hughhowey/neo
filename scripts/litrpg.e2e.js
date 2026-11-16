@@ -298,6 +298,14 @@ test('Plain text and Markdown', async () => {
   assert.ok(md.includes('```\nlevel up! "str"  -- ...\n\nSTR      14\n'), md.slice(0, 300));
 });
 
+test('the one font helper: scripts and manuscripts carry Courier Prime, with its measures', async () => {
+  const r = await js(`(async () => ({ sp: await spFontFaces(), ms: await manuscriptFontFaces('courier'), none: await manuscriptFontFaces('times') }))()`);
+  assert.match(r.sp, /font-family: 'Courier Prime'; src: url\(data:font\/woff2;base64,/);
+  assert.equal(r.sp, r.ms);
+  assert.match(r.sp, /size-adjust: 79\.5%/, 'the Korean face keeps its measures');
+  assert.equal(r.none, '');
+});
+
 test('a book without boxes carries no box face', async () => {
   const none = await js(`(async () => {
     const d = bookExportData();

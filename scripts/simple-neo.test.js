@@ -117,7 +117,7 @@ describe('the menu bar, simple and with Show More Features', () => {
 });
 
 // ---- deciding a library from before the switch ----
-const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('function usesMoreFeatures(lib)');
 const to = app.indexOf('async function setMoreFeatures(on)');
 assert.ok(from > 0 && to > from, 'the SIMPLE NEO code is where the test expects it');

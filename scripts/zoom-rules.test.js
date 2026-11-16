@@ -1,13 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
 // the interface zoom rule from app.js, on its own
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('// ---- zoom rules:');
 const to = app.indexOf('// ---- end of zoom rules ----');
 const context = vm.createContext({});

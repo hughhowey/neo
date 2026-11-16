@@ -15,7 +15,7 @@ const { describe, test } = require('node:test');
 const root = path.join(__dirname, '..');
 
 // ---- the window ----
-const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('// One imported chapter\'s paragraphs as a chapter body');
 const to = app.indexOf('async function importBooks()');
 assert.ok(from > 0 && to > from, 'the import-chapters code is where the test expects it');

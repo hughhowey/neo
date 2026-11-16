@@ -1,13 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
 // what ⌘B / ⌘I leave at the caret, kept when the caret is set again (#430)
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('// ---- typing style rules:');
 const to = app.indexOf('// ---- end of typing style rules ----');
 const context = vm.createContext({});

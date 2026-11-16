@@ -40,7 +40,7 @@ The Danish dictionary (`da`, **Dansk** in Edit → Spellcheck Language) is Stave
 
 - **Source.** `index.aff` and `index.dic` are `da_DK/da_DK.aff` and `da_DK/da_DK.dic` from [LibreOffice/dictionaries](https://github.com/LibreOffice/dictionaries/tree/cdaeab266e35c0f1ce367629c7f2079c64fe9351/da_DK) at commit `cdaeab266e35c0f1ce367629c7f2079c64fe9351`, byte for byte, renamed only. Their SHA-256 sums are in `dictionaries/da/NOTICE.txt`, and the tests check them. The thesaurus and hyphenation files are left out. (The npm package `dictionary-da` carries the older 2.8.034.)
 - **License.** © Foreningen for frit tilgængelige sprogværktøjer, offered under GPL 2.0, LGPL 2.1 or MPL 1.1. NEO distributes it under MPL 1.1, separately from NEO's MIT license, with the upstream notice (`README_da_DK.txt`), `NOTICE.txt` and the full `MPL-1.1.txt` beside the data, on desktop (`app.asar.unpacked/node_modules/dictionary-da/`) and in Pocket (`dict/da/`).
-- **Writing.** `i` (in) stays lowercase and a typed `I` (you) stays as typed: turning `i` into `I`, as you type and in the spellcheck's capital check, is English only. Sentences still start with a capital, and the common abbreviations *f.eks., bl.a., dvs., osv., mv., evt., jf., kl., nr., pga., mht., inkl.* don't end one (`CAPS_ABBREV` in `app.js`; as with *etc.*, a sentence ending in *osv.* leaves the next capital to the writer). Quotation marks are »…«, one of the forms Danish uses (with „…“ and ”…”); a book already set in „…“ keeps it. `'` is the apostrophe ’.
+- **Writing.** `i` (in) stays lowercase and a typed `I` (you) stays as typed: turning `i` into `I`, as you type and in the spellcheck's capital check, is English only. Sentences still start with a capital, and the common abbreviations *f.eks., bl.a., dvs., osv., mv., evt., jf., kl., nr., pga., mht., inkl.* don't end one (`CAPS_ABBREV` in `app/`; as with *etc.*, a sentence ending in *osv.* leaves the next capital to the writer). Quotation marks are »…«, one of the forms Danish uses (with „…“ and ”…”); a book already set in „…“ keeps it. `'` is the apostrophe ’.
 - **Compounds.** Hunspell takes compounds it can build from known words, so some typos that make two real words (*skrivebrod*: skrive + brod) pass.
 
 To update the dictionary:
@@ -100,9 +100,9 @@ So `fr-CA.json` is short: in Quebec, "courriel" instead of "e-mail", and no spac
 
 ## Typing in each language
 
-While writing, NEO sets the quotation marks of the language being written: the spellcheck language when one is chosen, otherwise NEO's own language. « » for French (with narrow no-break spaces), Spanish, Italian, European Portuguese, Russian and Ukrainian; „ “ for German; „ ” for Polish, Romanian and Hungarian; “ ” for English, Dutch, Brazilian Portuguese and Korean; ” ” for Swedish; » « for Danish. Swedish books set in »…» keep that style, and Danish books set in „…“ keep theirs. The apostrophe is always ’. French also gets a narrow no-break space before ; : ! ? (before : only in Canadian French). The table is `QUOTE_STYLES` in `app.js`.
+While writing, NEO sets the quotation marks of the language being written: the spellcheck language when one is chosen, otherwise NEO's own language. « » for French (with narrow no-break spaces), Spanish, Italian, European Portuguese, Russian and Ukrainian; „ “ for German; „ ” for Polish, Romanian and Hungarian; “ ” for English, Dutch, Brazilian Portuguese and Korean; ” ” for Swedish; » « for Danish. Swedish books set in »…» keep that style, and Danish books set in „…“ keep theirs. The apostrophe is always ’. French also gets a narrow no-break space before ; : ! ? (before : only in Canadian French). The table is `QUOTE_STYLES` in `app/`.
 
-A book that has settled on other guillemets keeps them: in a German novel set in »…«, or Swiss writing in «…», type the first mark by hand and NEO carries on in that style (`bookQuotes` in `app.js`).
+A book that has settled on other guillemets keeps them: in a German novel set in »…«, or Swiss writing in «…», type the first mark by hand and NEO carries on in that style (`bookQuotes` in `app/`).
 
 Imports recognize chapter headings in all these interface languages (`CHAPTER_WORDS` in `main.js`), and cover titles treat each language's small words like "of" and "the" (`CONNECTORS` in `covers.js`).
 
@@ -114,7 +114,7 @@ Korean also changes how the interface sets its labels (the end of `styles.css`):
 
 ## For developers
 
-The English text is the key. In the window (`app.js`) and the main process (`main.js`), wrap every string a writer can see:
+The English text is the key. In the window (`app/`) and the main process (`main.js`), wrap every string a writer can see:
 
 ```js
 toast(t('Chapter removed — its words are in Darlings, or {key} to undo', { key: KZ }));

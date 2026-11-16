@@ -3,11 +3,9 @@
 // keyLetter (app.js): a shortcut's letter is the character its key types
 // (Dvorak, BÉPO, AZERTY), or its US place when the key types no Latin letter
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const source = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const source = require('./app-files').appSource();
 const at = source.indexOf('function keyLetter(e)');
 const ctx = vm.createContext({});
 vm.runInContext(source.slice(at, source.indexOf('\n}\n', at) + 2) + 'this.keyLetter = keyLetter;', ctx);

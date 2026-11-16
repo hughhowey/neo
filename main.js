@@ -966,7 +966,7 @@ ipcMain.handle('book:create', (_e, meta) => {
     created: new Date().toISOString(),
     modified: new Date().toISOString(),
     chapterOrder: [],
-    tabNames: { notes: 'Notes', outline: 'Outline' } // shown translated (see tabName in app.js)
+    tabNames: { notes: 'Notes', outline: 'Outline' } // shown translated (see tabName in app/)
   };
   writeJSON(path.join(dir, 'book.json'), book);
   fs.writeFileSync(path.join(dir, 'notes.html'), '');
@@ -1202,7 +1202,7 @@ ipcMain.handle('aux:write', (_e, bookId, name, html, expected) => {
   return kept ? { kept: path.basename(kept) } : true;
 });
 
-// Snapshots of a book (SNAPSHOTS in app.js): book-…/snapshots/<name>/ holds the
+// Snapshots of a book (SNAPSHOTS in app/saving.js): book-…/snapshots/<name>/ holds the
 // chapters that changed since the snapshot before it and, written last, its
 // snapshot.json. A snapshot's files are written once and never rewritten, so
 // a sync tool only ever sees new files arrive and two devices have nothing to
@@ -1638,7 +1638,7 @@ ipcMain.handle('export:save', async (_e, { format, defaultName, content, zipEntr
 
 // ---------------------------------------------------------------------------
 // Paperback for KDP: a print-ready interior PDF and a cover template sized
-// to it. The window builds the book's HTML (app.js, PRINT BOOK); this lays
+// to it. The window builds the book's HTML (app/print.js); this lays
 // it out in pages with Paged.js (print/), checks it against KDP's rules,
 // and prints both files.
 // ---------------------------------------------------------------------------
@@ -1693,7 +1693,7 @@ function hyphenateHtml(html, lang) {
   const hy = hyphenatorFor(lang);
   if (!hy) return html;
   const nouns = /^de\b/i.test(String(lang || ''));
-  // only the paragraphs app.js marked .hy (prose), text between tags only
+  // only the paragraphs the window marked .hy (prose), text between tags only
   return html.replace(/(<p\b[^>]*\bclass="[^"]*\bhy\b[^"]*"[^>]*>)([\s\S]*?)(<\/p>)/g, (m, open, inner, close) => {
     const parts = inner.split(/(<[^>]+>|&[#\w]+;)/);
     // the last word of the paragraph keeps its hyphens out of the last line
@@ -2179,7 +2179,7 @@ async function importFile(fp) {
   const ext = path.extname(fp).toLowerCase();
   let paras = [];
   // a script (Fountain, or Final Draft's XML) is read as it stands; the
-  // window sorts it into its elements (spFromFountain, spFromFdx in app.js)
+  // window sorts it into its elements (spFromFountain, spFromFdx in app/screenplay.js)
   if (ext === '.fountain' || ext === '.fdx') {
     return { name, script: ext.slice(1), source: fs.readFileSync(fp, 'utf8').replace(/^\uFEFF/, '') };
   }

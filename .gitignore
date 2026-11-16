@@ -17,6 +17,7 @@ GITHUB-SETUP.md
 # NEO Pocket
 pocket/node_modules/
 pocket/www/app.js
+pocket/www/app/
 pocket/www/covers.js
 pocket/www/styles.css
 pocket/www/fonts/

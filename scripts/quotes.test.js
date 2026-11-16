@@ -7,12 +7,10 @@
 // the paragraph (quoteIsOpen) decide each quote.
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { describe, test } = require('node:test');
 
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const between = (from, to) => app.slice(app.indexOf(from), app.indexOf(to));
 const context = vm.createContext({ library: null, book: null, chapterHTML: {}, NeoI18n: { getLocale: () => 'en' } });
 vm.runInContext(between('function quoteOpenIn(', '// A hyphen standing on its own'), context);

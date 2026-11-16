@@ -1,13 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
 // the rules for today's word count from app.js, on their own (#345)
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('// ---- daily words rules:');
 const to = app.indexOf('// ---- end of daily words rules ----');
 const context = vm.createContext({});
