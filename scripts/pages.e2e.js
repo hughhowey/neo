@@ -270,7 +270,12 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     const top2 = () => [...body.getClientRects()][1].top;
     const foot1 = [...body.getClientRects()][0].bottom;
     const across = [...body.children].filter((p) => p.getClientRects()[0].top < foot1 - 350).pop();
-    across.textContent = 'She had done it since she was small, standing at the end of the pier with her coat buttoned to the chin. '.repeat(10);
+    // long enough to run onto the next page whatever the fonts measure (a
+    // fixed length crossed on a Mac and stopped short of the foot elsewhere)
+    const sentence = 'She had done it since she was small, standing at the end of the pier with her coat buttoned to the chin. ';
+    across.textContent = sentence.repeat(8);
+    for (let i = 0; i < 40 && across.getClientRects().length < 2; i++) across.textContent += sentence;
+    across.textContent += sentence.repeat(2); // a couple of lines onto the second page
     const line = top2();
     const w = document.createTreeWalker(across, NodeFilter.SHOW_TEXT);
     const text = w.nextNode();
