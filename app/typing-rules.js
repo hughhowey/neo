@@ -1042,6 +1042,9 @@ function frenchTypography() {
 // ⌥⌘→ / ⌥⌘← (Ctrl+Alt on Windows and Linux): the next or previous tab,
 // Manuscript → Notes → Outline → Darlings, round again. Caught here, like the
 // chapter keys, so no menu accelerator flashes the menu or takes AltGr input.
+// Off the Mac, Ctrl+Shift+Page Down / Page Up do the same, beside the chapter
+// keys' Ctrl+Page Down / Up: Cinnamon and GNOME keep Ctrl+Alt+←→ for
+// switching workspaces, so NEO never hears them there (#519).
 function goToTab(name) {
   if (!book || $('#editor-view').hidden || name === currentTab) return;
   if (document.querySelector('.modal-backdrop:not([hidden])')) return;
@@ -1049,13 +1052,16 @@ function goToTab(name) {
 }
 const TAB_ORDER = ['manuscript', 'notes', 'outline', 'darlings'];
 window.addEventListener('keydown', (e) => {
-  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const arrows = e.key === 'ArrowRight' || e.key === 'ArrowLeft';
+  const pages = e.key === 'PageDown' || e.key === 'PageUp';
+  if (!arrows && !pages) return;
   const cmd = IS_POCKET ? (e.metaKey !== e.ctrlKey) : (IS_MAC ? e.metaKey : e.ctrlKey);
-  if (!cmd || !e.altKey || e.shiftKey || e.isComposing) return;
+  if (arrows && (!cmd || !e.altKey || e.shiftKey || e.isComposing)) return;
+  if (pages && ((IS_MAC && !IS_POCKET) || !e.ctrlKey || !e.shiftKey || e.metaKey || e.altKey || e.isComposing)) return;
   if ($('#editor-view').hidden || document.querySelector('.modal-backdrop:not([hidden])')) return;
   e.preventDefault();
   e.stopPropagation();
-  const step = e.key === 'ArrowRight' ? 1 : TAB_ORDER.length - 1;
+  const step = e.key === 'ArrowRight' || e.key === 'PageDown' ? 1 : TAB_ORDER.length - 1;
   goToTab(TAB_ORDER[(TAB_ORDER.indexOf(currentTab) + step) % TAB_ORDER.length]);
 }, true);
 

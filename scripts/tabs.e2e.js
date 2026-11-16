@@ -79,6 +79,31 @@ test('the other platform\'s modifier, or a missing Alt or an extra Shift, does n
   assert.equal(await tab(), 'manuscript');
 });
 
+// Off the Mac, Ctrl+Shift+Page Down / Up are the tab keys too: Cinnamon and
+// GNOME take Ctrl+Alt+←→ for workspaces before NEO hears them (#519)
+test('off the Mac, Ctrl+Shift+Page Down / Page Up walk the tabs; on a Mac they do nothing', async () => {
+  const pages = ['control', 'shift'];
+  if (process.platform === 'darwin') {
+    await press('PageDown', pages);
+    assert.equal(await tab(), 'manuscript');
+    return;
+  }
+  for (const name of ['notes', 'outline', 'darlings', 'manuscript']) {
+    await press('PageDown', pages);
+    assert.equal(await tab(), name);
+  }
+  for (const name of ['darlings', 'outline', 'notes', 'manuscript']) {
+    await press('PageUp', pages);
+    assert.equal(await tab(), name);
+  }
+});
+
+test('Ctrl+Page Down without Shift, or with Alt, leaves the tab alone', async () => {
+  await press('PageDown', ['control']); // the next chapter's key
+  await press('PageDown', ['control', 'shift', 'alt']);
+  assert.equal(await tab(), 'manuscript');
+});
+
 test('a tab swap does not redraw the tab you stay on', async () => {
   await press(LEFT); // Darlings
   await js(`window.__renders = 0; const f = renderDarlings; renderDarlings = () => { window.__renders++; return f(); }; 0`);
