@@ -194,6 +194,8 @@
     }, { passive: true });
     document.addEventListener('touchmove', (e) => {
       if (!start) return;
+      // two fingers are a pinch (below), and Zen keeps the panes away
+      if (e.touches.length > 1 || document.body.classList.contains('zen')) { start = null; return; }
       const t = e.touches[0];
       const dx = t.clientX - start.x, dy = Math.abs(t.clientY - start.y);
       if (Math.abs(dx) < PULL || dy > Math.abs(dx)) return;
@@ -231,6 +233,7 @@
         seg(t('Page'), [['night', t('Night')], ['paper', t('Paper')], ['light', t('Light')]], lib.pageTheme || 'night', (v) => ({ type: 'pageTheme', value: v })) +
         tick(t('Brighter Interface'), document.body.classList.contains('bright'), { type: 'uiBright' }) +
         tick(t('Typewriter scrolling'), st.typewriter, { type: 'typewriter' }) +
+        (typeof book !== 'undefined' && book ? tick(t('Zen mode'), document.body.classList.contains('zen'), { type: 'zen' }) : '') +
         // (the dictionary is the desktop's choice, which comes along in library.json)
         tick(t('Spellcheck'), typeof spellOn !== 'undefined' && spellOn, { type: 'spellcheck' }) +
         (script ? '' : tick(t('Flush paragraph') + '  ⇧Enter', st.flush, { type: 'flush' })) +
@@ -257,12 +260,18 @@
       if (b.dataset.msg) {
         const msg = JSON.parse(b.dataset.msg);
         send(msg);
-        if (msg.type === 'stats' || msg.type === 'help' || msg.type === 'export') { closeMenu(); return; }
+        if (msg.type === 'stats' || msg.type === 'help' || msg.type === 'export' || msg.type === 'zen') { closeMenu(); return; }
         setTimeout(buildMenu, 60); // reflect the new state
       }
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !menuWrap.hidden) { closeMenu(); return; }
+      // ⌘⇧H (Ctrl+Shift+H): Zen mode, as the desktop's menu has it
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'KeyH') {
+        e.preventDefault();
+        send({ type: 'zen' });
+        return;
+      }
       // ⌘, (Ctrl+, on Android keyboards) opens the sheet, like Settings on a Mac
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === ',') {
         e.preventDefault();
@@ -312,6 +321,30 @@
     document.addEventListener('focusin', refreshUndo);
     document.addEventListener('focusout', () => setTimeout(refreshUndo, 50));
     document.addEventListener('input', refreshUndo);
+
+    // Zen mode (ZEN MODE in app.js): two fingers spread apart on the page
+    // go in, pinched together they come back. Once per gesture, past a
+    // clear threshold, so a finger resting on the glass does nothing. The
+    // page itself never zooms under the fingers (Text size is in ⋯).
+    const fingerGap = (ts) => Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY);
+    let pinch = null;
+    document.getElementById('paper-scroll').addEventListener('touchstart', (e) => {
+      pinch = e.touches.length === 2 ? { from: fingerGap(e.touches), done: false } : null;
+    }, { passive: true });
+    document.getElementById('paper-scroll').addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      if (pinch.done || !pinch.from) return;
+      const ratio = fingerGap(e.touches) / pinch.from;
+      const zen = document.body.classList.contains('zen');
+      if ((!zen && ratio > 1.4) || (zen && ratio < 0.7)) {
+        pinch.done = true;
+        send({ type: 'zen' });
+      }
+    }, { passive: false });
+    document.getElementById('paper-scroll').addEventListener('touchend', (e) => { if (e.touches.length < 2) pinch = null; }, { passive: true });
+    // iOS's own pinch arrives as gesture events too
+    document.getElementById('paper-scroll').addEventListener('gesturestart', (e) => e.preventDefault());
 
     document.getElementById('paper-scroll').addEventListener('touchstart', (e) => {
       if (e.touches[0].clientX < EDGE || e.touches[0].clientX > window.innerWidth - EDGE) return;

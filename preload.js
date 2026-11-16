@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('neo', {
   // that opens next can offer Page Break Here
   scriptContext: (st) => ipcRenderer.sendSync('script:context', st),
   typewriterState: (st) => ipcRenderer.send('typewriter:state', st),
+  zenState: (st) => ipcRenderer.send('zen:state', st),
   nbspMarksState: (on) => ipcRenderer.send('nbspmarks:state', on),
   pagesState: (st) => ipcRenderer.send('pages:state', st),
   pageWidthState: (v) => ipcRenderer.send('pagewidth:state', v),
