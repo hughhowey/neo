@@ -53,7 +53,7 @@ One NEO for everyone. NEO → Options… (File → Options… off the Mac; FEATU
 - A feature that's off takes NEO's defaults (`applyLook`) and never erases the writer's choices: they wait in library.json for its return.
 - Nothing a book already holds is hidden. A footnote, poetry paragraph, bound shelf, painted cover, loose card or chapter notes page with notes on it opens and exports as before, and other pen names stay reachable.
 - A new library starts with every feature off and Markdown typing off. A library from before 2.0 is set up once (`setupFeatures`): Show More Features on → every feature on (vim keys only if they were on); off → every feature off and simple NEO's quiet defaults written in; older still → judged by what it uses.
-- Pocket shows a feature only where its `FEATURES` entry says `pocket: true`.
+- Pocket shows a feature only where its `FEATURES` entry says `pocket: true` (cards, notes pages, poetry, footnotes, pen names, vim, and More exports as txt/md/html; `pocketDesc` is its wording there). The rest need the desktop. Its ⋯ sheet has Options… at the foot, and rows for poetry and the extra exports while those are on. On Pocket, Options lists only its own features, and Turn all on/off leaves the desktop's alone. `npm run test:pocket` runs Pocket's own page with a stand-in for Capacitor's Filesystem.
 - The shortcuts window (`bookShortcutSections`) lists a key only when its feature is on.
 - A new feature gets an entry in `FEATURES` (off for a new library) unless Hugh says it's for everyone. `scripts/features.test.js`, `npm run test:options`.
 

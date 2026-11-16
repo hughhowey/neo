@@ -99,7 +99,7 @@ async function openOptions() {
         <section>
           <div class="opt-head"><h3>${t('Features')}</h3><button class="opt-all btn-link" type="button"></button></div>
           <p class="opt-note">${t('Turn on what you use. Anything a book already holds always shows.')}</p>
-          ${features.map((f) => check('feature:' + f.key, featureOn(f.key), t(f.label), t(f.desc))).join('')}
+          ${features.map((f) => check('feature:' + f.key, featureOn(f.key), t(f.label), t(IS_POCKET && f.pocketDesc ? f.pocketDesc : f.desc))).join('')}
         </section>
         <section>
           <h3>${t('Writing')}</h3>

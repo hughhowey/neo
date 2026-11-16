@@ -157,6 +157,7 @@ function room(library, { metas = {}, key = false, pocket = false } = {}) {
     library,
     log,
     IS_POCKET: pocket,
+    tk: (s) => s,
     t: (s) => s,
     toast: (msg) => log.push('toast ' + msg),
     setTimeout: (fn) => fn(),

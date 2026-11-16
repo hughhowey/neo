@@ -294,18 +294,18 @@ const IS_POCKET = !!window.Capacitor;
 // app/options.js turns them on and off, and sets up a library from before.
 // `pocket`: whether NEO Pocket shows the feature too.
 const FEATURES = [
-  { key: 'cards', label: 'Outline cards', desc: 'The outline as index cards, loose cards, and the cards beside the page.', pocket: false },
-  { key: 'notesPages', label: 'Chapter notes pages', desc: 'A notes page for each chapter, beside the book’s own.', pocket: false },
-  { key: 'poetry', label: 'Poetry paragraphs', desc: 'Lines set in from the margins, in italic.', pocket: false },
-  { key: 'footnotes', label: 'Footnotes', desc: 'Numbered notes at the foot of the page.', pocket: false },
-  { key: 'formatting', label: 'Alignment and other fonts', desc: 'Center, right-align or justify paragraphs or the whole book, and use any font on your computer.', pocket: false },
-  { key: 'penNames', label: 'Pen names and bound shelves', desc: 'Shelves under other names, a shelf bound into one book, anthologies, Duplicate and Reshelve.', pocket: false },
-  { key: 'covers', label: 'Painted covers', desc: 'Covers painted from your story with your own OpenAI key.', pocket: false },
-  { key: 'pages', label: 'Page views', desc: 'See the book as printed pages, two side by side, and choose the page width.', pocket: false },
-  { key: 'focus', label: 'Focus mode', desc: 'Dim everything but the sentence or paragraph you’re writing.', pocket: false },
-  { key: 'readAloud', label: 'Read aloud and Look Up', desc: 'Hear your words in your computer’s voice; look up a selected word.', pocket: false },
-  { key: 'vim', label: 'Vim keys', desc: 'Move around the page with h j k l and friends, the vim way.', pocket: false },
-  { key: 'exports', label: 'More exports', desc: 'Manuscript Format, plain text, Markdown and web page, and Import Chapters.', pocket: false }
+  { key: 'cards', label: tk('Outline cards'), desc: tk('The outline as index cards, loose cards, and the cards beside the page.'), pocket: true },
+  { key: 'notesPages', label: tk('Chapter notes pages'), desc: tk('A notes page for each chapter, beside the book’s own.'), pocket: true },
+  { key: 'poetry', label: tk('Poetry paragraphs'), desc: tk('Lines set in from the margins, in italic.'), pocket: true },
+  { key: 'footnotes', label: tk('Footnotes'), desc: tk('Numbered notes at the foot of the page.'), pocket: true },
+  { key: 'formatting', label: tk('Alignment and other fonts'), desc: tk('Center, right-align or justify paragraphs or the whole book, and use any font on your computer.'), pocket: false },
+  { key: 'penNames', label: tk('Pen names and bound shelves'), desc: tk('Shelves under other names, a shelf bound into one book, anthologies, Duplicate and Reshelve.'), pocket: true },
+  { key: 'covers', label: tk('Painted covers'), desc: tk('Covers painted from your story with your own OpenAI key.'), pocket: false },
+  { key: 'pages', label: tk('Page views'), desc: tk('See the book as printed pages, two side by side, and choose the page width.'), pocket: false },
+  { key: 'focus', label: tk('Focus mode'), desc: tk('Dim everything but the sentence or paragraph you’re writing.'), pocket: false },
+  { key: 'readAloud', label: tk('Read aloud and Look Up'), desc: tk('Hear your words in your computer’s voice; look up a selected word.'), pocket: false },
+  { key: 'vim', label: tk('Vim keys'), desc: tk('Move around the page with h j k l and friends, the vim way.'), pocket: true },
+  { key: 'exports', label: tk('More exports'), desc: tk('Manuscript Format, plain text, Markdown and web page, and Import Chapters.'), pocket: true, pocketDesc: tk('Plain text, Markdown and web page, beside Word and EPUB.') }
 ];
 const featureOn = (key) => {
   if (!library || !library.features || !library.features[key]) return false;
