@@ -108,6 +108,9 @@
       },
       "maintainer": "Hugh Howey <hughhowey@gmail.com>"
     },
+    "appImage": {
+      "artifactName": "${productName}-${arch}.${ext}"
+    },
     "nsis": {
       "oneClick": true,
       "deleteAppDataOnUninstall": false,
