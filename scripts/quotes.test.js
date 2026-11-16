@@ -102,7 +102,11 @@ const styles = [
   ['da', '', `"Hej," sagde hun.`, '»Hej,« sagde hun.'],
   ['da', '', `"Han sagde 'hej'"`, '»Han sagde ’hej’«'],
   ['da', '', `"Det er Peters bog," sagde hun. "Ja."`, '»Det er Peters bog,« sagde hun. »Ja.«'],
-  ['da', '„Ja“, sagde hun.', `"Nej," sagde han.`, '„Nej,“ sagde han.']
+  ['da', '„Ja“, sagde hun.', `"Nej," sagde han.`, '„Nej,“ sagde han.'],
+  // Norwegian «…», ' an apostrophe (#284)
+  ['nb', '', `"Hei," sa hun.`, '«Hei,» sa hun.'],
+  ['nb', '', `"Det er Peters bok," sa hun. "Ja."`, '«Det er Peters bok,» sa hun. «Ja.»'],
+  ['nb', '', `"Han sa 'hei'"`, '«Han sa ’hei’»']
 ];
 
 describe('smart quotes: an inner quotation closing right before the outer one (#410)', () => {
