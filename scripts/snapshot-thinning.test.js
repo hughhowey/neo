@@ -120,7 +120,7 @@ describe('preload.js forwards every snapshot argument', () => {
 });
 
 // ---- thinSnapshots in app.js, against an in-memory library ----
-const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const appContext = vm.createContext({});
 vm.runInContext(app.slice(app.indexOf('const SNAP_KEPT'), app.indexOf('// (the rules above are plain functions: scripts/snapshots.test.js)')), appContext);
 vm.runInContext('this.api = { snapHolder, thinSnapshots: typeof thinSnapshots === "function" ? thinSnapshots : () => { throw new Error("thinSnapshots is missing from app.js"); } };', appContext);

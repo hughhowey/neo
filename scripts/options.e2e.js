@@ -1,6 +1,7 @@
-// End-to-end tests for simple NEO and File → Show More Features: a library
-// from before the switch, the window in simple NEO, and the switch turned
-// both ways. Run with `npm run test:simple`.
+// End-to-end tests for NEO's features and the Options window: a library from
+// before 2.0, the window with every feature off, features turned on and off
+// in Options, and the settings that moved there. Run with
+// `npm run test:options`.
 
 'use strict';
 
@@ -11,12 +12,12 @@ const os = require('os');
 const path = require('path');
 
 for (const name of fs.readdirSync(os.tmpdir())) {
-  const pid = /^neo-simple-test-(\d+)-/.exec(name);
+  const pid = /^neo-options-test-(\d+)-/.exec(name);
   if (!pid || +pid[1] === process.pid) continue;
   try { process.kill(+pid[1], 0); continue; } catch (err) { if (err.code === 'EPERM') continue; }
   fs.rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true });
 }
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `neo-simple-test-${process.pid}-`));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `neo-options-test-${process.pid}-`));
 app.setPath('userData', path.join(tmp, 'app'));
 app.setPath('documents', tmp);
 const lib = path.join(tmp, 'NEO Library');
@@ -60,20 +61,25 @@ const caretInFirst = () => js(`(() => {
   getSelection().addRange(r);
   currentChapterId = id;
 })()`);
-const MORE_MENU = ['Vim Keys', 'Focus Mode', 'Language', 'Spellcheck Language', 'Manuscript Format…', 'Import Chapters…', 'Poetry Paragraph'];
+const FEATURE_MENU = ['Focus Mode', 'Manuscript Format…', 'Import Chapters…', 'Poetry Paragraph', 'Show Pages'];
+const opt = (sel) => js(`(() => { const el = document.querySelector('.options-modal [data-opt="${sel}"]'); if (!el) return 'missing'; el.click(); return el.checked; })()`);
+const openOpts = async () => { wc.send('menu', { type: 'options' }); await tick(400); };
+const closeOpts = async () => { await js(`document.querySelector('.options-modal .m-ok').click()`); await tick(200); };
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('a library that uses nothing behind the switch is decided simple, on disk', async () => {
-  assert.equal(await js('library.moreFeatures'), false);
-  assert.equal(onDisk().moreFeatures, false);
+test('a library from before 2.0 that used nothing behind the switch starts with every feature off, on disk', async () => {
+  assert.equal(await js('Object.values(library.features).some(Boolean)'), false);
+  assert.equal(Object.values(onDisk().features).some(Boolean), false);
+  assert.equal(onDisk().moreFeatures, undefined);
 });
 
-test('the menu bar is simple, with Show More Features unticked', async () => {
+test('the menu bar shows no feature items, and Options… is there', async () => {
   const labels = menuLabels();
-  for (const l of MORE_MENU) assert.ok(!labels.includes(l), l + ' is hidden');
-  for (const l of ['Show More Features', 'Typewriter Scrolling', 'Paperback for KDP…', 'Goals…']) assert.ok(labels.includes(l), l + ' is there');
+  for (const l of FEATURE_MENU) assert.ok(!labels.includes(l), l + ' is hidden');
+  for (const l of ['Options…', 'Typewriter Scrolling', 'Paperback for KDP…', 'Goals…']) assert.ok(labels.includes(l), l + ' is there');
+  for (const l of ['Show More Features', 'Vim Keys', 'Markdown Emphasis', 'Language', 'Spellcheck Language']) assert.ok(!labels.includes(l), l + ' moved to Options');
 });
 
 test('the Outline is the list, with no cards or loose cards', async () => {
@@ -98,7 +104,7 @@ test('a chapter\'s notes page with notes on it stays in reach', async () => {
   await js(`delete notesPeeks[${JSON.stringify(id)}]; renderNotesNav()`);
 });
 
-test('the keys behind the switch do nothing: footnote, poetry, tab keys', async () => {
+test('the keys of features that are off do nothing: footnote, poetry', async () => {
   await clickTab('manuscript');
   await caretInFirst();
   const before = await js(`document.querySelector('.chapter-body').innerHTML`);
@@ -107,15 +113,32 @@ test('the keys behind the switch do nothing: footnote, poetry, tab keys', async 
   await tick(100);
   assert.equal(await js(`document.querySelectorAll('.chapter-body .fn, .chapter-body p.poetry').length`), 0);
   assert.equal(await js(`document.querySelector('.chapter-body').innerHTML`), before);
-  await key({ key: 'ArrowRight', code: 'ArrowRight', metaKey: process.platform === 'darwin', ctrlKey: process.platform !== 'darwin', altKey: true });
-  await tick(200);
-  assert.equal(await js('currentTab'), 'manuscript');
+});
+
+test('a footnote the book already holds stays: it shows, opens, edits and exports with Footnotes off', async () => {
+  await clickTab('manuscript');
+  assert.equal(await js(`featureOn('footnotes')`), false);
+  await js(`(() => {
+    const p = document.querySelector('.chapter-body > p');
+    p.appendChild(footnoteMark('Written before the switch.'));
+    syncChapter(p.closest('.chapter-body'), p.closest('.chapter').dataset.id);
+  })()`);
+  await tick(100);
+  assert.equal(await js(`document.querySelectorAll('.chapter-body .fn').length`), 1);
+  await js(`document.querySelector('.chapter-body .fn').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+  await tick(150);
+  assert.equal(await js(`!!document.querySelector('.fn-box')`), true, 'a click opens the note');
+  await js(`document.querySelector('.fn-box textarea, .fn-box [contenteditable]') && closeFootnote()`);
+  await js(`closeFootnote()`);
+  const html = await js(`buildHtml(bookExportData(), {})`);
+  assert.match(html, /Written before the switch\./, 'the note goes out in the export');
+  await js(`(() => { const f = document.querySelector('.chapter-body .fn'); const body = f.closest('.chapter-body'); f.remove(); syncChapter(body, body.closest('.chapter').dataset.id); })()`);
 });
 
 test('the shortcuts window lists only what\'s showing', async () => {
   const rows = await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[1]))`);
   assert.ok(rows.includes('Insert a placeholder note'));
-  for (const gone of ['Italic, bold, the Markdown way', 'Add a footnote', 'Start or continue a poetry paragraph', 'Read aloud from the cursor', 'Cycle focus mode', 'Center paragraph', 'Go to the next tab']) {
+  for (const gone of ['Italic, bold, the Markdown way', 'Add a footnote', 'Start or continue a poetry paragraph', 'Read aloud from the cursor', 'Cycle focus mode', 'Center paragraph']) {
     assert.ok(!rows.includes(gone), gone + ' is not listed');
   }
 });
@@ -128,7 +151,7 @@ test('no cards beside the page', async () => {
   await shot('simple-page');
 });
 
-test('Markdown asterisks stay asterisks in simple NEO', async () => {
+test('Markdown asterisks stay asterisks, as simple NEO had them', async () => {
   assert.equal(await js('markdownOff()'), true);
 });
 
@@ -138,7 +161,7 @@ const bookMenu = async () => {
   await tick(500);
   await js(`document.querySelector('#shelves .book').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }))`);
   await tick(300);
-  await shot('book-menu-' + (await js('moreOn()') ? 'more' : 'simple'));
+  await shot('book-menu-' + (await js("featureOn('covers')") ? 'on' : 'off'));
   const cards = await js(`[...document.querySelectorAll('.modal-backdrop:not([hidden]):not(#firstrun) .fr-choice strong')].map((b) => b.textContent)`);
   const small = await js(`[...document.querySelectorAll('.pop-menu [role="menuitem"], .pop-menu button, .popmenu button')].map((b) => b.textContent.trim())`);
   await js(`(document.querySelector('.modal-backdrop:not(#firstrun) .m-cancel') || document.body).click(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
@@ -149,25 +172,27 @@ const bookMenu = async () => {
   return { cards, small };
 };
 
-test('a book\'s right-click is the larger cards, with no cover menu or word goal', async () => {
-  const { cards } = await bookMenu();
-  assert.deepEqual(cards, ['Export…', 'New cover', 'Remove from bookshelf', 'Move to Trash']);
+test('a book\'s right-click is the small menu, with the cover menu but no Duplicate or word goal', async () => {
+  const { cards, small } = await bookMenu();
+  assert.deepEqual(cards, []);
+  assert.ok(small.some((l) => l.startsWith('Cover')), small.join(' | '));
+  assert.ok(!small.includes('Duplicate'), 'Duplicate is a pen names feature');
+  assert.ok(!small.some((l) => l.startsWith('Set word goal')));
 });
 
-test('a choice made behind the switch waits: vim keys saved on, but off in simple NEO', async () => {
-  await js(`library.vimKeys = true; applyLook()`);
-  assert.equal(await js('vimEnabled'), false);
-});
-
-test('Show More Features brings it all back, and is kept', async () => {
-  wc.send('menu', { type: 'moreFeatures', checked: true });
+test('Options: Turn all on brings every feature back, and is kept', async () => {
+  await openOpts();
+  assert.equal(await js(`!!document.querySelector('.options-modal')`), true);
+  const boxes = await js(`[...document.querySelectorAll('.options-modal [data-opt^="feature:"]')].map((b) => b.checked)`);
+  assert.ok(boxes.length >= 10 && boxes.every((b) => !b), String(boxes));
+  await js(`document.querySelector('.options-modal .opt-all').click()`);
   await tick(400);
-  assert.equal(await js('library.moreFeatures'), true);
-  assert.equal(onDisk().moreFeatures, true);
+  assert.equal(await js(`[...document.querySelectorAll('.options-modal [data-opt^="feature:"]')].every((b) => b.checked)`), true);
+  assert.equal(Object.values(onDisk().features).every(Boolean), true);
   assert.equal(await js('vimEnabled'), true);
+  await closeOpts();
   const labels = menuLabels();
-  for (const l of MORE_MENU) assert.ok(labels.includes(l), l + ' is back');
-  assert.ok(Menu.getApplicationMenu().items.some((m) => m.submenu && m.submenu.items.some((i) => i.label === 'Show More Features' && i.checked)));
+  for (const l of FEATURE_MENU) assert.ok(labels.includes(l), l + ' is back');
   await js('sideCardsUpdate(true)');
   assert.notEqual(await js(`document.getElementById('side-cards').innerHTML`), '');
   await clickTab('outline');
@@ -178,7 +203,7 @@ test('Show More Features brings it all back, and is kept', async () => {
   assert.equal(await js(`document.querySelectorAll('#notes-nav .notes-item').length`), 4);
 });
 
-test('with more features, a book\'s right-click is the small menu, cover menu and all, and no word goal', async () => {
+test('with the features on, a book\'s right-click has the cover menu and Duplicate, and no word goal', async () => {
   const { cards, small } = await bookMenu();
   assert.deepEqual(cards, []);
   assert.ok(small.some((l) => l.startsWith('Cover')), 'the cover menu: ' + small.join(' | '));
@@ -187,17 +212,41 @@ test('with more features, a book\'s right-click is the small menu, cover menu an
   await clickTab('outline');
 });
 
-test('and back to simple, where the Outline is the list again and vim keys rest', async () => {
+test('one feature off at a time: Outline cards off makes the Outline the list again', async () => {
   await clickTab('outline');
-  wc.send('menu', { type: 'moreFeatures', checked: false });
+  await openOpts();
+  assert.equal(await opt('feature:cards'), false);
   await tick(400);
-  assert.equal(onDisk().moreFeatures, false);
-  assert.equal(onDisk().vimKeys, true, 'the choice is still saved');
-  assert.equal(await js('vimEnabled'), false);
+  assert.equal(onDisk().features.cards, false);
+  assert.equal(onDisk().features.vim, true, 'the others stay');
   assert.equal(await js(`document.getElementById('editor-view').classList.contains('board-on')`), false);
   assert.equal(await js(`document.getElementById('outline-list').hidden`), false);
-  assert.ok(menuLabels().includes('Show More Features'));
-  assert.ok(!menuLabels().includes('Vim Keys'));
+  assert.equal(await opt('feature:vim'), false);
+  await tick(300);
+  assert.equal(await js('vimEnabled'), false);
+  await closeOpts();
+});
+
+test('Options settings: Markdown emphasis and the interface size', async () => {
+  await openOpts();
+  assert.equal(await opt('markdown'), true);
+  await tick(200);
+  assert.equal(await js('markdownOff()'), false);
+  assert.equal(onDisk().markdownOff, undefined);
+  await js(`document.querySelector('.options-modal [data-zoom="1"]').click()`);
+  await tick(300);
+  assert.equal(onDisk().uiZoom, 1.1);
+  assert.equal(await js(`document.querySelector('.options-modal .opt-zoom').textContent`), '110%');
+  await js(`document.querySelector('.options-modal [data-zoom="0"]').click()`);
+  await tick(300);
+  assert.equal(onDisk().uiZoom, 1);
+  await shot('options-end');
+  await js(`document.querySelectorAll('.pop-menu, .popmenu').forEach((m) => m.remove()); document.querySelector('.options-modal .opt-panel').scrollTop = 0`);
+  await tick(100);
+  await shot('options');
+  // Esc closes it
+  await js(`document.querySelector('.options-modal').closest('.modal-backdrop').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  assert.equal(await js(`!!document.querySelector('.options-modal')`), false);
 });
 
 async function main() {
@@ -207,7 +256,7 @@ async function main() {
     let win;
     while (!(win = BrowserWindow.getAllWindows()[0])) await tick(50);
     wc = win.webContents;
-    while (!(await js(`typeof library !== 'undefined' && !!library && typeof library.moreFeatures === 'boolean'`).catch(() => false))) await tick(50);
+    while (!(await js(`typeof library !== 'undefined' && !!library && !!library.features`).catch(() => false))) await tick(50);
     await tick(300);
     await js(`(async () => {
       document.getElementById('firstrun').hidden = true;

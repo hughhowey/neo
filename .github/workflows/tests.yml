@@ -1,0 +1,32 @@
+# Every push to main and every pull request: NEO's tests on a Mac, the
+# computer most NEO writers use. The quick tests (npm test) and then every
+# end-to-end test (npm run test:e2e), each opening a real NEO on a throwaway
+# library and typing into it. A pull request shows the result as a green
+# check or a red cross before it's merged. Free for a public repository.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Quick tests
+        run: npm test
+      - name: End-to-end tests
+        run: npm run test:e2e

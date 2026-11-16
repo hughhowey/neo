@@ -152,7 +152,7 @@ test('a Ukrainian suggestion goes onto the page with a typographic apostrophe', 
       }
     }
   });
-  const app = source('app.js');
+  const app = require('./app-files').appSource();
   vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
   context.el = editor;
   await vm.runInContext('spellOn = true; showSpellMenu = captureMenu; spellScanEl(el, "ch-test")', context);
@@ -281,7 +281,7 @@ test('learning a Romanian word removes cached Unicode-variant underlines across 
   // app.js saves the library through its own writeLibrary(), which counts
   // writes before handing them to window.neo
   context.writeLibrary = (lib) => context.window.neo.writeLibrary(lib);
-  const app = source('app.js');
+  const app = require('./app-files').appSource();
   // Use the real scanner, cache and context-menu learn callback. Only DOM
   // primitives and IPC transport are replaced; the worker loads Hunspell.
   vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
@@ -330,7 +330,7 @@ test('a book opened again is checked again: new pages, the same chapter ids', as
     currentTab: 'manuscript', currentChapterId: 'ch-test', library: {},
     window: { neo: { spellCheckWords: async (words) => (await send({ type: 'check', words })).result } }
   });
-  const app = source('app.js');
+  const app = require('./app-files').appSource();
   vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
   vm.runInContext('spellOn = true;', context);
   await vm.runInContext('spellScanEl(spellElFor("ch-test"), "ch-test")', context);
@@ -477,7 +477,7 @@ test('hyphenated words: the whole word first, then only the wrong pieces', async
     $: () => null, t: (text) => text, tk: (text) => text, toast() {},
     window: { neo: { spellCheckWords: async (words) => (await send({ type: 'check', words })).result } }
   });
-  const app = source('app.js');
+  const app = require('./app-files').appSource();
   vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
   context.el = el;
   await vm.runInContext('spellOn = true; spellScanEl(el, "ch-test")', context);
@@ -517,7 +517,7 @@ test('a hyphenated word underlined whole opens the menu; a stammer is no misspel
       }
     }
   });
-  const app = source('app.js');
+  const app = require('./app-files').appSource();
   vm.runInContext(app.slice(app.indexOf('let spellOn = false;'), app.indexOf('let typewriterEnabled = false;')), context);
   context.el = editor;
   await vm.runInContext('spellOn = true; showSpellMenu = captureMenu; spellScanEl(el, "ch-test")', context);

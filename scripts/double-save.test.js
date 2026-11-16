@@ -1,12 +1,10 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 
 // Rule: a chapter's words reach the disk once, however many saves ask for
 // them. A book in memory, saved through persistChapter to a disk that notes

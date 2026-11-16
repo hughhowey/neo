@@ -171,6 +171,63 @@ test('ordinary saves go through: typing still writes book.json', async () => {
   assert.equal(meta.wordCount, await js(`bookWordCount()`));
 });
 
+test('an older copy of a chapter put back by the sync is written over, not kept as another chapter, however often it comes back', async () => {
+  await saved();
+  const chId = (await order())[0];
+  const file = path.join(dir, 'chapters', chId + '.html');
+  const startCount = (await order()).length;
+  for (let i = 0; i < 4; i++) {
+    const older = fs.readFileSync(file, 'utf8'); // this device's own last save...
+    await caretIn(0);
+    await typeKeys(' round' + 'abcd'[i]);
+    await tick(1800); // ...saved over...
+    fs.writeFileSync(file, older); // ...and the sync puts the older copy back
+    await caretIn(0);
+    await typeKeys(' again' + 'abcd'[i]);
+    await tick(1800);
+  }
+  await saved();
+  assert.equal((await order()).length, startCount, 'no "from other device" chapters were made');
+  const disk = fs.readFileSync(file, 'utf8');
+  assert.ok(/roundd/.test(disk) && /againd/.test(disk), 'the newest words are on disk');
+  assert.ok(/rounda/.test(disk) && /againa/.test(disk), 'and the earlier ones too');
+});
+
+test('an older copy that turns up while words are still unsaved here is written over too', async () => {
+  await saved();
+  const chId = (await order())[0];
+  const file = path.join(dir, 'chapters', chId + '.html');
+  const startCount = (await order()).length;
+  const older = fs.readFileSync(file, 'utf8');
+  await caretIn(0);
+  await typeKeys(' newest');
+  await saved();
+  fs.writeFileSync(file, older);
+  await caretIn(0);
+  await typeKeys(' unsaved');
+  await look();
+  await saved();
+  assert.equal((await order()).length, startCount, 'no chapter made from it');
+  const disk = fs.readFileSync(file, 'utf8');
+  assert.ok(/newest/.test(disk) && /unsaved/.test(disk));
+});
+
+test('a copy with words the page lacks is still kept as the chapter after it', async () => {
+  await saved();
+  const chId = (await order())[0];
+  const file = path.join(dir, 'chapters', chId + '.html');
+  const startCount = (await order()).length;
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/<\/p>(?![\s\S]*<\/p>)/, ' OTHERDEVICEWORDS</p>'));
+  await caretIn(0);
+  await typeKeys(' herewords');
+  await tick(1800);
+  await saved();
+  const ids = await order();
+  assert.equal(ids.length, startCount + 1, 'one chapter from the other device');
+  assert.ok((await page()).includes('OTHERDEVICEWORDS'));
+  assert.ok(/herewords/.test(fs.readFileSync(file, 'utf8')));
+});
+
 async function main() {
   await app.whenReady();
   let failed = 0;

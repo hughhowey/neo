@@ -1,14 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
 // spPaste, runHtml and paraRuns from app.js, run with the few DOM pieces they
 // touch replaced by stubs for flat pasted lines (<p class="sp-...">text</p>)
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const between = (a, b) => app.slice(app.indexOf(a), app.indexOf(b, app.indexOf(a)));
 
 function setup() {

@@ -1,13 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
 // the dialogue-dash rules from app.js, run on their own
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const context = vm.createContext({});
 vm.runInContext(app.slice(app.indexOf('const DIALOGUE_DASHES'), app.indexOf('function dashStyle(')), context);
 vm.runInContext('this.api = { DIALOGUE_DASHES, dialogueDashes, dialogueDashEdits, dashRuns };', context);

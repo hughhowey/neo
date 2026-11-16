@@ -8,7 +8,7 @@
 
 'use strict';
 
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
@@ -80,21 +80,21 @@ async function caretEnd(n) {
 }
 const para = (n) => js(`document.querySelector('.chapter-body').children[${n}].textContent`);
 
-// Edit → Spellcheck Language → label, clicked the way the menu clicks it
-function menuItem(label, items = Menu.getApplicationMenu().items) {
-  for (const item of items) {
-    if (item.label === label) return item;
-    const found = item.submenu && menuItem(label, item.submenu.items);
-    if (found) return found;
-  }
-  return null;
-}
+// Options → Spellcheck language, picked the way the writer picks it
 async function pickSpellLanguage(label, code) {
-  const item = menuItem(label);
-  assert.ok(item, `${label} in the menu`);
-  item.click();
+  wc.send('menu', { type: 'options' });
+  await tick(400);
+  const shown = await js(`(() => {
+    const sel = document.querySelector('.options-modal [data-opt="spellLanguage"]');
+    const o = [...sel.options].find((x) => x.value === ${JSON.stringify(code)});
+    sel.value = o.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return o.textContent;
+  })()`);
+  assert.ok(shown, `${label} in Options`);
   for (let i = 0; i < 100 && (await js('book.writingLanguage')) !== code; i++) await tick(50);
   assert.equal(await js('book.writingLanguage'), code);
+  await js(`document.querySelector('.options-modal .m-ok').click()`);
   await tick(300);
 }
 
@@ -123,8 +123,6 @@ test('Dansk is picked with the interface left in English, and saved with the boo
   assert.equal(JSON.parse(fs.readFileSync(path.join(path.dirname(libraryFile), id, 'book.json'), 'utf8')).writingLanguage, 'da');
   assert.equal(JSON.parse(fs.readFileSync(libraryFile, 'utf8')).spellLanguage, undefined);
   assert.equal(await js('NeoI18n.getLocale()'), 'en');
-  assert.equal(menuItem('Dansk').checked, true);
-  assert.equal(menuItem('Spellcheck Language').label, 'Spellcheck Language');
 });
 
 test('Danish "i" stays small, a typed "I" stays, sentences still start with a capital', async () => {

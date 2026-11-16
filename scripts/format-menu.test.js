@@ -51,7 +51,7 @@ function menuOn(platform, { script = false, more = true, view = null } = {}) {
   context.library = library;
   vm.runInContext('LIBRARY_DIR = library; LIBRARY_FILE = require("path").join(library, "library.json");', context);
   try {
-    listeners.get('more:state')(null, more);
+    listeners.get('features:state')(null, more ? { formatting: true, pages: true, poetry: true, focus: true, exports: true, covers: true, penNames: true } : {});
     if (view) listeners.get('view:state')({ sender: null }, view);
     if (script) listeners.get('script:state')(null, { on: true, book: true, element: 'action' });
     else vm.runInContext('buildMenu()', context);

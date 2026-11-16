@@ -971,7 +971,7 @@ ipcMain.handle('book:create', (_e, meta) => {
     created: new Date().toISOString(),
     modified: new Date().toISOString(),
     chapterOrder: [],
-    tabNames: { notes: 'Notes', outline: 'Outline' } // shown translated (see tabName in app.js)
+    tabNames: { notes: 'Notes', outline: 'Outline' } // shown translated (see tabName in app/)
   };
   writeJSON(path.join(dir, 'book.json'), book);
   fs.writeFileSync(path.join(dir, 'notes.html'), '');
@@ -1162,21 +1162,52 @@ ipcMain.handle('chapter:delete', (_e, bookId, chapterId) => {
   return true;
 });
 
+// A notes or outline page (aux:*): the same revision contract as chapters.
+// A page the disk can't read is an error, never an empty page: an empty read
+// that is then saved would wipe the page.
+function readAuxFile(file) {
+  try { return fs.readFileSync(file, 'utf8'); } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+// The displaced disk text is kept as <page>.bak, or .bak2, .bak3 … when that
+// name holds other words. A retry that finds its own copy already there adds nothing.
+function keepAuxBackup(file, text) {
+  for (let n = 1; n < 1000; n++) {
+    const bak = file + (n === 1 ? '.bak' : '.bak' + n);
+    const have = readAuxFile(bak);
+    if (have === text) return bak;
+    if (have === null) { writeFileDurable(bak, text); return bak; }
+  }
+  throw new Error('too many kept copies of ' + path.basename(file));
+}
+
 ipcMain.handle('aux:read', (_e, bookId, name) => {
-  // name: 'notes' | 'outline'
+  // name: 'notes' | 'outline' | 'notes-<chapter>'
   const file = path.join(bookDir(bookId), libName(name) + '.html');
-  const read = () => { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } };
+  const read = () => readAuxFile(file) || '';
   return afterLocal([file], read, () => '');
 });
 
-ipcMain.handle('aux:write', (_e, bookId, name, html) => {
+// `expected` is the text the window last read or wrote for this page (as for
+// chapter:write). When the file holds words the new text lacks, another device
+// wrote it since: the file's text is kept as a .bak beside the page before the
+// new text goes in, so neither version is lost. Returns {kept: '<name>.bak'}
+// when that happened, else true.
+ipcMain.handle('aux:write', (_e, bookId, name, html, expected) => {
   const file = path.join(bookDir(bookId), libName(name) + '.html');
   if (isCloudOnly(file)) { requestDownload([file]); throw cloudError(file); }
+  let kept = null;
+  if (typeof expected === 'string') {
+    const cur = readAuxFile(file);
+    if (cur !== null && chapterDiverged(cur, expected, html)) kept = keepAuxBackup(file, cur);
+  }
   writeFileDurable(file, html);
-  return true;
+  return kept ? { kept: path.basename(kept) } : true;
 });
 
-// Snapshots of a book (SNAPSHOTS in app.js): book-…/snapshots/<name>/ holds the
+// Snapshots of a book (SNAPSHOTS in app/saving.js): book-…/snapshots/<name>/ holds the
 // chapters that changed since the snapshot before it and, written last, its
 // snapshot.json. A snapshot's files are written once and never rewritten, so
 // a sync tool only ever sees new files arrive and two devices have nothing to
@@ -1612,7 +1643,7 @@ ipcMain.handle('export:save', async (_e, { format, defaultName, content, zipEntr
 
 // ---------------------------------------------------------------------------
 // Paperback for KDP: a print-ready interior PDF and a cover template sized
-// to it. The window builds the book's HTML (app.js, PRINT BOOK); this lays
+// to it. The window builds the book's HTML (app/print.js); this lays
 // it out in pages with Paged.js (print/), checks it against KDP's rules,
 // and prints both files.
 // ---------------------------------------------------------------------------
@@ -1667,7 +1698,7 @@ function hyphenateHtml(html, lang) {
   const hy = hyphenatorFor(lang);
   if (!hy) return html;
   const nouns = /^de\b/i.test(String(lang || ''));
-  // only the paragraphs app.js marked .hy (prose), text between tags only
+  // only the paragraphs the window marked .hy (prose), text between tags only
   return html.replace(/(<p\b[^>]*\bclass="[^"]*\bhy\b[^"]*"[^>]*>)([\s\S]*?)(<\/p>)/g, (m, open, inner, close) => {
     const parts = inner.split(/(<[^>]+>|&[#\w]+;)/);
     // the last word of the paragraph keeps its hyphens out of the last line
@@ -2153,7 +2184,7 @@ async function importFile(fp) {
   const ext = path.extname(fp).toLowerCase();
   let paras = [];
   // a script (Fountain, or Final Draft's XML) is read as it stands; the
-  // window sorts it into its elements (spFromFountain, spFromFdx in app.js)
+  // window sorts it into its elements (spFromFountain, spFromFdx in app/screenplay.js)
   if (ext === '.fountain' || ext === '.fdx') {
     return { name, script: ext.slice(1), source: fs.readFileSync(fp, 'utf8').replace(/^\uFEFF/, '') };
   }
@@ -2352,7 +2383,7 @@ ipcMain.handle('import:pick', async (_e, opts) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     title: chapters ? t('Bring chapters into this book') : t('Bring your manuscripts home'),
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: t('Manuscripts'), extensions: chapters || !moreState ? ['docx', 'txt', 'md'] : ['docx', 'txt', 'md', 'fountain', 'fdx'] }] // scripts: Show More Features
+    filters: [{ name: t('Manuscripts'), extensions: chapters ? ['docx', 'txt', 'md'] : ['docx', 'txt', 'md', 'fountain', 'fdx'] }]
   });
   if (canceled || !filePaths.length) return [];
   const out = [];
@@ -2793,6 +2824,21 @@ ipcMain.on('pagewidth:state', (_e, v) => {
   pageWidthState = v;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
+// macOS only: hold a letter for the accent picker (View → Press and Hold for
+// Accents). Kept in settings.json; off unless the writer turns it on (the
+// picker once re-emitted held keys as phantom letters, so held keys repeat).
+function pressAndHoldOn() {
+  return process.platform === 'darwin' && readSettings().pressAndHold === true;
+}
+ipcMain.on('pressHold:get', (e) => { e.returnValue = pressAndHoldOn(); });
+function setPressAndHold(on) {
+  try { writeSettings({ ...readSettings(), pressAndHold: on }); } catch (err) { logError('settings', err); }
+  try {
+    require('electron').systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', on);
+  } catch (err) { logError('prefs', err); }
+  sendToWindow({ type: 'pressHold', value: on });
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+}
 // View → Vim Keys shows whether they're on
 let vimState = false;
 ipcMain.on('vim:state', (_e, on) => {
@@ -2846,21 +2892,26 @@ ipcMain.on('style:state', (_e, style) => {
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 
-// File → Show More Features: off, simple NEO leaves out the menu items
-// marked `more` (the window keeps their keys and choices out of sight too)
-let moreState = false;
-ipcMain.on('more:state', (_e, on) => {
-  on = !!on;
-  if (on === moreState) return;
-  moreState = on;
+// Options (the window's FEATURES): an item marked `feature: 'cards'` shows
+// only while that feature is on (the window keeps its keys and choices out
+// of sight too). Until the window reports, nothing behind a feature shows.
+let featuresState = {};
+ipcMain.on('features:state', (_e, on) => {
+  const next = on && typeof on === 'object' ? { ...on } : {};
+  if (JSON.stringify(next) === JSON.stringify(featuresState)) return;
+  featuresState = next;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
-// a template without the `more` items, and without the separators they leave
-// at an end or side by side
-function simpleTemplate(items, more) {
-  const kept = items.filter((it) => more || !it.more).map((it) => {
-    const { more: _, ...item } = it;
-    return Array.isArray(item.submenu) ? { ...item, submenu: simpleTemplate(item.submenu, more) } : item;
+// the menu bar's Options items and the window's own controls
+ipcMain.handle('i18n:languages', () => ({ list: listLanguages(), current: uiLanguage }));
+ipcMain.on('i18n:set', (_e, code) => { if (typeof code === 'string') setUiLanguage(code); });
+ipcMain.on('pressHold:set', (_e, on) => setPressAndHold(!!on));
+// a template without the items of features that are off, and without the
+// separators they leave at an end or side by side
+function featureTemplate(items, features) {
+  const kept = items.filter((it) => !it.feature || !!features[it.feature]).map((it) => {
+    const { feature: _, ...item } = it;
+    return Array.isArray(item.submenu) ? { ...item, submenu: featureTemplate(item.submenu, features) } : item;
   });
   const shown = (it) => it.visible !== false;
   return kept.filter((it, i) => {
@@ -2908,6 +2959,8 @@ function buildMenu() {
       submenu: [
         { role: 'about', label: t('About NEO') },
         { type: 'separator' },
+        { label: t('Options…'), click: () => sendToWindow({ type: 'options' }) },
+        { type: 'separator' },
         { role: 'services', label: t('Services') },
         { type: 'separator' },
         { role: 'hide', label: t('Hide NEO') },
@@ -2927,24 +2980,15 @@ function buildMenu() {
             { label: 'Fountain (.fountain)', click: () => sendToWindow({ type: 'export', format: 'fountain' }) },
             { label: 'Final Draft (.fdx)', click: () => sendToWindow({ type: 'export', format: 'fdx' }) }
           ] : [
-            { more: true, label: t('Plain Text (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
-            { more: true, label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
-            { more: true, label: t('Web Page (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
+            { feature: 'exports', label: t('Plain Text (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
+            { feature: 'exports', label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
+            { feature: 'exports', label: t('Web Page (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
             { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
             { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
             { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) },
             { type: 'separator' },
             { label: t('Paperback for KDP…'), click: () => sendToWindow({ type: 'export', format: 'paperback' }) },
-            { more: true, label: t('Manuscript Format…'), click: () => sendToWindow({ type: 'export', format: 'manuscript' }) },
-            { type: 'separator' },
-            {
-              more: true,
-              id: 'export-custom-chapter-titles',
-              label: t('Chapter Titles Only'),
-              type: 'checkbox',
-              checked: !!readJSON(LIBRARY_FILE, {}).exportCustomChapterTitles,
-              click: (item) => sendToWindow({ type: 'exportCustomChapterTitles', checked: item.checked })
-            }
+            { feature: 'exports', label: t('Manuscript Format…'), click: () => sendToWindow({ type: 'export', format: 'manuscript' }) }
           ]
         },
         { type: 'separator' },
@@ -2959,19 +3003,11 @@ function buildMenu() {
         // same in Pocket with a keyboard and never fires twice
         { label: t('Take Snapshot'), accelerator: 'CmdOrCtrl+S', registerAccelerator: false, click: () => sendToWindow({ type: 'snapshot' }) },
         { type: 'separator' },
-        { more: true, label: t('Cover Art…'), click: () => sendToWindow({ type: 'coverArt' }) },
+        { feature: 'covers', label: t('Cover Art…'), click: () => sendToWindow({ type: 'coverArt' }) },
         {
           label: t('Goals…'),
           accelerator: 'CmdOrCtrl+,',
           click: () => sendToWindow({ type: 'stats' })
-        },
-        {
-          more: true,
-          label: t('New Books Open To'),
-          submenu: [
-            { label: t('Blank Page'), type: 'radio', checked: writingStyle !== 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'pantser' }) },
-            { label: t('Outline First'), type: 'radio', checked: writingStyle === 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'plotter' }) }
-          ]
         },
         { type: 'separator' },
         {
@@ -2980,21 +3016,15 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'import' })
         },
         {
-          more: true,
+          feature: 'exports',
           label: t('Import Chapters…'),
           enabled: bookOpenState && !scriptState.on,
           click: () => sendToWindow({ type: 'importChapters' })
         },
-        { more: true, label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
+        { feature: 'penNames', label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
         { label: t('Library Folder…'), click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
         { type: 'separator' },
-        {
-          label: t('Show More Features'),
-          type: 'checkbox',
-          checked: moreState,
-          click: (item) => sendToWindow({ type: 'moreFeatures', checked: item.checked })
-        },
-        { type: 'separator' },
+        ...(isMac ? [] : [{ label: t('Options…'), click: () => sendToWindow({ type: 'options' }) }, { type: 'separator' }]),
         ...(isMac ? [{ role: 'close', label: t('Close Window') }] : [{ role: 'quit', label: t('Quit') }])
       ]
     },
@@ -3023,21 +3053,6 @@ function buildMenu() {
           // key and one press did both (#282).
           registerAccelerator: false,
           click: () => sendToWindow({ type: 'spellcheck' })
-        },
-        {
-          more: true,
-          label: t('Spellcheck Language'),
-          submenu: [
-            { label: bookOpenState ? t('This book') : t('Library default'), enabled: false },
-            ...(bookOpenState ? [{ label: t('Use library default'), click: () => sendToWindow({ type: 'spellLanguage', value: null }) }] : []),
-            { type: 'separator' },
-            ...Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
-              label: lang.label,
-              type: 'radio',
-              checked: spellLanguage === code,
-              click: () => sendToWindow({ type: 'spellLanguage', value: code })
-            }))
-          ]
         }
       ]
     },
@@ -3066,7 +3081,7 @@ function buildMenu() {
               click: () => sendToWindow({ type: 'bodyFont', value: f })
             })),
             { type: 'separator' },
-            { more: true, label: t('Other Font…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
+            { feature: 'formatting', label: t('Other Font…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
           ]
         },
         {
@@ -3083,7 +3098,7 @@ function buildMenu() {
           ]
         },
         {
-          more: true,
+          feature: 'formatting',
           visible: !scriptState.on, // a script's elements are placed where they print
           label: t('Align Paragraph'),
           submenu: [
@@ -3093,13 +3108,22 @@ function buildMenu() {
             { label: t('Justify'), accelerator: 'CmdOrCtrl+Shift+J', type: 'radio', checked: viewState.align === 'justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
+        {
+          feature: 'formatting',
+          visible: !scriptState.on,
+          enabled: bookOpenState,
+          label: t('Align Book Prose'),
+          submenu: [['Left', 'left'], ['Center', 'center'], ['Right', 'right'], ['Justify', 'justify']].map(([label, value]) => ({
+            label: t(label), click: () => sendToWindow({ type: 'alignBook', value })
+          }))
+        },
         { type: 'separator' },
         { label: t('Larger Text'), accelerator: 'CmdOrCtrl-Plus', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
         { label: t('Smaller Text'), accelerator: 'CmdOrCtrl-Minus', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
         { label: t('Reset Text Size'), accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
         { type: 'separator', visible: !scriptState.on },
         {
-          more: true,
+          feature: 'pages',
           visible: !scriptState.on, // a script has its own pages
           label: t('Show Pages'),
           type: 'checkbox',
@@ -3107,7 +3131,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'pagedView' })
         },
         {
-          more: true,
+          feature: 'pages',
           visible: !scriptState.on,
           label: t('Two Pages Side by Side'),
           type: 'checkbox',
@@ -3116,7 +3140,7 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'twoPageView' })
         },
         {
-          more: true,
+          feature: 'pages',
           visible: !scriptState.on, // a script is set to its own page
           label: t('Page Width'),
           submenu: [['regular', t('Regular')], ['wide', t('Wide')], ['wider', t('Wider')]].map(([value, label]) => ({
@@ -3133,13 +3157,6 @@ function buildMenu() {
           type: 'checkbox',
           checked: typewriterState,
           click: () => sendToWindow({ type: 'typewriter' })
-        },
-        {
-          more: true,
-          label: t('Non-Breaking Marks'),
-          type: 'checkbox',
-          checked: nbspMarksState,
-          click: () => sendToWindow({ type: 'nbspMarks' })
         },
         { type: 'separator' },
         // tick when the caret sits in one; the keys are the editor's own
@@ -3169,22 +3186,12 @@ function buildMenu() {
           checked: flushState
         },
         {
-          more: true,
+          feature: 'poetry',
           visible: !scriptState.on,
           label: t('Poetry Paragraph'),
           ...pageKey('CmdOrCtrl+Shift+Enter', () => sendToWindow({ type: 'poetry' })),
           type: 'checkbox',
           checked: poetryState
-        },
-        { type: 'separator' },
-        // *italic* and **bold** as you type or paste; off for writers who
-        // keep literal asterisks
-        {
-          more: true,
-          label: t('Markdown Emphasis'),
-          type: 'checkbox',
-          checked: !readJSON(LIBRARY_FILE, {}).markdownOff,
-          click: (item) => sendToWindow({ type: 'markdownEmphasis', checked: item.checked })
         }
       ]
     },
@@ -3207,7 +3214,7 @@ function buildMenu() {
           }
         },
         {
-          more: true,
+          feature: 'focus',
           label: t('Focus Mode'),
           submenu: [
             { label: t('Cycle'), accelerator: 'CmdOrCtrl+Shift+O', click: () => sendToWindow({ type: 'focusCycle' }) },
@@ -3216,13 +3223,6 @@ function buildMenu() {
             { label: t('Paragraph'), type: 'radio', checked: viewState.focus === 'paragraph', click: () => sendToWindow({ type: 'focus', value: 'paragraph' }) },
             { label: t('Off'), type: 'radio', checked: viewState.focus === 'off', click: () => sendToWindow({ type: 'focus', value: 'off' }) }
           ]
-        },
-        {
-          more: true,
-          label: t('Vim Keys'),
-          type: 'checkbox',
-          checked: vimState,
-          click: () => sendToWindow({ type: 'vim' })
         },
         { type: 'separator' },
         {
@@ -3239,29 +3239,6 @@ function buildMenu() {
           type: 'checkbox',
           checked: viewState.uiBright,
           click: () => sendToWindow({ type: 'uiBright' })
-        },
-        {
-          more: true,
-          // the size in use rides on the label; the steps are a tenth (#364),
-          // from 90% up to the page zoom's own 300%
-          label: t('Interface Size') + (uiZoomState === 1 ? '' : ' — ' + new Intl.NumberFormat(uiLanguage || 'en', { style: 'percent' }).format(uiZoomState)),
-          submenu: [
-            { label: t('Larger'), click: () => sendToWindow({ type: 'uiZoomStep', value: 1 }) },
-            { label: t('Smaller'), click: () => sendToWindow({ type: 'uiZoomStep', value: -1 }) },
-            { type: 'separator' },
-            { label: t('Reset'), click: () => sendToWindow({ type: 'uiZoomStep', value: 0 }) }
-          ]
-        },
-        { type: 'separator' },
-        {
-          more: true,
-          label: t('Language'),
-          submenu: listLanguages().map((lang) => ({
-            label: lang.name,
-            type: 'radio',
-            checked: uiLanguage === lang.code,
-            click: () => setUiLanguage(lang.code)
-          }))
         }
       ]
     },
@@ -3284,6 +3261,10 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'help' })
         },
         {
+          label: t('What’s New in NEO…'),
+          click: () => sendToWindow({ type: 'whatsNew' })
+        },
+        {
           label: t('NEO for iPad and iPhone…'),
           click: () => { showPocketInfo().catch((err) => logError('pocket info', err)); }
         },
@@ -3299,7 +3280,7 @@ function buildMenu() {
       ]
     }
   ];
-  const menu = Menu.buildFromTemplate(simpleTemplate(template, moreState));
+  const menu = Menu.buildFromTemplate(featureTemplate(template, featuresState));
   editMenuState.edit = null; // the old menu bar is going: forget its Edit menu first
   Menu.setApplicationMenu(menu);
   if (isMac) {
@@ -3468,6 +3449,8 @@ function compareVersions(a, b) {
 // toggling at the session level forces the engine to re-scan visible text —
 // newer Chromium ignores attribute changes on text it has already looked at
 ipcMain.handle('app:version', () => app.getVersion());
+// a packaged NEO (not `npm start`, `npm run try` or a test): What's New shows itself only there
+ipcMain.on('app:packaged', (e) => { e.returnValue = app.isPackaged; });
 
 // Updating
 //
@@ -3664,13 +3647,13 @@ app.whenReady().then(() => {
       logError('paths', err);
     }
 
-    // macOS press-and-hold accent picker can open invisibly inside Chromium
-    // and re-emit swallowed keys as phantom repeated letters. Within NEO,
-    // held keys simply repeat — which is what writers expect anyway.
+    // macOS press-and-hold: off by default, so held keys simply repeat (the
+    // picker once re-emitted keys as phantom letters); View → Press and hold
+    // for accents turns the accent picker on.
     if (process.platform === 'darwin') {
       try {
         const { systemPreferences } = require('electron');
-        systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', false);
+        systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', pressAndHoldOn());
         // macOS injects its own items into any menu named "Edit" —
         // these two official switches remove the ones writers can't use here
         systemPreferences.setUserDefault('NSDisabledDictationMenuItem', 'boolean', true);

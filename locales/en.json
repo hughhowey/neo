@@ -62,6 +62,10 @@
     "one": "{n} chapter changed",
     "other": "{n} chapters changed"
   },
+  "{n} chapters changed since previous snapshot": {
+    "one": "{n} chapter changed since previous snapshot",
+    "other": "{n} chapters changed since previous snapshot"
+  },
   "{n} chapters differ from now": {
     "one": "{n} chapter differs from now",
     "other": "{n} chapters differ from now"

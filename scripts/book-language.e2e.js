@@ -12,7 +12,7 @@ const lib = path.join(tmp, 'NEO Library');
 fs.mkdirSync(lib);
 app.setPath('documents', tmp);
 app.setPath('userData', path.join(tmp, 'app'));
-fs.writeFileSync(path.join(lib, 'library.json'), JSON.stringify({ firstRunDone: true, moreFeatures: true, spellLanguage: 'en-US', hintShown: true,
+fs.writeFileSync(path.join(lib, 'library.json'), JSON.stringify({ firstRunDone: true, spellLanguage: 'en-US', hintShown: true,
   shelves: [{ id: 's1', name: 'Test', bookIds: [] }] }));
 const loadFile = BrowserWindow.prototype.loadFile;
 BrowserWindow.prototype.loadFile = function (file, opts) { return loadFile.call(this, path.resolve(__dirname, '..', file), opts); };
@@ -32,16 +32,37 @@ function item(label, items = Menu.getApplicationMenu().items) {
   }
   return null;
 }
+// Options → Spellcheck language, picked the way the writer picks it: with a
+// book open the row is the book's, and its first choice is the library's
+async function optionsLabel() {
+  wc.send('menu', { type: 'options' });
+  await until(() => js("!!document.querySelector('.options-modal [data-opt=\"spellLanguage\"]')"));
+  const label = await js("document.querySelector('.options-modal [data-opt=\"spellLanguage\"]').closest('label').querySelector('.opt-label').textContent");
+  await js("document.querySelector('.options-modal .m-ok').click()");
+  await until(() => js("!document.querySelector('.options-modal')"));
+  return label;
+}
 async function pick(label, code) {
-  assert.ok(item(label), label + ' exists');
-  item(label).click();
+  const value = label === 'Use library default' ? '' : code;
+  wc.send('menu', { type: 'options' });
+  await until(() => js("!!document.querySelector('.options-modal [data-opt=\"spellLanguage\"]')"));
+  assert.ok(await js(`(() => {
+    const sel = document.querySelector('.options-modal [data-opt="spellLanguage"]');
+    const o = [...sel.options].find((x) => x.value === ${JSON.stringify(value)});
+    if (!o) return false;
+    sel.value = o.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`), label + ' exists');
   await until(() => js(`writingLanguage() === ${JSON.stringify(code)}`));
-  // The menu message runs asynchronously; metadata is the completed-save gate.
+  // The change runs asynchronously; metadata is the completed-save gate.
   await until(async () => {
     const id = await js('book && book.id');
-    const value = JSON.parse(fs.readFileSync(id ? path.join(lib, id, 'book.json') : path.join(lib, 'library.json'), 'utf8'));
-    return id ? (label === 'Use library default' ? value.writingLanguage === undefined : value.writingLanguage === code) : value.spellLanguage === code;
+    const meta = JSON.parse(fs.readFileSync(id ? path.join(lib, id, 'book.json') : path.join(lib, 'library.json'), 'utf8'));
+    return id ? (label === 'Use library default' ? meta.writingLanguage === undefined : meta.writingLanguage === code) : meta.spellLanguage === code;
   });
+  await js("document.querySelector('.options-modal .m-ok').click()");
+  await until(() => js("!document.querySelector('.options-modal')"));
   if (await js('!!book')) await until(() => js(`document.getElementById('chapters').lang === ${JSON.stringify(code)}`));
 }
 async function main() {
@@ -60,7 +81,7 @@ async function main() {
       return [file, fs.readFileSync(file, 'utf8'), fs.statSync(file).mtimeMs];
     }));
     await js(`openBook(${JSON.stringify(ids[0])})`);
-    assert.ok(item('This book'));
+    assert.equal(await optionsLabel(), 'Spellcheck language (this book)');
     await pick('Deutsch', 'de');
     assert.equal(JSON.parse(fs.readFileSync(metaFile(ids[0]), 'utf8')).writingLanguage, 'de');
     assert.equal(JSON.parse(fs.readFileSync(path.join(lib, 'library.json'), 'utf8')).spellLanguage, 'en-US');
@@ -70,7 +91,7 @@ async function main() {
     assert.equal(await js("document.getElementById('chapters').lang"), 'de');
     assert.equal(await js(`typedQuote('"', '', bookQuotes(), singleQuotes(), () => false)`), '»');
     assert.equal((await js("window.neo.spellCheckWords(['Kartoffel'])")).Kartoffel, true);
-    console.log('ok menu choice is saved per book, German headings/quotes/dictionary are active, UI and library default stay English');
+    console.log('ok Options choice is saved per book, German headings/quotes/dictionary are active, UI and library default stay English');
 
     const d = await js('bookExportData()');
     assert.equal(d.language, 'de');
@@ -104,7 +125,7 @@ async function main() {
     console.log('ok switching and reopening books restores each dictionary, headings and punctuation');
 
     await js('backToShelf()');
-    assert.ok(item('Library default'));
+    assert.equal(await optionsLabel(), 'Spellcheck language');
     await pick('Français', 'fr');
     await js(`openBook(${JSON.stringify(ids[0])})`);
     assert.equal(await js('writingLanguage()'), 'de', 'explicit book setting survives default change');

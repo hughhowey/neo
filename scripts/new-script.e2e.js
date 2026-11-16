@@ -38,8 +38,8 @@ const tick = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('simple NEO: right-click on the shelf\'s + offers New Script, and it makes one', async () => {
-  assert.equal(await js('moreOn()'), false);
+test('every feature off: right-click on the shelf\'s + offers New Script, and it makes one', async () => {
+  assert.equal(await js("Object.values(library.features).some(Boolean)"), false);
   await js(`(() => {
     const plus = document.querySelector('.new-book');
     const r = plus.getBoundingClientRect();

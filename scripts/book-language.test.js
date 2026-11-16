@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 const I18n = require('../i18n.js');
-const source = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const source = require('./app-files').appSource();
 function room() {
   const ui = I18n.create();
   ui.setLocale('en', {}, {});
