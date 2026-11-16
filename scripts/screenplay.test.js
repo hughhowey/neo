@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const { test } = require('node:test');
 
 // the screenplay rules from app.js, run on their own
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('// ---- screenplay rules:');
 const to = app.indexOf('// ---- end of screenplay rules ----');
 const context = vm.createContext({});

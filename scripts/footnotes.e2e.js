@@ -55,7 +55,10 @@ const save = async () => { await js('flushAux()'); await tick(300); };
 
 
 const MOD = process.platform === 'darwin' ? 'meta' : 'control';
+const { editKey } = require('./e2e-keys');
 const key = async (keyCode, modifiers = []) => {
+  // ⌘X, ⌘Z and the rest are the Edit menu's on a Mac (e2e-keys.js)
+  if (modifiers.length === 1 && modifiers[0] === MOD && ['x', 'c', 'v', 'a', 'z'].includes(keyCode.toLowerCase())) { await editKey(wc, keyCode); await tick(150); return; }
   for (const type of ['keyDown', 'char', 'keyUp']) {
     if (type === 'char' && (modifiers.length || keyCode.length > 1)) continue;
     wc.sendInputEvent({ type, keyCode, modifiers });

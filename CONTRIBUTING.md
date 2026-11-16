@@ -12,7 +12,7 @@ Good territory: bug fixes, performance, accessibility, better import/export prec
 
 - `main.js` — the Electron main process: window, menus, file system, import/export, backups.
 - `preload.js` — the bridge. Every capability the UI has is listed here.
-- `app.js` — the entire UI: bookshelf, editor, outline, search, goals.
+- `app/` — the entire UI, one file per area (bookshelf, editor, outline, search, goals…), loaded in the order `index.html` lists.
 - `styles.css` — all styling, with CSS variables at the top.
 
 Books are folders of plain files in `~/Documents/NEO Library`: `book.json` for metadata, `chapters/*.html` for text, JSON files for darlings/stickies.

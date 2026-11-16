@@ -167,6 +167,60 @@ describe('filesystem', { concurrency: 1 }, () => {
     }
   });
 
+  test('a stale notes or outline save keeps the other device’s version as a .bak beside it', () => {
+    const dir = tempLibrary();
+    try {
+      const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+      for (const name of ['notes', 'outline']) {
+        const file = path.join(dir, book.id, name + '.html');
+        const base = '<p>shared</p>';
+        assert.equal(main.call('aux:write', book.id, name, base), true);
+        // the other device saves its own line over the same page
+        fs.writeFileSync(file, '<p>shared</p><p>other device line</p>');
+        // this device saved from the base it read: it must not drop the other line
+        const mine = '<p>shared</p><p>this device line</p>';
+        const r = main.call('aux:write', book.id, name, mine, base);
+        assert.equal(r.kept, name + '.html.bak');
+        assert.equal(fs.readFileSync(file, 'utf8'), mine);
+        assert.equal(fs.readFileSync(file + '.bak', 'utf8'), '<p>shared</p><p>other device line</p>');
+        // a retry of the same stale save, or the same text again, makes no copy
+        assert.equal(main.call('aux:write', book.id, name, mine, base), true);
+        assert.equal(main.call('aux:write', book.id, name, mine, mine), true);
+        assert.equal(fs.existsSync(file + '.bak2'), false);
+        // a third device's different words are kept too, and the first copy stays
+        fs.writeFileSync(file, '<p>third device words</p>');
+        const again = main.call('aux:write', book.id, name, '<p>mine again</p>', mine);
+        assert.equal(again.kept, name + '.html.bak2');
+        assert.equal(fs.readFileSync(file + '.bak', 'utf8'), '<p>shared</p><p>other device line</p>');
+        assert.equal(fs.readFileSync(file + '.bak2', 'utf8'), '<p>third device words</p>');
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a clean notes page saves with no copy, and an unreadable page is never overwritten', () => {
+    const dir = tempLibrary();
+    try {
+      const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+      assert.equal(main.call('aux:write', book.id, 'notes', '<p>one</p>'), true);
+      assert.equal(main.call('aux:write', book.id, 'notes', '<p>two</p>', '<p>one</p>'), true);
+      assert.equal(fs.existsSync(path.join(dir, book.id, 'notes.html.bak')), false);
+      assert.equal(fs.readFileSync(path.join(dir, book.id, 'notes.html'), 'utf8'), '<p>two</p>');
+
+      // a page the disk can't read (not iCloud, not missing): reads and saves fail, nothing is replaced
+      const page = path.join(dir, book.id, 'outline.html');
+      fs.rmSync(page, { force: true });
+      fs.mkdirSync(page);
+      assert.throws(() => main.call('aux:read', book.id, 'outline'));
+      assert.throws(() => main.call('aux:write', book.id, 'outline', '<p>x</p>', '<p>x</p>'));
+      assert.equal(fs.statSync(page).isDirectory(), true);
+      assert.equal(fs.existsSync(page + '.bak'), false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('library:write regenerates the catalog and drops a hand edit', () => {
     const dir = tempLibrary();
     try {

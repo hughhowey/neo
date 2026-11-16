@@ -10,7 +10,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const root = path.join(__dirname, '..');
-const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const ids = (html) => new Set([...html.matchAll(/id="([\w-]+)"/g)].map((m) => m[1]));
 const wanted = new Set([
   ...[...app.matchAll(/\$\('#([\w-]+)'\)/g)].map((m) => m[1]),

@@ -10,7 +10,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'neo-project-search-'));
 app.setPath('userData', path.join(tmp, 'app'));
 app.setPath('documents', tmp);
 fs.mkdirSync(path.join(tmp, 'NEO Library'));
-fs.writeFileSync(path.join(tmp, 'NEO Library', 'library.json'), JSON.stringify({ firstRunDone: true, moreFeatures: true,
+fs.writeFileSync(path.join(tmp, 'NEO Library', 'library.json'), JSON.stringify({ firstRunDone: true, features: { projectSearch: true, cards: true, notesPages: true },
   shelves: [{ id: 'shelf-1', name: 'Tests', bookIds: [] }] }));
 const loadFile = BrowserWindow.prototype.loadFile;
 BrowserWindow.prototype.loadFile = function (file, opts) { return loadFile.call(this, path.resolve(__dirname, '..', file), opts); };
@@ -32,7 +32,7 @@ const search = (q) => js(`(async () => { $('#search-input').value = ${JSON.strin
 const go = (kind) => js(`gotoProjectMatch(projectSearchMatches.findIndex((m) => m.source.kind === ${JSON.stringify(kind)}))`);
 const scope = (value) => js(`$('#search-scope').value = ${JSON.stringify(value)}; runSearch()`);
 const seed = () => js(`(async () => {
-  switchTab('manuscript'); closeSearch(); library.moreFeatures = true;
+  switchTab('manuscript'); closeSearch(); library.features = { ...library.features, projectSearch: true };
   $('#search-scope').value = 'tab'; $('#search-input').value = '';
   window.testCh = book.chapterOrder.find((c) => isStory(c));
   window.testBook = book.id;
@@ -159,17 +159,17 @@ test('late search results cannot replace a newer query or reopen a closed search
   await js('projectSources = realProjectSources; undefined');
 });
 
-test('result lists are bounded and simple mode immediately returns to tab scope', async () => {
+test('result lists are bounded and turning the feature off immediately returns to tab scope', async () => {
   await seed();
   await js(`chapterBodyEl(testCh).innerHTML = '<p>' + 'many '.repeat(250) + '</p>'`);
   await search('many');
   assert.equal(await js('document.querySelectorAll(".project-search-result").length'), 200);
   assert.match(await js('document.getElementById("project-search-results").textContent'), /Showing the first 200/);
-  await js('setMoreFeatures(false)');
+  await js("setFeature('projectSearch', false)");
   assert.equal(await js('document.getElementById("search-scope").hidden'), true);
   assert.equal(await js('document.getElementById("project-search-results").hidden'), true);
   assert.equal(await js('projectSearchOn()'), false);
-  await js('setMoreFeatures(true)');
+  await js("setFeature('projectSearch', true)");
 });
 
 test('closing one book clears search results before another book opens', async () => {

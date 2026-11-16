@@ -79,6 +79,8 @@ EPUB 3 with a proper table of contents built to KDP's guidelines, Word .docx, PD
 
 Bring in existing .docx, .txt, and .md manuscripts; chapters and scene breaks are detected automatically. This is still a bit rough and might require you to tweak things. It will try to grab your title and remove that from the body, and it seems to be working okay.
 
+For a manuscript with many chapters, turn on **Alignment and other fonts** in **Options** and use **Format → Align Book Prose → Justify** (or Left, Center, Right) to align the story in one move. Poetry, flush lines, scene breaks and special pages keep their formatting. One Undo puts the book back.
+
 **Backups** 
 
 Continuous autosave, daily zip backups kept for two weeks, everything stored as plain files. Set up your NEO library folder on your iCloud if you want for extra safety. You can also email copies of your WIP to yourself with a keystroke: ⌘E.
@@ -106,7 +108,7 @@ npm start
 
 To build installers: `npm install electron-builder --save-dev`, then `npm run package` (macOS, also `npm run package:mac`), `npm run package:win` (Windows), or `npm run package:all`. Output lands in `dist/`.
 
-The app is very simple: an Electron shell (`main.js`), a preload bridge (`preload.js`), and a renderer (`app.js` + `styles.css` + `index.html`). If you know JavaScript, you can change NEO. Have at it.
+The app is very simple: an Electron shell (`main.js`), a preload bridge (`preload.js`), and a renderer (`app/` + `styles.css` + `index.html`). If you know JavaScript, you can change NEO. Have at it.
 
 ## Roadmap (things I'm dreaming up but may never get to):
 

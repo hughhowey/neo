@@ -24,7 +24,7 @@
 //     font: 'times' | 'courier', paper: 'Letter' | 'A4', lang: 'en-US',
 //     short: true when it's one story with no chapters,
 //     sections: [{ kind: 'chapter' | 'part' | 'epigraph', heading, partTitle,
-//                  paras: [{ sceneBreak, poetry, flush, align,
+//                  paras: [{ sceneBreak, blank, poetry, flush, litrpg, align,
 //                            runs: [{ text, b, i, u, s, br } | { fn: note }] }] }]
 //   }
 
@@ -155,14 +155,24 @@
         if (sec.heading) out.push(p(plainRun(sec.heading), { style: 'ChapterHeading', pageBreak: brk, before: third }));
         // an untitled chapter's first line starts its page (no empty line above it)
         let lead = !sec.heading && brk;
-        for (const x of sec.paras || []) {
+        const paras = sec.paras || [];
+        paras.forEach((x, i) => {
           const pageBreak = lead;
           lead = false;
+          // a LitRPG box: lines in a row share one border and gray fill,
+          // single-spaced in Courier New, a line's room above and below
+          if (x.blank) { out.push(p([], { style: 'Manuscript', pageBreak })); return; } // a blank line, as on the page
+          if (x.litrpg) {
+            const top = !(paras[i - 1] && paras[i - 1].litrpg);
+            const end = !(paras[i + 1] && paras[i + 1].litrpg);
+            out.push(p(x.runs, { style: 'LitRPG', keepNext: !end, pageBreak, before: top ? 240 : 0, after: end ? 240 : 0 }));
+            return;
+          }
           if (x.sceneBreak) out.push(p(plainRun('#'), { style: 'SceneBreak', pageBreak }));
           else if (x.poetry) out.push(p(x.runs, { style: 'Poetry', pageBreak, align: x.align === 'center' || x.align === 'right' ? x.align : '' }));
           else if (x.align === 'center' || x.align === 'right') out.push(p(x.runs, { style: 'Centered', pageBreak, align: x.align === 'right' ? 'right' : '' }));
           else out.push(p(x.runs, { style: x.flush ? 'ManuscriptNoIndent' : 'Manuscript', pageBreak }));
-        }
+        });
         if (lead) out.push(p([], { pageBreak: true }));
       }
       first = false;
@@ -196,6 +206,7 @@
 ${para('Manuscript', 'Manuscript Text', `<w:ind w:firstLine="${TWIP / 2}"/>`)}
 ${para('ManuscriptNoIndent', 'Manuscript Text No Indent', '')}
 ${para('Poetry', 'Poetry', `<w:ind w:left="${TWIP / 2}" w:right="${TWIP / 2}"/>`)}
+${para('LitRPG', 'LitRPG', ['top', 'left', 'bottom', 'right'].map((side) => `<w:${side} w:val="single" w:sz="4" w:space="${side === 'top' || side === 'bottom' ? 4 : 6}" w:color="999999"/>`).join('').replace(/^/, '<w:pBdr>') + '</w:pBdr><w:shd w:val="clear" w:color="auto" w:fill="EDEDED"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>' + `<w:ind w:left="${TWIP / 2}" w:right="${TWIP / 2}"/>`, '<w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:eastAsia="Courier New" w:cs="Courier New"/>')}
 ${para('Centered', 'Centered', '<w:jc w:val="center"/>')}
 ${para('SceneBreak', 'Scene Break', '<w:jc w:val="center"/>')}
 ${para('ChapterHeading', 'Chapter Heading', `<w:keepNext/><w:spacing w:after="${DOUBLE}"/><w:jc w:val="center"/><w:outlineLvl w:val="0"/>`)}
@@ -297,6 +308,12 @@ ${headers.map((h) => `<Relationship Id="${h.id}" Type="http://schemas.openxmlfor
     }).join('');
   }
 
+  // a box line's runs with every second space of a run (and one at the
+  // line's start) made a no-break space, so no column collapses
+  function boxSpaces(runs) {
+    return (runs || []).map((r) => (r.text ? { ...r, text: r.text.replace(/(^| ) /g, (m, a) => a + '\u00a0').replace(/(^| ) /g, (m, a) => a + '\u00a0') } : r));
+  }
+
   // One page of HTML for Paged.js: the header in the page's top-right
   // margin box. main.js's renderPaged numbers pages from the one holding
   // .pg1 (the story's first page; for a short story, the title page).
@@ -316,8 +333,14 @@ ${headers.map((h) => `<Relationship Id="${h.id}" Type="http://schemas.openxmlfor
       } else if (sec.kind === 'epigraph') {
         story.push(`<section class="epigraph ${cls}">${(sec.paras || []).filter((x) => !x.sceneBreak).map((x) => `<p class="c">${runsHtml(x.runs)}</p>`).join('')}</section>`);
       } else {
-        const paras = (sec.paras || []).map((x) => {
+        const list = sec.paras || [];
+        const paras = list.map((x, i) => {
           if (x.sceneBreak) return '<p class="brk">#</p>';
+          if (x.blank) return '<p class="blank">&#160;</p>';
+          if (x.litrpg) {
+            const edge = [list[i - 1] && list[i - 1].litrpg ? '' : 'lt-top', list[i + 1] && list[i + 1].litrpg ? '' : 'lt-end'].filter(Boolean).join(' ');
+            return `<p class="litrpg${edge ? ' ' + edge : ''}">${runsHtml(boxSpaces(x.runs)) || '&#8203;'}</p>`;
+          }
           const c = x.poetry ? 'poetry' : x.align === 'center' ? 'c' : x.align === 'right' ? 'r' : x.flush ? 'flush' : '';
           return `<p${c ? ` class="${c}"` : ''}>${runsHtml(x.runs)}</p>`;
         }).join('\n');
@@ -347,6 +370,9 @@ p.flush, p.c, p.r, p.brk, p.end, p.poetry { text-indent: 0; }
 p.c, p.brk, p.end { text-align: center; }
 p.r { text-align: right; }
 p.poetry { margin: 0 0.5in; }
+p.litrpg { font-family: "Courier Prime", "Courier New", monospace; line-height: 1.2; text-indent: 0; white-space: pre-wrap; margin: 0 0.5in; padding: 0 0.1in; background: #ededed; border-left: 0.75pt solid #999; border-right: 0.75pt solid #999; -webkit-print-color-adjust: exact; print-color-adjust: exact; break-inside: avoid; }
+p.litrpg.lt-top { margin-top: 1em; padding-top: 0.3em; border-top: 0.75pt solid #999; }
+p.litrpg.lt-end { margin-bottom: 1em; padding-bottom: 0.3em; border-bottom: 0.75pt solid #999; }
 p.end { margin-top: 2em; }
 section.newpage { break-before: page; }
 h2 { font: inherit; font-weight: normal; text-align: center; margin: calc(${pp.in[1] / 3 - 1}in) 0 2em; break-after: avoid; }

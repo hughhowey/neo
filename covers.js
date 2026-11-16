@@ -7,7 +7,7 @@
  * never smears the way image models render lettering, and a renamed book
  * re-sets its cover for free.
  *
- * Loaded before app.js; exposes window.NeoCovers.
+ * Loaded before app/; exposes window.NeoCovers.
  */
 
 'use strict';
@@ -441,7 +441,7 @@ const NeoCovers = (() => {
     const template = pick(r, TEMPLATES);
     const entry = art || paintAbstract(seed);
     // a book still named the English default shows it in the interface
-    // language (breakLines sets that), as app.js's isUntitled() reads it
+    // language (breakLines sets that), as the window's isUntitled() reads it
     const title = meta.title && meta.title !== 'Untitled' ? meta.title : '';
     const laid = layout(title, template);
     const reg = regions(template, laid.height);
@@ -452,7 +452,7 @@ const NeoCovers = (() => {
   }
 
   // Apply a plan to a tile element: background, template class, ink class,
-  // and the title lines themselves (the author line is app.js's).
+  // and the title lines themselves (the author line is the window's).
   function dress(el, planned) {
     el.classList.remove(...TEMPLATES.map((t) => 'cv-' + t.id), 'cv-light', 'cv-dark', 'cv-scrim',
       'cv-au-light', 'cv-au-dark', 'cv-au-long', 'cv-au-scrim');

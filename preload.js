@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('neo', {
   deleteChapter: (bookId, chId) => ipcRenderer.invoke('chapter:delete', bookId, chId),
 
   readAux: (bookId, name) => ipcRenderer.invoke('aux:read', bookId, name),
-  writeAux: (bookId, name, html) => ipcRenderer.invoke('aux:write', bookId, name, html),
+  writeAux: (bookId, name, html, expected) => ipcRenderer.invoke('aux:write', bookId, name, html, expected),
   snapshotList: (bookId) => ipcRenderer.invoke('snapshot:list', bookId),
   snapshotRead: (bookId, name, file) => ipcRenderer.invoke('snapshot:read', bookId, name, file),
   snapshotWrite: (bookId, name, file, text) => ipcRenderer.invoke('snapshot:write', bookId, name, file, text),
@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('neo', {
   spellLearn: (word) => ipcRenderer.invoke('spell:learn', word),
   setSpellLanguage: (code) => ipcRenderer.invoke('spell:setLanguage', code),
   appVersion: () => ipcRenderer.invoke('app:version'),
+  isPackaged: () => ipcRenderer.sendSync('app:packaged'),
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),
@@ -69,6 +70,7 @@ contextBridge.exposeInMainWorld('neo', {
   nbspMarksState: (on) => ipcRenderer.send('nbspmarks:state', on),
   pagesState: (st) => ipcRenderer.send('pages:state', st),
   pageWidthState: (v) => ipcRenderer.send('pagewidth:state', v),
+  pressHold: () => ipcRenderer.sendSync('pressHold:get'),
   vimState: (on) => ipcRenderer.send('vim:state', on),
   uiZoomState: (z) => ipcRenderer.send('uizoom:state', z),
   // interface language, fetched once before the page's scripts run
@@ -77,7 +79,10 @@ contextBridge.exposeInMainWorld('neo', {
   reloadForLanguage: () => ipcRenderer.invoke('i18n:reload'),
 
   writingStyleState: (st) => ipcRenderer.send('style:state', st),
-  moreState: (on) => ipcRenderer.send('more:state', on),
+  featuresState: (on) => ipcRenderer.send('features:state', on),
+  uiLanguages: () => ipcRenderer.invoke('i18n:languages'),
+  setUiLanguage: (code) => ipcRenderer.send('i18n:set', code),
+  setPressHold: (on) => ipcRenderer.send('pressHold:set', on),
   viewState: (st) => ipcRenderer.send('view:state', st),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, msg) => cb(msg))
 });

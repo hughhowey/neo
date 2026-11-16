@@ -82,7 +82,9 @@ test('a break made at the foot of the window keeps the caret in sight', async ()
   await enter();
   await enter(); // the empty line becomes ***, and the caret goes below it
   const w = await where();
-  assert.ok(w.caretBottom <= w.bottom, `the caret's line ends ${Math.round(w.caretBottom - w.bottom)}px below the window`);
+  // what the window measured, should it fail (a Mac has failed it where Linux doesn't)
+  const why = async () => JSON.stringify({ w, later: await (async () => { await tick(500); return where(); })(), ...(await js(`(() => { const sc = document.getElementById('paper-scroll'); const s = getSelection(); const n = s.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); return { scrollTop: sc.scrollTop, scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight, innerHeight, typewriter: typewriterEnabled, caretEl: el && el.outerHTML.slice(0, 80), prevEl: el && el.previousElementSibling && el.previousElementSibling.outerHTML.slice(0, 60), caretRect: caretRect() && [caretRect().top, caretRect().bottom] }; })()`)) });
+  if (!(w.caretBottom <= w.bottom)) assert.fail(`the caret's line ends ${Math.round(w.caretBottom - w.bottom)}px below the window ${await why()}`);
   assert.ok(w.caretTop >= w.top);
 });
 
