@@ -35,7 +35,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
 
-`app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, manuscript format.
+`app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, LitRPG boxes, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, manuscript format.
 
 Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app.js` handles it on `window.neo.onMenu`.
 
@@ -84,6 +84,17 @@ A book whose `book.json` says `"format": "screenplay"` is a script. Right-click 
 - A script's style lives in its `book.json`: `underlineHeadings: true` (Format → Underline Scene Headings) and `contd: false` ((CONT'D) turned off).
 - A script exports as a PDF (letter, printed with `print: 'screenplay'`), Fountain or Final Draft (`.fdx`). The book formats don't apply.
 - A `.fountain` or `.fdx` file dropped on a shelf or picked with Import becomes a new script. `importFile` in `main.js` only reads the file; `spFromFountain` and `spFromFdx` in `app.js` sort it into elements. Both readers are plain string functions, so the tests cover them (`scripts/fixtures/` holds a Final Draft file written by screenplain, an outside tool).
+
+## LitRPG boxes
+
+`[[` typed at the very start of a line makes it a box line: `<p class="litrpg">` (LITRPG BOXES in `app.js`, `litrpgKey` from `smartKeys`, so Pocket's typed keys reach it too). No menu item and no Show More Features switch: the brackets are the whole door (Hugh's call, Nov 2026). ⌘Z right after brings the `[[` back.
+
+- Lines in a row are one box. Enter (⇧Enter too) is the box's next line; Enter on the box's empty last line ends it, and that line is prose; an empty line inside a box stays. Backspace at the start of a box's first line makes it prose.
+- Inside a box the smart typing stands aside (quotes, dashes, ellipsis, capitals, Markdown emphasis), and every space is kept, for columns. A box is never the opening paragraph: the drop cap goes to the first prose line (`openingPara`).
+- Text pasted into a box keeps its lines and spaces (`pasteIntoBox`); NEO's own copied box lines paste as box lines (`pasteBoxesFromNeo`).
+- Face: IBM Plex Mono, bundled as TrueType in `fonts/` (OFL). It's embedded in the PDF and paperback (`exportFontFaces`) and carried as files in the EPUB (`litrpgEpubFonts`, only the styles a box uses). Word gets the `LitRPG` paragraph style in Courier New: a border and gray fill that Word draws as one box over the run of lines. Manuscript Format has the same style (and Courier Prime in its PDF).
+- In the HTML-based exports (PDF, paperback, EPUB) a run of spaces goes out as alternating no-break spaces (`litrpgSpaces`) so no reader collapses a column, and box lines carry `lt-top` / `lt-end` for their edges. Markdown gets a fenced block, plain text the lines as typed.
+- `npm run test:litrpg` (`scripts/litrpg.e2e.js`; `OUT=<folder>` keeps the exported files and a picture of the page).
 
 ## Manuscript format
 

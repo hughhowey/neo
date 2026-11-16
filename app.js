@@ -2960,6 +2960,14 @@ function wireChapterBody(body, chId) {
     writeOverGhost(); // pasted words over a gray note are prose, like typed ones
     const html = data.getData('text/html');
     const text = data.getData('text/plain');
+    // into a LitRPG box: line for line, every space kept
+    const into = caretBlock(body);
+    if (into && into.classList.contains('litrpg')) { pasteIntoBox(body, chId, html, text); return; }
+    // a box copied from NEO stays a box
+    if (html && /<p\b[^>]*\bclass="[^"]*\blitrpg\b/.test(html) && pasteBoxesFromNeo(body, chId, html)) {
+      reconcileMarks();
+      return;
+    }
     // hyphens set as dialogue dashes, the same as typing them
     const edges = caretEdges(body);
     if (html) {
@@ -3039,6 +3047,8 @@ function wireChapterBody(body, chId) {
       smartKeys(e, body);
       return;
     }
+    if (litrpgEnter(e, body, chId)) return;
+    if (litrpgBackspace(e, body, chId)) return;
     if (handlePoetry(e, body, chId)) return;
     if (handleFlush(e, body, chId)) return;
     if (poetryBackspace(e, body, chId)) return;
@@ -3076,6 +3086,7 @@ function wireChapterBody(body, chId) {
     if (e.inputType !== 'insertLineBreak' || e.defaultPrevented) return;
     if (isScript()) { e.preventDefault(); return; } // a script's lines are its elements
     const key = { key: 'Enter', shiftKey: true, metaKey: false, ctrlKey: false, altKey: false, preventDefault: () => e.preventDefault() };
+    if (litrpgEnter(key, body, chId)) return;
     if (!handlePoetry(key, body, chId)) handleFlush(key, body, chId);
   });
   // the moment writing hits a ghost, it becomes prose
@@ -4112,7 +4123,7 @@ function toggleParaKind(kind) {
   const on = !ps.every((p) => p.classList.contains(kind));
   for (const p of ps) {
     const wasPoetry = p.classList.contains('poetry');
-    p.classList.remove('poetry', 'flush');
+    p.classList.remove('poetry', 'flush', 'litrpg');
     if (on) p.classList.add(kind);
     if (kind === 'poetry' && on) italicize(p);
     else if (wasPoetry) romanize(p);
@@ -4135,6 +4146,253 @@ function poetryUnderHeading(body, chId) {
   syncChapter(body, chId);
   resetNativeUndo();
   breakRun++;
+}
+
+/* ================================================================== */
+/*  LITRPG BOXES — type [[ at the start of a line                      */
+/*  The game's own voice on the page: a roll, a level-up, a character  */
+/*  sheet. Monospace on gray, every space kept, so columns line up.    */
+/*  Lines in a row make one box. No menu item: [[ is the whole door.   */
+/* ================================================================== */
+
+// [[ typed at the very start of a paragraph turns it into a box line (the
+// brackets go). ⌘Z right after brings the [[ back as typed. Inside a box
+// the smart typing stands aside: quotes stay straight, -- stays two
+// hyphens, ... three dots, and nothing is capitalized for the writer.
+// Returns true when the key is the box's (smartKeys then does nothing).
+function litrpgKey(e, body) {
+  if (!body.matches || !body.matches('.chapter-body') || body.classList.contains('script-body') || body.closest('#snap-view')) return false;
+  const block = caretBlock(body);
+  if (!block) return false;
+  if (block.classList.contains('litrpg')) return true;
+  if (e.key !== '[' || e.metaKey || e.ctrlKey || e.altKey || e.isComposing || e.keyCode === 229) return false;
+  if (block.matches('.scene-break, .ghost, .poetry')) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(block);
+  try { pre.setEnd(r.startContainer, r.startOffset); } catch { return false; }
+  if (pre.toString() !== '[') return false;
+  const chapter = body.closest('.chapter');
+  const chId = chapter && chapter.dataset.id;
+  if (!chId) return false;
+  e.preventDefault();
+  // the second [ goes in first, so ⌘Z comes back to the [[ as typed
+  document.execCommand('insertText', false, '[');
+  syncChapter(body, chId);
+  snapshotStructure('litrpg box');
+  selectChars(block, 0, 2);
+  document.execCommand('delete');
+  block.classList.remove('flush');
+  block.classList.add('litrpg');
+  block.removeAttribute('data-first');
+  if (block.textContent === '' && !block.querySelector('br')) block.innerHTML = '<br>';
+  placeCaret(block, 0);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+
+// Enter in a box (⇧Enter too) is the box's next line. Enter on the box's
+// last line when it's empty closes the box: that line becomes prose. An
+// empty line inside a box stays, as a blank line in it.
+function litrpgEnter(e, body, chId) {
+  if (e.key !== 'Enter' || e.altKey) return false;
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey) return false; // ⌘Enter: full screen
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const block = caretBlock(body);
+  if (!block || !block.classList.contains('litrpg')) return false;
+  e.preventDefault();
+  enterRun = 0;
+  const next = block.nextElementSibling;
+  const last = !(next && next.classList.contains('litrpg'));
+  if (last && block.textContent === '') {
+    snapshotStructure('litrpg box to prose');
+    block.classList.remove('litrpg');
+    placeCaret(block, 0);
+    syncChapter(body, chId);
+    resetNativeUndo();
+    breakRun++;
+    return true;
+  }
+  if (block.querySelector('span:not(.ph-mark):not(.fn)')) stripJunkSpans(block);
+  // the engine's own split, so ⌘Z sees it
+  document.execCommand('insertParagraph');
+  const cur = caretBlock(body);
+  if (cur) {
+    cur.classList.remove('poetry', 'flush');
+    cur.classList.add('litrpg');
+  }
+  syncChapter(body, chId);
+  return true;
+}
+
+// Backspace at the very start of a box's first line takes that line out
+// of the box (it becomes prose); further down a box, Backspace joins the
+// line to the one above, as anywhere.
+function litrpgBackspace(e, body, chId) {
+  if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const block = caretBlock(body);
+  if (!block || !block.classList.contains('litrpg')) return false;
+  const prev = block.previousElementSibling;
+  if (prev && prev.classList.contains('litrpg')) return false;
+  const r = sel.getRangeAt(0);
+  const head = document.createRange();
+  head.selectNodeContents(block);
+  try { head.setEnd(r.startContainer, r.startOffset); } catch { return false; }
+  if (head.toString().length !== 0) return false;
+  e.preventDefault();
+  snapshotStructure('litrpg box to prose');
+  block.classList.remove('litrpg');
+  placeCaret(block, 0);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+
+// the boxes' face: bundled (styles.css) and embedded in the PDF and EPUB.
+// Word gets Courier New, which every editor's computer has.
+const LITRPG_FONT = 'IBM Plex Mono';
+const LITRPG_STACK = "'IBM Plex Mono', Menlo, Consolas, 'Courier New', monospace";
+const LITRPG_WORD_FONT = 'Courier New';
+// Word's LitRPG paragraph style: a thin gray border all round and a light
+// gray fill, single-spaced, pulled in from both margins, in Courier New a
+// size down. Paragraphs in a row with the same border are one box in Word,
+// LibreOffice and Google Docs alike. An editor can restyle every box at once.
+const LITRPG_DOCX_PPR = ['top', 'left', 'bottom', 'right'].reduce((x, side) => x + `<w:${side} w:val="single" w:sz="4" w:space="${side === 'top' || side === 'bottom' ? 4 : 6}" w:color="999999"/>`, '<w:pBdr>') + '</w:pBdr>'
+  + '<w:shd w:val="clear" w:color="auto" w:fill="EDEDED"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="432" w:right="432"/>';
+const LITRPG_DOCX_RPR = `<w:rFonts w:ascii="${LITRPG_WORD_FONT}" w:hAnsi="${LITRPG_WORD_FONT}" w:cs="${LITRPG_WORD_FONT}"/><w:sz w:val="20"/>`;
+// The exports' side of a box. A run of spaces keeps its width in every
+// reader: each space after the first (and one at a line's start) goes out
+// as a no-break space, which no reading app collapses.
+function litrpgSpaces(text) {
+  return String(text).replace(/(^| ) /g, (m, a) => a + ' ').replace(/(^| ) /g, (m, a) => a + ' ');
+}
+// The box face's files an EPUB carries: regular always, bold and italic
+// only when a box uses them. TrueType, which Kindle and Apple Books both read.
+async function litrpgEpubFonts(d) {
+  const boxes = d.sections.flatMap((ch) => ch.paras.filter((p) => p.litrpg)).map((p) => paraRuns(p.html));
+  if (!boxes.length) return [];
+  const runs = boxes.flat().filter((r) => r.text);
+  const wanted = [['regular', 400, 'normal', true], ['bold', 700, 'normal', runs.some((r) => r.b && !r.i)],
+    ['italic', 400, 'italic', runs.some((r) => r.i && !r.b)], ['bolditalic', 700, 'italic', runs.some((r) => r.b && r.i)]];
+  const out = [];
+  for (const [name, weight, style, used] of wanted) {
+    if (!used) continue;
+    try {
+      const bytes = new Uint8Array(await (await fetch(new URL(`fonts/ibm-plex-mono-${name}.ttf`, location.href))).arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      out.push({ file: `IBMPlexMono-${name}.ttf`, base64: btoa(bin), weight, style });
+    } catch { /* the reader's own monospace stands in */ }
+  }
+  return out;
+}
+// A clipboard's lines, for a box: each paragraph (or line break) one line,
+// spaces as they were, tabs as four spaces, no blank lines at either end
+function clipBoxLines(html, text) {
+  let lines = null;
+  if (html) {
+    const holder = new DOMParser().parseFromString(html, 'text/html').body;
+    holder.querySelectorAll('script,style,meta,link,img,head,title').forEach((n) => n.remove());
+    const BLOCK = 'p, div, li, pre, h1, h2, h3, h4, h5, h6, tr, blockquote';
+    const leaves = [...holder.querySelectorAll(BLOCK)].filter((b) => !b.querySelector(BLOCK));
+    if (leaves.length) {
+      lines = [];
+      for (const b of leaves) {
+        b.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+        lines.push(...b.textContent.split('\n'));
+      }
+    }
+  }
+  if (!lines) lines = String(text || '').replace(/\r/g, '').split('\n');
+  lines = lines.map((l) => l.replace(/\t/g, '    ').replace(/\s+$/, ''));
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  return lines;
+}
+function pasteIntoBox(body, chId, html, text) {
+  const lines = clipBoxLines(html, text);
+  lines.forEach((line, i) => {
+    if (i > 0) {
+      document.execCommand('insertParagraph');
+      const cur = caretBlock(body);
+      if (cur) { cur.classList.remove('poetry', 'flush'); cur.classList.add('litrpg'); }
+    }
+    if (line) document.execCommand('insertText', false, line);
+  });
+  if (body.querySelector('span:not(.ph-mark):not(.fn)')) {
+    const caret = captureCaret();
+    stripJunkSpans(body);
+    restoreCaret(caret);
+  }
+  syncChapter(body, chId);
+}
+// NEO's own copied paragraphs with boxes among them: box lines keep their
+// class and spaces, the rest is cleaned like any paste. The paragraphs go in
+// whole between the two halves of the caret's line (the engine's own paste
+// would run the last one into the words after the caret); ⌘Z takes them out.
+function pasteBoxesFromNeo(body, chId, html) {
+  const holder = new DOMParser().parseFromString(html, 'text/html').body;
+  const lines = [...holder.querySelectorAll('p')].map((p) => {
+    const box = p.classList.contains('litrpg');
+    const runs = paraRuns(p.innerHTML, true).filter((r) => r.text);
+    const inner = runs.map((r) => runHtml(r)).join('');
+    if (!box && !inner.replace(/<[^>]*>/g, '').trim()) return null;
+    const el = document.createElement('p');
+    if (box) el.className = 'litrpg';
+    el.innerHTML = box ? inner || '<br>' : inner.replace(/^\s+|\s+$/g, '');
+    return el;
+  }).filter(Boolean);
+  if (!lines.length) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return false;
+  snapshotStructure('paste');
+  if (!sel.isCollapsed) document.execCommand('delete');
+  const block = caretBlock(body);
+  if (!block || block.classList.contains('scene-break')) return false;
+  const tail = document.createRange();
+  tail.selectNodeContents(block);
+  const r = sel.getRangeAt(0);
+  tail.setStart(r.startContainer, r.startOffset);
+  const after = tail.extractContents();
+  let at = block;
+  for (const el of lines) { at.after(el); at = el; }
+  const rest = document.createElement('p');
+  if (block.className) rest.className = block.className;
+  rest.appendChild(after);
+  if (rest.textContent.trim()) at.after(rest);
+  if (!block.textContent.trim()) block.remove();
+  const last = lines[lines.length - 1];
+  const end = document.createRange();
+  end.selectNodeContents(last);
+  end.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(end);
+  syncChapter(body, chId);
+  resetNativeUndo();
+  breakRun++;
+  return true;
+}
+// a box line's classes in an export: its edges are marked, since a reading
+// app may not know :has(), and Paged.js must see where a box starts
+function litrpgClass(paras, i) {
+  const is = (p) => !!(p && p.litrpg);
+  return ['litrpg', is(paras[i - 1]) ? '' : 'lt-top', is(paras[i + 1]) ? '' : 'lt-end'].filter(Boolean).join(' ');
+}
+// the box as the PDF, the web page and the paperback set it (o: size, side
+// margins, padding, gray fill and line, the room above and below)
+function litrpgCss(sel, o) {
+  return `${sel} { font-family: ${LITRPG_STACK}; font-size: ${o.size}; line-height: 1.5; text-indent: 0 !important; text-align: left !important; hyphens: manual; -webkit-hyphens: manual; white-space: pre-wrap; margin: 0 ${o.side}; padding: 0 ${o.pad}; background: ${o.fill}; border-left: 0.75pt solid ${o.line}; border-right: 0.75pt solid ${o.line}; -webkit-print-color-adjust: exact; print-color-adjust: exact; break-inside: avoid; }
+${sel}.lt-top { margin-top: ${o.gap}; padding-top: 0.45em; border-top: 0.75pt solid ${o.line}; }
+${sel}.lt-end { margin-bottom: ${o.gap}; padding-bottom: 0.45em; border-bottom: 0.75pt solid ${o.line}; }
+${sel}::first-letter { font: inherit; initial-letter: normal; -webkit-initial-letter: normal; padding: 0; }`;
 }
 
 // Backspace just below a *** (or Delete just above one) removes the break
@@ -4222,11 +4480,11 @@ function dropJunkSpans(html) {
 const OPENING_DASH = /^\s*[-‐‑‒–—―]/;
 // A chapter's opening paragraph — the one with the drop cap and no indent —
 // is its first paragraph with words in it, past a blank line or a *** at the
-// top (the exports skip those too). Poetry stands apart. In an empty
+// top (the exports skip those too). Poetry and LitRPG boxes stand apart. In an empty
 // chapter it's the paragraph waiting for the first word. Marked data-first,
 // for the screen only.
 function openingPara(body) {
-  const ps = [...body.children].filter((p) => p.tagName === 'P' && !p.classList.contains('poetry') && !p.classList.contains('scene-break') && !p.classList.contains('ghost'));
+  const ps = [...body.children].filter((p) => p.tagName === 'P' && !p.classList.contains('poetry') && !p.classList.contains('litrpg') && !p.classList.contains('scene-break') && !p.classList.contains('ghost'));
   return ps.find((p) => p.textContent.trim() !== '') || ps[0] || null;
 }
 function markDialogueOpening(body) {
@@ -4809,7 +5067,7 @@ function autoCapKey(e, body) {
   const range = sel.getRangeAt(0);
   const start = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
   const block = start && start.closest('p');
-  if (!block || !body.contains(block) || block.matches('.poetry, .scene-break, .sp-paren')) return;
+  if (!block || !body.contains(block) || block.matches('.poetry, .litrpg, .scene-break, .sp-paren')) return;
   const pre = document.createRange();
   pre.setStart(block, 0);
   pre.setEnd(range.startContainer, range.startOffset);
@@ -4857,6 +5115,7 @@ function smartKeys(e, body) {
   // a field can reach smartKeys twice (its own handler and the page-wide
   // one below): the first pass wins
   if (e.defaultPrevented) return;
+  if (litrpgKey(e, body)) return;
   dialogueDashKey(e, body);
   autoCapKey(e, body);
   if (e.defaultPrevented) return;
@@ -5663,7 +5922,7 @@ function chapterAlign(html) {
   let best = null;
   for (const m of String(html || '').matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/g)) {
     const cls = (/\bclass="([^"]*)"/.exec(m[1]) || [])[1] || '';
-    if (/(^|\s)(scene-break|ghost|poetry|flush|sp-[\w-]+)(\s|$)/.test(cls)) continue;
+    if (/(^|\s)(scene-break|ghost|poetry|flush|litrpg|sp-[\w-]+)(\s|$)/.test(cls)) continue;
     if (!m[2].replace(/<[^>]*>|&nbsp;|\s/g, '')) continue;
     let a = (/text-align:\s*([a-z]+)/.exec(m[1]) || [])[1] || '';
     if (!['center', 'right', 'justify'].includes(a)) a = '';
@@ -6258,7 +6517,7 @@ function spType(p) {
   return 'action';
 }
 function spSetClass(p, type) {
-  p.classList.remove(...SP_CLASSES, 'poetry', 'flush', 'scene-break', 'ghost');
+  p.classList.remove(...SP_CLASSES, 'poetry', 'flush', 'litrpg', 'scene-break', 'ghost');
   if (type !== 'action') p.classList.add('sp-' + type);
   if (!p.className) p.removeAttribute('class');
   spGuessed.delete(p);
@@ -13933,6 +14192,7 @@ function rejoinAtCaret() {
   if (prev.classList.contains('scene-break') || blk.classList.contains('scene-break')) return;
   if (prev.classList.contains('poetry') !== blk.classList.contains('poetry')) return;
   if (prev.classList.contains('flush') !== blk.classList.contains('flush')) return;
+  if (prev.classList.contains('litrpg') !== blk.classList.contains('litrpg')) return;
   const chId = body.closest('.chapter').dataset.id;
   const at = prev.textContent.length;
   if (blk.textContent.trim() === '') {
@@ -14740,7 +15000,7 @@ function capitalSlips(el) {
   const out = [];
   if (typeof el.matches !== 'function' || !el.matches('.chapter-body')) return out;
   const english = /^en\b/.test(writingLanguage());
-  for (const p of el.querySelectorAll('p:not(.poetry):not(.scene-break)')) {
+  for (const p of el.querySelectorAll('p:not(.poetry):not(.litrpg):not(.scene-break)')) {
     // the paragraph's text, and which node holds each stretch of it
     const segs = [];
     let text = '';
@@ -15879,6 +16139,7 @@ function bookShortcutSections() {
       [tk('Enter ×3'), tk('Start a new chapter')],
       [K('⇧Enter', 'Shift+Enter'), tk('A paragraph with no indent'), tk('Again for another; Enter goes back to prose.')],
       ...(more ? [[K('⌘⇧Enter', 'Ctrl+Shift+Enter'), tk('Start or continue a poetry paragraph'), tk('Also works from a chapter heading.')]] : []),
+      ...(more ? [[['[['], tk('At the start of a line: a LitRPG box'), tk('For rolls, stats and system messages. Enter on an empty last line ends the box.')]] : []),
       [KPH, tk('Insert a placeholder note')],
       ...(more ? [[KFN, tk('Add a footnote'), tk('Type the note, then Enter to go back to writing. Click its number to change it.')]] : []),
       [KDA, tk('Move selected text to Darlings')],
@@ -16037,24 +16298,40 @@ function parasFromHtml(html) {
     if (brk) brk.remove();
   });
   holder.querySelectorAll('.darling-anchor, .ph-mark, .ghost').forEach((n) => n.remove());
-  return [...holder.querySelectorAll('p')].map((p) => {
+  const paras = [...holder.querySelectorAll('p')].map((p) => {
     const sceneBreak = p.classList.contains('scene-break');
-    const poetry = p.classList.contains('poetry');
-    const flush = !poetry && p.classList.contains('flush');
-    const align = (p.style && p.style.textAlign) || '';
-    const runs = paraRuns(p.innerHTML, true).filter((r) => r.text || r.fn !== undefined);
-    const inner = runs.map((r) => runHtml(r)).join('');
+    // a LitRPG box line: its spaces are the writer's (columns), so they stay
+    const litrpg = !sceneBreak && p.classList.contains('litrpg');
+    const poetry = !litrpg && p.classList.contains('poetry');
+    const flush = !poetry && !litrpg && p.classList.contains('flush');
+    const align = litrpg ? '' : (p.style && p.style.textAlign) || '';
+    const runs = paraRuns(p.innerHTML, !litrpg).filter((r) => r.text || r.fn !== undefined);
+    const inner = runs.map((r) => runHtml(litrpg && r.text ? { ...r, text: litrpgSpaces(r.text) } : r)).join('');
     p.querySelectorAll('.fn').forEach((f) => f.remove());
+    healStrayNbsp(p);
     return {
       sceneBreak,
       poetry,
       flush,
-      text: (healStrayNbsp(p), p.innerText).trim(),
+      litrpg,
+      text: litrpg ? p.textContent.replace(/\s+$/, '') : p.innerText.trim(),
       runs,
       align,
-      html: `<p${poetry ? ' class="poetry"' : flush ? ' class="flush"' : ''}${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
+      html: `<p${litrpg ? ' class="litrpg"' : poetry ? ' class="poetry"' : flush ? ' class="flush"' : ''}${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
     };
-  }).filter((p) => p.sceneBreak || p.text);
+  });
+  // an empty line inside a box is a blank line in it; at a box's edge, or
+  // as the whole box, it's nothing
+  const has = (p) => p && (p.sceneBreak || p.text);
+  return paras.filter((p, i) => {
+    if (has(p)) return true;
+    if (!p.litrpg) return false;
+    let a = i - 1;
+    while (a >= 0 && paras[a].litrpg && !has(paras[a])) a--;
+    let b = i + 1;
+    while (b < paras.length && paras[b].litrpg && !has(paras[b])) b++;
+    return !!(paras[a] && paras[a].litrpg && has(paras[a]) && paras[b] && paras[b].litrpg && has(paras[b]));
+  });
 }
 
 // The book's entries as the builders lay them out. Chapters, a prologue and
@@ -16153,7 +16430,7 @@ function manuscriptSections() {
   const { sections } = exportChapters();
   return sections.filter((s) => s.kind === 'chapter' || s.kind === 'part' || s.kind === 'epigraph').map((s) => ({
     kind: s.kind, heading: s.heading || '', partTitle: s.partTitle || '',
-    paras: s.paras.map((p) => ({ sceneBreak: p.sceneBreak, poetry: p.poetry, flush: p.flush, align: p.align, runs: p.runs || [] })),
+    paras: s.paras.map((p) => ({ sceneBreak: p.sceneBreak, poetry: p.poetry, flush: p.flush, litrpg: !!p.litrpg, align: p.align, runs: p.runs || [] })),
     words: s.paras.reduce((n, p) => n + (p.sceneBreak ? 0 : countWords(p.text || '')), 0)
   }));
 }
@@ -16196,9 +16473,10 @@ function manuscriptModel(v, sections) {
   };
 }
 // Courier Prime (NEO's own Courier, bundled) goes into the PDF; Times New
-// Roman is the computer's own
-async function manuscriptFontFaces(font) {
-  if (font !== 'courier') return '';
+// Roman is the computer's own. A story with LitRPG boxes carries Courier
+// Prime for them either way.
+async function manuscriptFontFaces(font, boxes) {
+  if (font !== 'courier' && !boxes) return '';
   let css = '';
   for (const sheet of document.styleSheets) {
     let rules = [];
@@ -16329,7 +16607,7 @@ async function manuscriptRun(sections) {
       saved = await window.neo.exportSave({ format: 'docx', defaultName, zipEntries: NeoManuscript.docxEntries(m) });
     } else {
       toast(t('Setting the pages…'));
-      const res = await window.neo.printManuscript({ html: NeoManuscript.html(m, { fontFaces: await manuscriptFontFaces(m.font) }), paper: m.paper, defaultName });
+      const res = await window.neo.printManuscript({ html: NeoManuscript.html(m, { fontFaces: await manuscriptFontFaces(m.font, (m.sections || []).some((sec) => (sec.paras || []).some((x) => x.litrpg))) }), paper: m.paper, defaultName });
       saved = res && res.file;
       if (saved) toast(t('Exported: {file} ({pages} pages)', { file: saved.split(/[\\/]/).pop(), pages: res.pages }), 6000);
       return;
@@ -16389,9 +16667,10 @@ function buildPrintHtml(d, o) {
   const prose = (paras, opening) => {
     let first = opening;
     let afterBreak = false;
-    return paras.map((p) => {
+    return paras.map((p, i) => {
       if (p.sceneBreak) { afterBreak = true; return '<p class="brk">*&#8195;*&#8195;*</p>'; }
       const inner = atFoot(p.html.replace(/^<p[^>]*>|<\/p>$/g, ''), p);
+      if (p.litrpg) { afterBreak = false; return `<p class="${litrpgClass(paras, i)}">${inner || '&#8203;'}</p>`; }
       if (p.poetry) { afterBreak = false; return `<p class="poetry"${p.align ? ` style="text-align:${p.align}"` : ''}>${inner}</p>`; }
       const cls = ['hy'];
       if (first) cls.push('first');
@@ -16565,6 +16844,7 @@ ${cap ? `p.first:not(.dialogue)::first-letter { initial-letter: 2; -webkit-initi
 p.brk { text-align: center; margin: 0.7em 0; break-after: avoid; letter-spacing: 0.1em; }
 p.poetry { margin: 0.5em 1.5em; text-align: left; }
 p.poetry + p.poetry { margin-top: 0; }
+${litrpgCss('p.litrpg', { size: '0.78em', side: '0.15in', pad: '0.12in', fill: '#ebebeb', line: '#9a9a9a', gap: '0.8em' })}
 .backpage p.hy { text-indent: 0; margin-bottom: 0.7em; }
 .also p { text-align: center; font-style: italic; margin: 0 0 0.45em; }
 .note .reach-hd { margin-top: 1.4em; text-align: center; letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.85em; }
@@ -16765,11 +17045,16 @@ function buildTxt(data) {
   for (const ch of d.sections) {
     if (ch.heading) out += `${plainHeading(ch).toUpperCase()}\n\n`;
     const notes = [];
-    for (const p of ch.paras) {
+    ch.paras.forEach((p, i) => {
+      // a LitRPG box: its lines one under the other, spaces as typed
+      if (p.litrpg) {
+        out += p.text + '\n' + (ch.paras[i + 1] && ch.paras[i + 1].litrpg ? '' : '\n');
+        return;
+      }
       const noted = (p.runs || []).some((r) => r.fn !== undefined);
       const text = noted ? p.runs.map((r) => (r.fn !== undefined ? (notes.push(r.fn), `[${++fnN}]`) : r.text)).join('').trim() : p.text;
       out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '    ' : '') + text + '\n\n';
-    }
+    });
     if (notes.length) out += '----------\n' + notes.map((n, i) => `[${fnN - notes.length + i + 1}] ${n}`).join('\n') + '\n\n';
     out += '\n';
   }
@@ -16792,10 +17077,17 @@ function buildMd(data) {
   for (const ch of d.sections) {
     if (ch.heading) out += `\n## ${mdMeta(plainHeading(ch))}\n\n`;
     const notes = [];
-    for (const p of ch.paras) {
+    ch.paras.forEach((p, i) => {
+      // a LitRPG box: a fenced block, which keeps its spaces and monospace
+      if (p.litrpg) {
+        const top = !(ch.paras[i - 1] && ch.paras[i - 1].litrpg);
+        const end = !(ch.paras[i + 1] && ch.paras[i + 1].litrpg);
+        out += (top ? '```\n' : '') + p.text + '\n' + (end ? '```\n\n' : '');
+        return;
+      }
       const runs = (p.runs || []).map((r) => (r.fn !== undefined ? (notes.push(r.fn), { text: '\uE001' + (++fnN) + '\uE002' }) : r));
       out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '> ' : '') + mdRuns(runs).replace(/\uE001(\d+)\uE002/g, '[^$1]') + '\n\n';
-    }
+    });
     notes.forEach((n, i) => { out += `[^${fnN - notes.length + i + 1}]: ${mdMeta(n)}\n`; });
     if (notes.length) out += '\n';
   }
@@ -16820,6 +17112,8 @@ async function exportFontFaces(d) {
   const italic = !!d.subtitle || /<i[\s>]/.test(text)
     || d.sections.some((ch) => ['dedication', 'epigraph', 'part'].includes(ch.kind) || ch.subtitle);
   const boldItalic = italic && /<b[\s>]/.test(text);
+  // a book with LitRPG boxes carries their monospace face too
+  const mono = d.sections.some((ch) => ch.paras.some((p) => p.litrpg)) ? LITRPG_FONT : '';
   let css = '';
   for (const sheet of document.styleSheets) {
     let rules = [];
@@ -16831,7 +17125,8 @@ async function exportFontFaces(d) {
       const weight = r.style.getPropertyValue('font-weight') || '400';
       const forBody = name === family && !(style === 'italic' && !(parseInt(weight, 10) >= 600 ? boldItalic : italic));
       const forCap = name === cap && style === 'normal' && parseInt(weight, 10) === 400;
-      if (!forBody && !forCap) continue;
+      const forMono = !!mono && name === mono;
+      if (!forBody && !forCap && !forMono) continue;
       const src = r.style.getPropertyValue('src').match(/url\(["']?([^"')]+)["']?\)\s*(format\([^)]*\))?/);
       if (!src) continue;
       // a Russian face keeps its range and its measures, or it would stand
@@ -16869,6 +17164,7 @@ function buildHtml(data, opts = {}) {
     let afterBreak = false; // a story's line of speech after *** keeps its indent
     return paras.map((p) => {
       if (p.sceneBreak) { afterBreak = initial; return '<p class="brk">***</p>'; }
+      if (p.litrpg) { afterBreak = false; return `<p class="${litrpgClass(paras, paras.indexOf(p))}">${p.html.replace(/^<p[^>]*>|<\/p>$/g, '') || '&#8203;'}</p>`; }
       if (p.poetry) { afterBreak = false; return p.html; }
       let html = p.html;
       if (first || afterBreak) {
@@ -16990,6 +17286,7 @@ function buildHtml(data, opts = {}) {
   .chapter .brk, .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .chapter p.poetry { text-indent: 0; margin: 0 2.5em; }
   .chapter p.flush { text-indent: 0 !important; }
+  ${litrpgCss('.chapter p.litrpg', { size: '0.8em', side: '1.5em', pad: '1em', fill: '#ececec', line: '#a0a0a0', gap: '1.1em' })}
   .chapter p:not(.poetry) + p.poetry, .chapter .hd + p.poetry { margin-top: 0.9em; }
   .chapter p.poetry + p:not(.poetry) { margin-top: 0.9em; }
   .chapter p.byline { text-align: center; margin: -24px 0 40px; letter-spacing: 3px; text-transform: uppercase; font-size: 10pt; color: #555; }
@@ -17335,7 +17632,7 @@ function docxP(runs, opts = {}) {
   if (opts.keepNext) pPr.push('<w:keepNext/>');
   if (opts.pageBreak) pPr.push('<w:pageBreakBefore/>');
   if (opts.spaceBefore || opts.spaceAfter) {
-    pPr.push(`<w:spacing${opts.spaceBefore ? ` w:before="${opts.spaceBefore}"` : ''}${opts.spaceAfter ? ` w:after="${opts.spaceAfter}"` : ''} w:line="360" w:lineRule="auto"/>`);
+    pPr.push(`<w:spacing${opts.spaceBefore ? ` w:before="${opts.spaceBefore}"` : ''}${opts.spaceAfter ? ` w:after="${opts.spaceAfter}"` : ''} w:line="${opts.line || 360}" w:lineRule="auto"/>`);
   }
   if (opts.poetry) pPr.push('<w:ind w:left="720" w:right="720"/>');
   else if (opts.indentLeft) pPr.push(`<w:ind w:left="${opts.indentLeft}"/>`);
@@ -17435,12 +17732,20 @@ function docxEntriesOf(data) {
     // the prose by paragraph style: Body Text (indented), Body Text No
     // Indent (a flush paragraph), Poetry, Scene Break; only a centered or
     // right-set line adds its alignment on top
-    for (const p of ch.paras) {
+    ch.paras.forEach((p, i) => {
+      if (p.litrpg) {
+        // one Word box: lines in a row share the LitRPG style's border and
+        // shading, which Word draws as a single box; room above and below it
+        const top = !(ch.paras[i - 1] && ch.paras[i - 1].litrpg);
+        const end = !(ch.paras[i + 1] && ch.paras[i + 1].litrpg);
+        body.push(docxP(paraRuns(p.html), { style: 'LitRPG', keepNext: !end, spaceBefore: top ? 240 : 0, spaceAfter: end ? 240 : 0, line: 240 }));
+        return;
+      }
       if (p.sceneBreak) body.push(docxP([{ text: '***' }], { style: 'SceneBreak' }));
       else if (p.poetry) body.push(docxP(paraRuns(p.html), { style: 'Poetry', align: p.align === 'center' || p.align === 'right' ? p.align : '' }));
       else if (p.align === 'center' || p.align === 'right') body.push(docxP(paraRuns(p.html), { style: 'BodyTextNoIndent', align: p.align }));
       else body.push(docxP(paraRuns(p.html), { style: p.flush ? 'BodyTextNoIndent' : 'BodyText' }));
-    }
+    });
   });
   if (!placed) contents();
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -17461,6 +17766,7 @@ function docxEntriesOf(data) {
 ${para('BodyText', 'Body Text', '<w:ind w:firstLine="480"/>')}
 ${para('BodyTextNoIndent', 'Body Text No Indent', '', 'BodyText')}
 ${para('Poetry', 'Poetry', '<w:ind w:left="720" w:right="720"/>')}
+${para('LitRPG', 'LitRPG', LITRPG_DOCX_PPR, 'BodyText', LITRPG_DOCX_RPR)}
 ${para('SceneBreak', 'Scene Break', '<w:spacing w:before="240"/><w:jc w:val="center"/>', 'BodyText')}
 ${para('Title', 'Title', '<w:spacing w:before="3000"/><w:jc w:val="center"/>', 'Normal', '<w:b/><w:sz w:val="56"/>')}
 ${para('Subtitle', 'Subtitle', '<w:jc w:val="center"/>', 'Normal', '<w:i/><w:sz w:val="32"/>')}
@@ -17525,6 +17831,7 @@ function chapterXhtml(ch, d) {
   const notes = [];
   const xhtmlRuns = (p) => paraRuns(p.html).map((r) => {
     if (r.br) return '<br/>';
+    if (p.litrpg && r.text) r = { ...r, text: litrpgSpaces(r.text) };
     if (r.fn !== undefined) {
       notes.push(r.fn);
       fnN += 1;
@@ -17538,8 +17845,9 @@ function chapterXhtml(ch, d) {
     return t;
   }).join('');
   // a page's lines, each set on its own
-  const lines = () => ch.paras.map((p) => {
+  const lines = () => ch.paras.map((p, i) => {
     if (p.sceneBreak) return '<p class="brk">* * *</p>';
+    if (p.litrpg) return `<p class="${litrpgClass(ch.paras, i)}">${xhtmlRuns(p) || '&#8203;'}</p>`;
     const cls = [kind !== 'copyright' && isAttribution(p) ? 'attr' : '', p.poetry ? 'poetry' : '', p.align === 'center' || p.align === 'right' ? p.align : ''].filter(Boolean);
     return `<p${cls.length ? ` class="${cls.join(' ')}"` : ''}>${xhtmlRuns(p)}</p>`;
   }).join('\n');
@@ -17558,8 +17866,9 @@ ${ch.subtitle ? `<p class="sub">${escXml(ch.subtitle)}</p>` : ''}${ch.byline ? `
 </section>`;
   } else {
     let first = true;
-    const paras = ch.paras.map((p) => {
+    const paras = ch.paras.map((p, i) => {
       if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
+      if (p.litrpg) return `<p class="${litrpgClass(ch.paras, i)}">${xhtmlRuns(p) || '&#8203;'}</p>`;
       const classes = [];
       if (p.poetry) classes.push('poetry');
       else if (p.flush) classes.push('flush');
@@ -17625,6 +17934,8 @@ ${navList(n.children)}
 <navPoint id="ch${n.e.num}" playOrder="${playOrder}"><navLabel><text>${escXml(n.e.label)}</text></navLabel><content src="ch${n.e.num}.xhtml"/>${ncxPoints(n.children)}</navPoint>`;
   }).join('');
   const entryCount = (nodes) => nodes.reduce((n, x) => n + 1 + entryCount(x.children), 0);
+  // LitRPG boxes bring their monospace face (only the styles they use)
+  const monoFonts = await litrpgEpubFonts(d);
 
   const entries = [
     { path: 'mimetype', content: 'application/epub+zip', store: true },
@@ -17649,7 +17960,7 @@ ${navList(n.children)}
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
 <item id="css" href="style.css" media-type="text/css"/>
-${chItems}
+${monoFonts.map((f, i) => `<item id="font${i + 1}" href="fonts/${f.file}" media-type="font/ttf"/>`).join('\n')}${monoFonts.length ? '\n' : ''}${chItems}
 </manifest>
 <spine toc="ncx">
 <itemref idref="cover" linear="no"/>
@@ -17685,7 +17996,7 @@ ${navList(toc)}
 <navMap>
 <navPoint id="titlepage" playOrder="1"><navLabel><text>${escXml(t('Title Page'))}</text></navLabel><content src="title.xhtml"/></navPoint>${ncxPoints(toc)}
 </navMap></ncx>` },
-    { path: 'OEBPS/style.css', content: `body { font-family: serif; line-height: 1.5; margin: 1em; }
+    { path: 'OEBPS/style.css', content: `${monoFonts.map((f) => `@font-face { font-family: "${LITRPG_FONT}"; src: url("fonts/${f.file}"); font-weight: ${f.weight}; font-style: ${f.style}; }\n`).join('')}body { font-family: serif; line-height: 1.5; margin: 1em; }
 sup.fnref { font-size: 0.7em; line-height: 0; vertical-align: super; }
 sup.fnref a, .footnote a { text-decoration: none; }
 .notes { margin-top: 2.5em; border-top: 1px solid #999; padding-top: 0.5em; font-size: 0.85em; }
@@ -17725,7 +18036,10 @@ nav#toc ol ol { padding-left: 1.5em; }
 .titlepage .sub { text-align: center; text-indent: 0; font-style: italic; }
 .titlepage .auth { text-align: center; text-indent: 0; margin-top: 4em; letter-spacing: 0.3em; text-transform: uppercase; }
 .coverimg { text-align: center; margin: 0; padding: 0; }
-.coverimg img { max-width: 100%; max-height: 100%; }` },
+.coverimg img { max-width: 100%; max-height: 100%; }
+p.litrpg { font-family: "${LITRPG_FONT}", Menlo, Consolas, "Courier New", monospace; font-size: 0.8em; line-height: 1.45; text-indent: 0; text-align: left; -webkit-hyphens: none; -epub-hyphens: none; hyphens: none; white-space: pre-wrap; margin: 0 0.8em; padding: 0 0.6em; background-color: rgba(128, 128, 128, 0.14); border-left: 1px solid rgba(128, 128, 128, 0.6); border-right: 1px solid rgba(128, 128, 128, 0.6); }
+p.litrpg.lt-top { margin-top: 1em; padding-top: 0.4em; border-top: 1px solid rgba(128, 128, 128, 0.6); }
+p.litrpg.lt-end { margin-bottom: 1em; padding-bottom: 0.4em; border-bottom: 1px solid rgba(128, 128, 128, 0.6); }` },
     { path: 'OEBPS/cover.xhtml', content: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -17738,7 +18052,8 @@ nav#toc ol ol { padding-left: 1.5em; }
 <body><div class="titlepage"><h2>${escXml(d.title)}</h2>
 ${d.subtitle ? `<p class="sub">${escXml(d.subtitle)}</p>` : ''}
 <p class="auth">${escXml(d.author)}</p></div></body></html>` },
-    { path: 'OEBPS/' + coverName, content: coverContent, base64: true }
+    { path: 'OEBPS/' + coverName, content: coverContent, base64: true },
+    ...monoFonts.map((f) => ({ path: 'OEBPS/fonts/' + f.file, content: f.base64, base64: true }))
   ];
   for (const ch of chapters) {
     entries.push({ path: `OEBPS/ch${ch.num}.xhtml`, content: chapterXhtml(ch, d) });

@@ -888,6 +888,28 @@ body.paged #paper:not(.script) #tp-author { font-size: calc(14px * var(--page-zo
 .chapter-body i i i { font-style: italic; }
 .chapter-body p:not(.poetry) + p.poetry { margin-top: 0.9em; }
 .chapter-body p.poetry + p:not(.poetry) { margin-top: 0.9em; }
+/* LitRPG boxes ([[ at the start of a line): the game talking — a roll, a
+   level-up, a character sheet. IBM Plex Mono (bundled in fonts/, OFL) so columns line
+   up, every space kept (pre-wrap, as all prose here), on a light wash of the
+   page's own ink so it reads on Night, Paper and Light alike. Lines in a row
+   are one box: the first draws the top, the last the bottom. Never a drop
+   cap, never an indent. */
+@font-face { font-family: 'IBM Plex Mono'; src: url('fonts/ibm-plex-mono-regular.ttf') format('truetype'); font-weight: 400; font-style: normal; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('fonts/ibm-plex-mono-italic.ttf') format('truetype'); font-weight: 400; font-style: italic; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('fonts/ibm-plex-mono-bold.ttf') format('truetype'); font-weight: 700; font-style: normal; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('fonts/ibm-plex-mono-bolditalic.ttf') format('truetype'); font-weight: 700; font-style: italic; }
+:root { --litrpg-font: 'IBM Plex Mono', Menlo, Consolas, 'Courier New', monospace; }
+.chapter-body p.litrpg {
+  --litrpg-line: color-mix(in srgb, var(--ink) 22%, transparent);
+  font-family: var(--litrpg-font); font-size: 0.8em; line-height: 1.65;
+  text-indent: 0 !important; text-align: left !important; hyphens: manual; -webkit-hyphens: manual;
+  margin: 0 1.2em; padding: 0 1em;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border-left: 1px solid var(--litrpg-line); border-right: 1px solid var(--litrpg-line);
+}
+.chapter-body p.litrpg:not(p.litrpg + p.litrpg) { margin-top: 1.1em; padding-top: 0.6em; border-top: 1px solid var(--litrpg-line); border-radius: 4px 4px 0 0; }
+.chapter-body p.litrpg:not(:has(+ p.litrpg)) { margin-bottom: 1.1em; padding-bottom: 0.6em; border-bottom: 1px solid var(--litrpg-line); border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }
+.chapter-body p.litrpg i i { font-style: italic; }
 /* The drop cap is drawn beside the opening paragraph, not made of its first
    letter (setDropCap in app.js): a ::first-letter makes the engine split the
    paragraph's text in two, which left doubled letters on the page when
