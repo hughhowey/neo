@@ -1373,6 +1373,16 @@ body.focus-mode .walk-note { opacity: 0.6; }
 }
 .nav-item .n-row { cursor: grab; }
 .nav-item.dragging { opacity: 0.4; }
+.nav-scenes { margin: 7px 0 0 10px; border-left: 1px solid var(--muted); }
+.nav-scenes .nav-drop-ind { pointer-events: none; }
+.nav-scene {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 0 5px 10px;
+  background: none; border: 0; color: inherit; text-align: left; cursor: grab;
+  font: inherit; font-size: 12px; opacity: 0.7;
+}
+.nav-scene:hover, .nav-scene:focus-visible { opacity: 1; color: var(--accent); }
+.nav-scene .nav-scene-label { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nav-scene.dragging { opacity: 0.35; }
 .nav-drop-ind {
   height: 2px; margin: 2px 14px; background: var(--accent);
   border-radius: 1px; box-shadow: 0 0 8px rgba(201,168,106,0.8);
