@@ -21,7 +21,7 @@ Get the latest installer from the **[Releases page](../../releases)**:
   ./NEO-*.AppImage
   ```
 
-  If it complains about a sandbox (common on Ubuntu 24.04 and newer), run it as `./NEO-*.AppImage --no-sandbox`. Your library lives in `~/Documents/NEO Library`; File → Library Folder… moves it anywhere you like.
+  If it complains about a sandbox (common on Ubuntu 24.04 and newer), run it as `./NEO-*.AppImage --no-sandbox`. NEO updates itself in place, under the same file name (`NEO-x86_64.AppImage`, or `NEO-arm64.AppImage`), so a menu entry or desktop file that starts it keeps working. Your library lives in `~/Documents/NEO Library`; File → Library Folder… moves it anywhere you like.
 
 ## Why NEO?
 
