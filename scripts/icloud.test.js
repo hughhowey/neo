@@ -159,6 +159,30 @@ describe('files still in iCloud', { concurrency: 1 }, () => {
     assert.equal(fs.statSync(file).blocks, 0, 'not written over');
   });
 
+  // opening a book reads these; one taken off the Mac failed the open at
+  // once, and nothing asked iCloud for it (#547)
+  test('Darlings in iCloud are waited for and read, as a chapter is', async () => {
+    const { book, bookDir } = libraryWithBook();
+    const file = path.join(bookDir, 'darlings.json');
+    const words = JSON.stringify([{ id: 'd1', html: '<p>A line I loved.</p>' }]);
+    fs.writeFileSync(file, words);
+    sendToICloud(file);
+    main.context.arrivals.set(file, words);
+    const answer = main.call('json:read', book.id, 'darlings', []);
+    assert.ok(typeof answer.then === 'function', 'not read on the spot');
+    assert.equal((await answer)[0].id, 'd1');
+    assert.ok(main.asked.includes(file), 'iCloud was asked for it');
+  });
+
+  test('Darlings iCloud never sends: an error, never an empty list to save over them', async () => {
+    const { book, bookDir } = libraryWithBook();
+    const file = path.join(bookDir, 'darlings.json');
+    fs.writeFileSync(file, JSON.stringify([{ id: 'd1', html: '<p>A line I loved.</p>' }]));
+    sendToICloud(file);
+    await assert.rejects(Promise.resolve(main.call('json:read', book.id, 'darlings', [])), (err) => err.code === 'ECLOUD');
+    assert.equal(fs.statSync(file).blocks, 0, 'left as it was');
+  });
+
   test('a save never goes over a chapter or notes still in iCloud', () => {
     const { book, bookDir } = libraryWithBook();
     const ch = path.join(bookDir, 'chapters', 'ch-aaa.html');

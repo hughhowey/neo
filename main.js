@@ -1255,8 +1255,14 @@ ipcMain.handle('app:lookUp', (e) => {
   return true;
 });
 
+// The lists beside a book (stickies, Darlings) wait for iCloud as chapters
+// do: opening a book reads them, and one iCloud had taken off this Mac
+// failed the open at once, with nothing asking for it to come back (#547).
+// One that never arrives is an error, never the empty fallback: a save of
+// an empty list would go over the writer's Darlings.
 ipcMain.handle('json:read', (_e, bookId, name, fallback) => {
-  return readJSON(path.join(bookDir(bookId), libName(name) + '.json'), fallback);
+  const file = path.join(bookDir(bookId), libName(name) + '.json');
+  return afterLocal([file], () => readJSON(file, fallback), () => { throw cloudError(file); });
 });
 
 ipcMain.handle('json:write', (_e, bookId, name, data) => {
