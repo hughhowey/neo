@@ -570,6 +570,20 @@ function keepCaretHeight(was) {
 // The caret never types out of sight: an Enter (or anything else) on the
 // window's bottom line brings the new line into view, with a little room
 // below it. (Typewriter scrolling keeps the line centered on its own.)
+// …and again if the chapter's height changes in the moment after: the ***
+// line can settle its height a frame or two later (its face arriving, on a
+// Mac), which pushed a line made at the window's foot back out of sight
+function revealCaretSettled(body) {
+  revealCaret();
+  if (typeof ResizeObserver !== 'function' || !body) return;
+  let first = true;
+  const ro = new ResizeObserver(() => {
+    if (first) { first = false; return; } // (the observer's own first report)
+    if (!typewriterEnabled) revealCaret();
+  });
+  ro.observe(body);
+  setTimeout(() => ro.disconnect(), 600);
+}
 function revealCaret() {
   const sc = $('#paper-scroll');
   const rect = caretRect();
@@ -1027,10 +1041,8 @@ function handleEnter(e, body, chId) {
       resetNativeUndo();
       // no input event follows a break made by hand, so the caret is kept in
       // sight here, as typing keeps it: a break near the window's foot pushed
-      // the line below it until the next key. Once more in the next frame:
-      // on a Mac the *** line settles its height a moment later and pushed
-      // the caret's line out of sight again
-      if (!typewriterEnabled) { revealCaret(); requestAnimationFrame(() => { if (!typewriterEnabled) revealCaret(); }); }
+      // the line below it until the next key
+      if (!typewriterEnabled) revealCaretSettled(body);
       breakRun++;
       return true;
     }
@@ -1082,7 +1094,7 @@ function handleEnter(e, body, chId) {
     sel.addRange(range);
     syncChapter(body, chId);
     resetNativeUndo();
-    if (!typewriterEnabled) revealCaret(); // (see the break above)
+    if (!typewriterEnabled) revealCaretSettled(body); // (see the break above)
     breakRun++;
     return true;
   }
