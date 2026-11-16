@@ -290,6 +290,27 @@ test('the KDP paperback interior sets the box too', async () => {
   assert.match(html, /<p class="litrpg lt-top">level up!/);
   assert.match(html, /p\.litrpg \{ font-family: 'IBM Plex Mono'/);
   assert.match(html, /<p class="hy first">Prose again/);
+  // a little room inside the box, and a cap that stands at the tall letters, two lines deep
+  assert.match(html, /p\.litrpg \{[^}]*padding: 0 0\.17in/);
+  assert.match(html, /p\.litrpg\.lt-top \{[^}]*padding-top: 0\.65em/);
+  assert.match(html, /initial-letter: 2\.15 3/);
+});
+
+test('a chapter’s own title keeps its case in the PDF and the EPUB, as on the page', async () => {
+  const r = await js(`(() => {
+    const id = book.chapterOrder.find((c) => isStory(c));
+    const was = (book.chapterTitles || {})[id];
+    book.chapterTitles = { ...(book.chapterTitles || {}), [id]: 'the long walk OUT' };
+    try {
+      const d = bookExportData();
+      const ch = d.sections.find((s) => s.chId === id);
+      return { pdf: headingOwnCase(ch, escHtml), html: buildHtml(d, {}), css: getComputedStyle(document.querySelector('.chapter-head .ch-title')).textTransform };
+    } finally { book.chapterTitles[id] = was; if (was === undefined) delete book.chapterTitles[id]; }
+  })()`);
+  assert.match(r.pdf, /— <span class="own">the long walk OUT<\/span>$/);
+  assert.match(r.html, /<span class="own">the long walk OUT<\/span>/);
+  assert.match(r.html, /\.chapter \.hd \.own \{ font-variant-caps: normal/);
+  assert.equal(r.css, 'none', 'NEO shows the title as typed');
 });
 
 test('EPUB: classes, styles and the font files', async () => {

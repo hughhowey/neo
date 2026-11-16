@@ -873,6 +873,8 @@ body.paged #paper:not(.script) #tp-author { font-size: calc(14px * var(--page-zo
 .chapter-head:hover .ch-sep, .chapter-head.has-title .ch-sep { opacity: 0.6; }
 .chapter-head .ch-title {
   outline: none; user-select: text; min-width: 10px; display: inline-block;
+  /* the title as typed, as every export prints it; "Chapter 7" stays in capitals */
+  text-transform: none; letter-spacing: 1px;
 }
 .chapter-head .ch-title:empty::before {
   content: var(--ph-add-title, 'add a title'); color: #c4beb0; font-style: italic;

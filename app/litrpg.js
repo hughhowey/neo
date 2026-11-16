@@ -240,7 +240,7 @@ function litrpgClass(paras, i) {
 // margins, padding, gray fill and line, the room above and below)
 function litrpgCss(sel, o) {
   return `${sel} { font-family: ${LITRPG_STACK}; font-size: ${o.size}; line-height: 1.5; text-indent: 0 !important; text-align: left !important; hyphens: manual; -webkit-hyphens: manual; white-space: pre-wrap; margin: 0 ${o.side}; padding: 0 ${o.pad}; background: ${o.fill}; border-left: 0.75pt solid ${o.line}; border-right: 0.75pt solid ${o.line}; -webkit-print-color-adjust: exact; print-color-adjust: exact; break-inside: avoid; }
-${sel}.lt-top { margin-top: ${o.gap}; padding-top: 0.45em; border-top: 0.75pt solid ${o.line}; }
-${sel}.lt-end { margin-bottom: ${o.gap}; padding-bottom: 0.45em; border-bottom: 0.75pt solid ${o.line}; }
+${sel}.lt-top { margin-top: ${o.gap}; padding-top: ${o.edge || '0.45em'}; border-top: 0.75pt solid ${o.line}; }
+${sel}.lt-end { margin-bottom: ${o.gap}; padding-bottom: ${o.edge || '0.45em'}; border-bottom: 0.75pt solid ${o.line}; }
 ${sel}::first-letter { font: inherit; initial-letter: normal; -webkit-initial-letter: normal; padding: 0; }`;
 }

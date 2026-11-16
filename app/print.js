@@ -25,6 +25,24 @@ const cssString = (s) => '"' + String(s || '').replace(/\\/g, '\\\\').replace(/"
 // back, the dedication and epigraph, the contents where the writer put
 // one, the story (each chapter on a right-hand page), the pages at the back,
 // then the other books by the same name and a note to the reader.
+// A chapter heading for the regular PDF and the EPUB, whose headings are set
+// in capitals: the writer's own title keeps the case it was typed in, as on
+// the page and in the paperback ("CHAPTER 7 — Holston"), in a span the
+// stylesheet leaves alone.
+function headingOwnCase(ch, esc) {
+  const whole = esc(ch.heading || '');
+  const own = ch.chId && book ? ((book.chapterTitles || {})[ch.chId] || '').trim() : '';
+  if (!own || !ch.heading.endsWith(own)) return whole;
+  return esc(ch.heading.slice(0, ch.heading.length - own.length)) + `<span class="own">${esc(own)}</span>`;
+}
+
+// The drop cap in the PDFs: a little taller than two lines, so its top
+// stands at the tall letters (h, l, d) of the line beside it rather than
+// below them, at the shorter capitals'. Chromium counts the sink from the
+// cap's own top, so "3" here is what keeps it two lines deep; past about
+// 2.3 it takes a third line. scripts/litrpg.e2e.js measures it.
+const DROP_CAP_SIZE = '2.15 3';
+
 function buildPrintHtml(d, o) {
   const trim = PRINT_TRIMS.find((x) => x.id === o.trim) || PRINT_TRIMS[0];
   const [W, H] = PRINT_DIMS[trim.id];
@@ -221,11 +239,11 @@ p { margin: 0; orphans: 2; widows: 2; }
 .ch-title.ch-only { font-size: ${(sz * 1.35).toFixed(1)}pt; letter-spacing: 0.06em; }
 p.hy { text-align: justify; text-indent: 1.5em; hyphens: manual; -webkit-hyphens: manual; text-wrap: pretty; }
 p.hy.first, p.hy.flush { text-indent: 0; }
-${cap ? `p.first:not(.dialogue)::first-letter { initial-letter: 2; -webkit-initial-letter: 2; font-family: ${cap}; padding-right: 0.06em; }` : ''}
+${cap ? `p.first:not(.dialogue)::first-letter { initial-letter: ${DROP_CAP_SIZE}; -webkit-initial-letter: ${DROP_CAP_SIZE}; font-family: ${cap}; padding-right: 0.06em; }` : ''}
 p.brk { text-align: center; margin: 0.7em 0; break-after: avoid; letter-spacing: 0.1em; }
 p.poetry { margin: 0.5em 1.5em; text-align: left; }
 p.poetry + p.poetry { margin-top: 0; }
-${litrpgCss('p.litrpg', { size: '0.78em', side: '0.15in', pad: '0.12in', fill: '#ebebeb', line: '#9a9a9a', gap: '0.8em' })}
+${litrpgCss('p.litrpg', { size: '0.78em', side: '0.15in', pad: '0.17in', edge: '0.65em', fill: '#ebebeb', line: '#9a9a9a', gap: '0.9em' })}
 .backpage p.hy { text-indent: 0; margin-bottom: 0.7em; }
 .also p { text-align: center; font-style: italic; margin: 0 0 0.45em; }
 .note .reach-hd { margin-top: 1.4em; text-align: center; letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.85em; }
@@ -630,7 +648,7 @@ function buildHtml(data, opts = {}) {
     const back = kind === 'acknowledgments' || kind === 'about';
     return `
     <section class="chapter${back ? ' backpage' : ''}" id="${id}">
-      ${ch.heading ? `<${h} class="hd">${escHtml(ch.heading)}</${h}>` : ''}
+      ${ch.heading ? `<${h} class="hd">${headingOwnCase(ch, escHtml)}</${h}>` : ''}
       ${ch.byline ? `<p class="byline">${escHtml(ch.byline)}</p>` : ''}
       ${prose(ch.paras, !back)}
     </section>`;
@@ -668,6 +686,7 @@ function buildHtml(data, opts = {}) {
   /* headings in small capitals rather than capitals, so the PDF's bookmarks
      read "Chapter 3", not "CHAPTER 3" */
   .chapter .hd, .contents .hd { text-align: center; letter-spacing: 4px; font-variant-caps: all-small-caps; font-variant-numeric: oldstyle-nums; font-size: 17pt; font-weight: normal; color: #555; margin: 54px 0 36px; }
+  .chapter .hd .own { font-variant-caps: normal; letter-spacing: 0.5px; }
   /* set like a printed book: justified, hyphenated in the book's language,
      no line left alone at the top or foot of a page */
   .chapter p { text-indent: 2em; margin: 0; text-align: justify; hyphens: auto; -webkit-hyphens: auto; widows: 2; orphans: 2; }
@@ -679,7 +698,7 @@ function buildHtml(data, opts = {}) {
      search, and screen readers still find "The" where a float leaves "T"
      and "he" (a gap much wider than 4px splits the word again). A browser
      that can't set one gets a raised initial. */
-  ${(library.fonts || {}).dropcap === 'none' ? '' : `.chapter p.first:not(.dialogue)::first-letter { -webkit-initial-letter: 2; initial-letter: 2; padding-right: 4px; font-family: ${exportDropCapFont()}; }
+  ${(library.fonts || {}).dropcap === 'none' ? '' : `.chapter p.first:not(.dialogue)::first-letter { -webkit-initial-letter: ${DROP_CAP_SIZE}; initial-letter: ${DROP_CAP_SIZE}; padding-right: 4px; font-family: ${exportDropCapFont()}; }
   @supports not ((initial-letter: 2) or (-webkit-initial-letter: 2)) { .chapter p.first:not(.dialogue)::first-letter { font-size: 1.8em; line-height: 1; padding-right: 0; } }`}
   .chapter .brk, .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .chapter p.poetry { text-indent: 0; margin: 0 2.5em; }
@@ -1282,7 +1301,7 @@ ${ch.subtitle ? `<p class="sub">${escXml(ch.subtitle)}</p>` : ''}${ch.byline ? `
       if (!p.poetry) first = false;
       return `<p${cls}>${xhtmlRuns(p)}</p>`;
     }).join('\n');
-    inner = `<section epub:type="${EPUB_TYPES[kind] || ch.role || 'chapter'}">${ch.heading ? `<h1>${escXml(ch.heading)}</h1>` : ''}${ch.byline ? `<p class="byline">${escXml(ch.byline)}</p>` : ''}
+    inner = `<section epub:type="${EPUB_TYPES[kind] || ch.role || 'chapter'}">${ch.heading ? `<h1>${headingOwnCase(ch, escXml)}</h1>` : ''}${ch.byline ? `<p class="byline">${escXml(ch.byline)}</p>` : ''}
 ${paras}
 </section>`;
   }
@@ -1402,6 +1421,7 @@ sup.fnref a, .footnote a { text-decoration: none; }
 .notes { margin-top: 2.5em; border-top: 1px solid #999; padding-top: 0.5em; font-size: 0.85em; }
 .notes p { text-indent: 0; text-align: left; margin: 0 0 0.4em; }
 h1 { text-align: center; font-weight: normal; letter-spacing: 0.2em; text-transform: uppercase; font-size: 1.2em; margin: 3em 0 2em; }
+h1 .own { text-transform: none; letter-spacing: 0.03em; }
 p { text-indent: 1.2em; margin: 0; text-align: justify; -webkit-hyphens: auto; -epub-hyphens: auto; hyphens: auto; widows: 2; orphans: 2; }
 h1, p.brk { -webkit-hyphens: none; -epub-hyphens: none; hyphens: none; }
 p.poetry, .dedication p, .epigraph p, .part p, .copyright p { text-align: left; -webkit-hyphens: manual; -epub-hyphens: manual; hyphens: manual; }
