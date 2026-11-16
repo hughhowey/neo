@@ -20,8 +20,21 @@ async function openBook(bookId) {
     html[chId] = await window.neo.readChapter(bookId, chId);
     if (gen !== openGeneration) return;
   }
-  const sideStickies = await window.neo.readJSON(bookId, 'stickies', []);
-  const sideDarlings = await window.neo.readJSON(bookId, 'darlings', []);
+  // stickies and Darlings still in iCloud after the wait: the book stays on
+  // the shelf, and the writer is told why, not just that something hiccuped
+  let sideStickies, sideDarlings;
+  try {
+    sideStickies = await window.neo.readJSON(bookId, 'stickies', []);
+    sideDarlings = await window.neo.readJSON(bookId, 'darlings', []);
+  } catch (err) {
+    window.neo.logError('open book: ' + (err && err.message || err));
+    if (gen === openGeneration) {
+      toast(/Still in iCloud/.test(String(err && err.message))
+        ? t('This book is still coming down from iCloud. Try again in a moment.')
+        : t('This book couldn’t be opened. The details were logged.'), 6000);
+    }
+    return;
+  }
   if (gen !== openGeneration) return;
   tabPlaces = {}; // a fresh book starts with fresh places
   book = meta;
