@@ -68,7 +68,11 @@ const where = () => js(`(() => {
   const sc = document.getElementById('paper-scroll');
   const box = sc.getBoundingClientRect();
   const s = getSelection();
-  let r = s.getRangeAt(0).getBoundingClientRect();
+  // an empty line is where its paragraph is: a bare caret there is measured
+  // a line off on a Mac (NEO's caretRect goes by the paragraph too)
+  const a = s.anchorNode;
+  const line = (a.nodeType === 1 ? a : a.parentElement).closest('p');
+  let r = line && line.textContent === '' ? line.getBoundingClientRect() : s.getRangeAt(0).getBoundingClientRect();
   if (!r.height) { const n = s.anchorNode; r = (n.nodeType === 1 ? n : n.parentElement).getBoundingClientRect(); }
   const head = (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement).closest('.chapter').querySelector('.chapter-head').getBoundingClientRect();
   return { top: box.top, bottom: box.bottom, caretTop: r.top, caretBottom: r.bottom, headTop: head.top, headBottom: head.bottom };
@@ -83,7 +87,7 @@ test('a break made at the foot of the window keeps the caret in sight', async ()
   await enter(); // the empty line becomes ***, and the caret goes below it
   const w = await where();
   // what the window measured, should it fail (a Mac has failed it where Linux doesn't)
-  const why = async () => JSON.stringify({ w, later: await (async () => { await tick(500); return where(); })(), ...(await js(`(() => { const sc = document.getElementById('paper-scroll'); const s = getSelection(); const n = s.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); return { scrollTop: sc.scrollTop, scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight, innerHeight, typewriter: typewriterEnabled, caretEl: el && el.outerHTML.slice(0, 80), prevEl: el && el.previousElementSibling && el.previousElementSibling.outerHTML.slice(0, 60), caretRect: caretRect() && [caretRect().top, caretRect().bottom] }; })()`)) });
+  const why = async () => JSON.stringify({ w, later: await (async () => { await tick(500); return where(); })(), ...(await js(`(() => { const sc = document.getElementById('paper-scroll'); const s = getSelection(); const n = s.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); return { scrollTop: sc.scrollTop, scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight, innerHeight, typewriter: typewriterEnabled, caretEl: el && el.outerHTML.slice(0, 80), prevEl: el && el.previousElementSibling && el.previousElementSibling.outerHTML.slice(0, 60), caretRect: caretRect() && [caretRect().top, caretRect().bottom], bareCaret: (() => { const b = getSelection().getRangeAt(0).getBoundingClientRect(); return [b.top, b.bottom]; })() }; })()`)) });
   if (!(w.caretBottom <= w.bottom)) assert.fail(`the caret's line ends ${Math.round(w.caretBottom - w.bottom)}px below the window ${await why()}`);
   assert.ok(w.caretTop >= w.top);
 });
