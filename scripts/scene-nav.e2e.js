@@ -138,15 +138,15 @@ test('dropping above another scene reorders within a chapter and drag cancellati
   assert.equal(await js('undoStack.length'), count);
 });
 
-test('empty scenes have labels, and simple mode hides rows immediately without changing text', async () => {
+test('empty scenes have labels, and turning the feature off hides rows immediately without changing text', async () => {
   await seed();
   await js(`chapterHTML[testCh] += '<p class="scene-break">***</p><p><br></p>'; renderChapters(); renderNav()`);
   assert.equal(await js(`document.querySelector('.nav-scene[data-seg="3"] .nav-scene-label').textContent`), 'Scene 4');
   const before = await js('chapterHTML[testCh]');
-  await js('setMoreFeatures(false)');
+  await js("setFeature('sceneNav', false)");
   assert.equal(await js('document.querySelectorAll(".nav-scene").length'), 0);
   assert.equal(await js('chapterHTML[testCh]'), before);
-  await js('setMoreFeatures(true)');
+  await js("setFeature('sceneNav', true)");
   assert.equal(await js('document.querySelectorAll(".nav-scene").length'), 4);
 });
 
