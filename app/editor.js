@@ -23,8 +23,14 @@ async function openBook(bookId) {
   const sideStickies = await window.neo.readJSON(bookId, 'stickies', []);
   const sideDarlings = await window.neo.readJSON(bookId, 'darlings', []);
   if (gen !== openGeneration) return;
+  await prepareWritingLanguage(meta);
+  if (gen !== openGeneration) return;
+  const dictionaryReady = await window.neo.setSpellLanguage(writingDictionary(writingLanguage(meta)));
+  if (gen !== openGeneration) return;
+  bookDictionaryReady = dictionaryReady;
   tabPlaces = {}; // a fresh book starts with fresh places
   book = meta;
+  focusSegmenter = null;
   showWindowTitle();
   forgetSnapshots();
   forgetSpelling();
@@ -104,6 +110,7 @@ const PAGE_PROMPTS = { dedication: () => t('For…'), epigraph: () => '…', par
 
 function renderChapters() {
   const wrap = $('#chapters');
+  wrap.lang = writingLanguage();
   wrap.innerHTML = '';
   wordCache = {};
   book.chapterTitles = book.chapterTitles || {};

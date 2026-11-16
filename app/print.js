@@ -44,6 +44,7 @@ function headingOwnCase(ch, esc) {
 const DROP_CAP_SIZE = '2.15 3';
 
 function buildPrintHtml(d, o) {
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const trim = PRINT_TRIMS.find((x) => x.id === o.trim) || PRINT_TRIMS[0];
   const [W, H] = PRINT_DIMS[trim.id];
   const esc = (s) => escHtml(String(s || ''));
@@ -437,6 +438,7 @@ const plainHeading = (ch) => (ch.partTitle ? `${ch.heading}: ${ch.partTitle}` : 
 
 function buildTxt(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   let out = `${d.title.toUpperCase()}\n`;
   if (d.subtitle) out += `${d.subtitle}\n`;
   out += t('by {author}', { author: d.author }) + '\n\n\n';
@@ -463,6 +465,7 @@ function buildTxt(data) {
 
 function buildMd(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   // a title like "Wool *Omnibus*" must not turn into markup (idea: nejcc, #70)
   const mdMeta = (s) => String(s || '').replace(/([\\`*_\[\]#<>])/g, '\\$1');
   // wrap a run in emphasis markers, keeping boundary spaces outside them
@@ -569,6 +572,7 @@ const headTag = (ch) => 'h' + Math.min(6, 2 + (ch.level || 0));
 
 function buildHtml(data, opts = {}) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const total = d.sections.filter((ch) => (ch.kind || 'chapter') === 'chapter')
     .reduce((s, ch) => s + ch.paras.reduce((n, p) => n + countWords(p.text || ''), 0), 0);
   const stamp = new Date().toLocaleString(NeoI18n.getLocale());
@@ -1092,6 +1096,7 @@ function docxFootnotesXml(notes) {
 }
 function docxEntriesOf(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const body = [];
   // headings carry Word's own heading styles, so the navigation pane and a
   // table of contents inserted in Word both see the book's shape
@@ -1178,7 +1183,7 @@ function docxEntriesOf(data) {
 <w:pPr><w:keepNext/><w:pageBreakBefore/><w:spacing w:before="1200"/><w:jc w:val="center"/><w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr><w:caps/><w:sz w:val="28"/></w:rPr></w:style>`;
   const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/><w:sz w:val="24"/><w:lang w:val="${escXml(d.language || writingLanguage())}"/></w:rPr></w:rPrDefault>
 <w:pPrDefault><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
 ${para('BodyText', 'Body Text', '<w:ind w:firstLine="480"/>')}
@@ -1322,6 +1327,7 @@ ${paras}
 
 async function buildEpubEntries(data) {
   const d = data || bookExportData();
+  const t = (key, vars) => writingText(key, vars, { writingLanguage: d.language });
   const chapters = d.sections;
   const uuid = 'urn:uuid:' + (d.uuid || crypto.randomUUID());
   const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -1497,7 +1503,7 @@ async function shelfBookData(shelf, opts = {}) {
   const metas = [];
   for (const id of shelf.bookIds) {
     const m = await window.neo.readBookMeta(id);
-    if (m && (bound || !isPageMeta(m))) metas.push(m);
+    if (m && (bound || !isPageMeta(m))) { await prepareWritingLanguage(m); metas.push(m); }
   }
   const cover = metas.find((m) => m.kind === 'cover') || null;
   const author = (cover && cover.author) || shelfAuthorName(shelf);
@@ -1546,7 +1552,7 @@ async function shelfBookData(shelf, opts = {}) {
         paras.push(...p);
       }
       if (!paras.length) continue;
-      const heading = isUntitled(m.title) ? pageKindName(m.kind) : m.title.trim();
+      const heading = isUntitled(m.title) ? writingKindName(m.kind, m) : m.title.trim();
       const s = push({ kind: 'chapter', role: m.kind, heading, level: 0, paras });
       toc.push({ label: heading, num: s.num, level: 0, type: 'title' });
       inPart = false;
@@ -1593,7 +1599,7 @@ async function shelfBookData(shelf, opts = {}) {
         if (m.restartNumbering) n = 0; // this title numbers its chapters part by part
         const titled = !!(c.paras[0] && !c.paras[0].sceneBreak && !isAttribution(c.paras[0]));
         const partTitle = titled ? c.paras[0].text : '';
-        const s = push({ kind: 'part', heading: partLabel(titleParts), partTitle, level: chLevel, paras: titled ? c.paras.slice(1) : c.paras });
+        const s = push({ kind: 'part', heading: partLabel(titleParts, m), partTitle, level: chLevel, paras: titled ? c.paras.slice(1) : c.paras });
         toc.push({ label: partTitle ? s.heading + ': ' + partTitle : s.heading, num: s.num, level: chLevel, type: 'part' });
         underPart = true;
         continue;
@@ -1604,9 +1610,9 @@ async function shelfBookData(shelf, opts = {}) {
       let heading;
       if (c.kind === 'unnumbered') heading = chTitle || '';
       else {
-        if (role) heading = role === 'prologue' ? t('Prologue') : t('Epilogue');
-        else { n += 1; heading = t('Chapter {n}', { n }); }
-        if (chTitle) heading = library.exportCustomChapterTitles ? chTitle : heading + ' ' + headingDash() + ' ' + chTitle;
+        if (role) heading = writingKindName(role, m);
+        else { n += 1; heading = writingText('Chapter {n}', { n }, m); }
+        if (chTitle) heading = library.exportCustomChapterTitles ? chTitle : heading + ' ' + headingDash(m) + ' ' + chTitle;
       }
       const lv = underPart ? chLevel + 1 : chLevel;
       const s = push({ kind: 'chapter', heading, level: lv, paras: c.paras, role: role || '' });
@@ -1764,6 +1770,8 @@ async function exportFromShelf(bookId, format) {
   for (const chId of meta.chapterOrder) html[chId] = await window.neo.readChapter(bookId, chId);
   if (book) return; // a book was opened meanwhile
   const hadUuid = !!meta.uuid;
+  await prepareWritingLanguage(meta);
+  if (book) return;
   const keep = { chapterHTML, savedHTML };
   shelfExport = true;
   book = meta;

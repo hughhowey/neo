@@ -400,6 +400,7 @@ test('spellcheck follows the interface until a dictionary is picked; nothing is 
   // switching the interface takes a dictionary nobody picked along with it
   vm.runInContext('setUiLanguage("en")', fresh.context);
   assert.equal(vm.runInContext('spellLanguage', fresh.context), 'en-US');
+  await vm.runInContext('spellLanguageChain', fresh.context);
   assert.equal(fresh.loads.length, 2);
   assert.equal(fresh.loads[1].language, 'en-US');
   assert.equal(fresh.read().spellLanguage, undefined);

@@ -1,5 +1,5 @@
 // End-to-end tests for writing in Danish with an English interface: Dansk
-// picked in Edit → Spellcheck Language is saved with the library; a Danish
+// picked in Edit → Spellcheck Language is saved with the book; a Danish
 // "i" (in) stays lowercase and a typed "I" (you) stays as typed, while
 // sentences still start with a capital and f.eks. doesn't end one; the
 // Danish dictionary underlines a misspelling and nothing else; English keeps
@@ -92,8 +92,8 @@ async function pickSpellLanguage(label, code) {
     return o.textContent;
   })()`);
   assert.ok(shown, `${label} in Options`);
-  for (let i = 0; i < 100 && (await js('library.spellLanguage')) !== code; i++) await tick(50);
-  assert.equal(await js('library.spellLanguage'), code);
+  for (let i = 0; i < 100 && (await js('book.writingLanguage')) !== code; i++) await tick(50);
+  assert.equal(await js('book.writingLanguage'), code);
   await js(`document.querySelector('.options-modal .m-ok').click()`);
   await tick(300);
 }
@@ -117,9 +117,11 @@ async function underlined(n) {
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('Dansk is picked with the interface left in English, and saved with the library', async () => {
+test('Dansk is picked with the interface left in English, and saved with the book', async () => {
   await pickSpellLanguage('Dansk', 'da');
-  assert.equal(JSON.parse(fs.readFileSync(libraryFile, 'utf8')).spellLanguage, 'da');
+  const id = await js('book.id');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(path.dirname(libraryFile), id, 'book.json'), 'utf8')).writingLanguage, 'da');
+  assert.equal(JSON.parse(fs.readFileSync(libraryFile, 'utf8')).spellLanguage, undefined);
   assert.equal(await js('NeoI18n.getLocale()'), 'en');
 });
 

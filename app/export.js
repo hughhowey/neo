@@ -102,7 +102,7 @@ function exportChapters() {
     }
     if (kind === 'acknowledgments' || kind === 'about') {
       if (!paras.length) continue;
-      const sec = push({ kind, heading: kindName(kind), level: 0, paras });
+      const sec = push({ kind, heading: writingKindName(kind), level: 0, paras });
       toc.push({ label: sec.heading, num: sec.num, level: 0, type: 'page' });
       continue;
     }
@@ -203,9 +203,9 @@ function manuscriptModel(v, sections) {
   return {
     title: book.title || t('Untitled'), byline: v.byline, headerName: v.headerName, headerTitle: v.headerTitle,
     contact: { name: v.name, lines: [...String(v.address || '').split(/\r?\n/), v.phone, v.email] },
-    wordsText: t('about {n} words', { n: shown.toLocaleString(NeoI18n.getLocale()) }),
-    byText: v.byline ? t('by {name}', { name: v.byline }) : '',
-    endText: v.end ? t('END') : '',
+    wordsText: writingText('about {n} words', { n: shown }),
+    byText: v.byline ? writingText('by {name}', { name: v.byline }) : '',
+    endText: v.end ? writingText('END') : '',
     font: v.font, paper: window.neo.paper || 'Letter', lang: writingLanguage(),
     // one story with no chapters: the short-story layout
     short: sections.length === 1 && chapters.length === 1 && !chapters[0].heading,

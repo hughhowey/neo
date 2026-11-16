@@ -95,11 +95,11 @@ function kindCount(chId, kind, meta = book) {
 const chapterNumber = (chId, meta = book) => kindCount(chId, 'chapter', meta);
 function chapterName(chId, meta = book) {
   const k = chapterKind(chId, meta);
-  if (k === 'chapter') return t('Chapter {n}', { n: chapterNumber(chId, meta) });
-  if (k === 'part') return partLabel(kindCount(chId, 'part', meta));
+  if (k === 'chapter') return writingText('Chapter {n}', { n: chapterNumber(chId, meta) }, meta);
+  if (k === 'part') return partLabel(kindCount(chId, 'part', meta), meta);
   // an unnumbered chapter is its title
   if (k === 'unnumbered') return ((meta.chapterTitles || {})[chId] || '').trim() || t('Untitled');
-  return kindName(k);
+  return writingKindName(k, meta);
 }
 // the chapter a note sits in, for the notes pane: its name, or for an
 // unnumbered chapter with no title (whose name would be Untitled), its
@@ -116,10 +116,10 @@ function stickyChapterLabel(chId) {
 // language: an en dash where that's how the language sets its dash
 // (KAPITEL 2 – SZENENWECHSEL), the em dash elsewhere (CHAPTER 2 — TITLE)
 const EN_DASH_LANGUAGES = ['de', 'nl', 'pl', 'ro', 'fr', 'it', 'hu'];
-function headingDash() {
-  return EN_DASH_LANGUAGES.includes(writingLanguage().toLowerCase().split('-')[0]) ? '–' : '—';
+function headingDash(meta = book) {
+  return EN_DASH_LANGUAGES.includes(writingLanguage(meta).toLowerCase().split('-')[0]) ? '–' : '—';
 }
-function chapterHeading(chId, meta = book, sep = ' ' + headingDash() + ' ') {
+function chapterHeading(chId, meta = book, sep = ' ' + headingDash(meta) + ' ') {
   const title = ((meta.chapterTitles || {})[chId] || '').trim();
   const k = chapterKind(chId, meta);
   if (k === 'unnumbered') return title;

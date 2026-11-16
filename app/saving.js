@@ -1159,6 +1159,7 @@ async function refreshFromDisk() {
       return;
     }
     const bookId = book.id;
+    const previousWritingLanguage = writingLanguage();
     if (window.neo.refreshBook) await window.neo.refreshBook(bookId);
     const meta = await window.neo.readBookMeta(bookId);
     if (!book || book.id !== bookId || !meta) return;
@@ -1354,6 +1355,19 @@ async function refreshFromDisk() {
         conflicts++;
       }
     }
+    if (writingLanguage() !== previousWritingLanguage) {
+      const target = book;
+      await prepareWritingLanguage(target);
+      if (book !== target) return;
+      bookDictionaryReady = await window.neo.setSpellLanguage(writingDictionary(writingLanguage()));
+      if (book !== target) return;
+      focusSegmenter = null;
+      spellCache.clear();
+      spellScanned = new Set();
+      spellRanges = new Map();
+      capsRanges.clear();
+      if (window.CSS && CSS.highlights) CSS.highlights.delete('neo-spell');
+    }
     if (restructured || adopted || conflicts) {
       const caret = captureCaret();
       const keepScroll = $('#paper-scroll').scrollTop;
@@ -1361,6 +1375,7 @@ async function refreshFromDisk() {
       wordsFromDisk(); // the words that came in were written elsewhere, or before today (#345)
       $('#paper-scroll').scrollTop = keepScroll;
       if (caret) restoreCaret(caret);
+      if (spellOn && writingLanguage() !== previousWritingLanguage) scanSpellingHere();
       if (restructured) {
         const show = (el, text) => { if (el.textContent !== text) el.textContent = text; };
         show($('#tp-title'), isUntitled(book.title) ? '' : book.title);
@@ -1437,5 +1452,7 @@ async function backToShelf() {
   spEditorMode(); // a script's pane, page and title page go
   spReportState();
   renderShelves();
+  await prepareWritingLanguage(null);
+  if (!book) await window.neo.setSpellLanguage(writingDictionary(writingLanguage(null)));
 }
 $('#back-to-shelf').onclick = backToShelf;

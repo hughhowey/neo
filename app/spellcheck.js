@@ -9,6 +9,7 @@
    search — and a right-click menu for suggestions. Chapters scan lazily
    as the caret reaches them. */
 let spellOn = false;
+let bookDictionaryReady = true;
 let spellScanned = new Set();
 let spellRanges = new Map();     // key → [Range]
 const spellCache = new Map();    // word → correct?
@@ -189,6 +190,7 @@ function forgetSpelling() {
 }
 
 function toggleSpellcheck() {
+  if (!spellOn && !bookDictionaryReady) { toast(t('That dictionary would not load')); return; }
   spellOn = !spellOn;
   if (spellOn) {
     spellScanned = new Set();
@@ -204,18 +206,48 @@ function toggleSpellcheck() {
   toast(spellOn ? t('Spellcheck on') : t('Spellcheck off'));
 }
 
-// Edit → Spellcheck Language: swap the dictionary, remember the choice with
-// the library, and re-check whatever is on screen
+// Edit → Spellcheck Language: the open book's choice, or the library default
+// from the shelf. The interface has its own translator throughout.
 const SPELL_LANGUAGE_NAMES = {
   'en-US': t('US English'), 'en-GB': t('UK English'), 'en-CA': t('Canadian English'),
   'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'),
-  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
+  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish'), el: t('Greek')
 };
 async function changeSpellLanguage(code) {
-  const ok = await window.neo.setSpellLanguage(code);
+  const target = book;
+  const previousDictionary = writingDictionary(writingLanguage());
+  const meta = target ? { ...target, writingLanguage: code || undefined } : null;
+  const wanted = code || writingLanguage(meta);
+  await prepareWritingLanguage(target ? meta : { writingLanguage: wanted });
+  if (book !== target) return;
+  const ok = await window.neo.setSpellLanguage(writingDictionary(wanted));
+  if (book !== target) return;
   if (!ok) { toast(t('That dictionary would not load')); return; }
-  library.spellLanguage = code;
-  await writeLibrary(library);
+  bookDictionaryReady = true;
+  if (target) {
+    const previous = target.writingLanguage;
+    if (code) target.writingLanguage = code; else delete target.writingLanguage;
+    try { await saveMeta(); }
+    catch (err) {
+      if (previous === undefined) delete target.writingLanguage; else target.writingLanguage = previous;
+      if (book === target) bookDictionaryReady = await window.neo.setSpellLanguage(previousDictionary);
+      throw err;
+    }
+    if (book !== target) return;
+    const caret = captureCaret();
+    renderChapters();
+    restoreCaret(caret);
+  } else {
+    const previous = library.spellLanguage;
+    library.spellLanguage = code;
+    try { await writeLibrary(library); }
+    catch (err) {
+      if (previous === undefined) delete library.spellLanguage; else library.spellLanguage = previous;
+      if (!book) await window.neo.setSpellLanguage(previousDictionary);
+      throw err;
+    }
+  }
+  focusSegmenter = null;
   spellCache.clear();
   if (spellOn) {
     spellScanned = new Set();
@@ -224,7 +256,7 @@ async function changeSpellLanguage(code) {
     CSS.highlights.delete('neo-spell');
     scanSpellingHere();
   }
-  toast(t('Spellcheck: {lang}', { lang: SPELL_LANGUAGE_NAMES[code] || code }));
+  toast(t('Spellcheck: {lang}', { lang: SPELL_LANGUAGE_NAMES[wanted] || wanted }));
 }
 
 // right-click a flagged word for suggestions
@@ -666,7 +698,7 @@ function sentenceRange(p) {
   if (!text.trim()) return null;
   const at = caretOffsetIn(p);
   if (!focusSegmenter && window.Intl && Intl.Segmenter) {
-    focusSegmenter = new Intl.Segmenter((library.spellLanguage || 'en').split('-')[0], { granularity: 'sentence' });
+    focusSegmenter = new Intl.Segmenter(writingLanguage(), { granularity: 'sentence' });
   }
   if (!focusSegmenter) return null;
   let hit = null, last = null;

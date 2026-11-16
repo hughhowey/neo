@@ -941,8 +941,38 @@ function singleQuotes(el) {
   if (d === '«') return { open: '‹', close: '›' };
   return { open: '‚', close: '‘' };
 }
-function writingLanguage() {
-  return (library && library.spellLanguage) || NeoI18n.getLocale();
+function writingLanguage(meta = book) {
+  for (const code of [(meta && meta.writingLanguage), (library && library.spellLanguage)]) {
+    if (typeof code !== 'string') continue;
+    try { const canonical = Intl.getCanonicalLocales(code)[0]; if (canonical) return canonical; } catch { /* try the library or interface */ }
+  }
+  try { return Intl.getCanonicalLocales(NeoI18n.getLocale())[0] || 'en'; } catch { return 'en'; }
+}
+const writingTranslators = new Map();
+async function prepareWritingLanguage(meta) {
+  const code = writingLanguage(meta);
+  if (writingTranslators.has(code) || !window.neo.writingI18n || !NeoI18n.create) return;
+  const strings = await window.neo.writingI18n(code);
+  const translator = NeoI18n.create();
+  translator.setLocale(strings.locale, strings.dict, strings.base);
+  writingTranslators.set(code, translator);
+}
+function writingText(key, vars, meta = book) {
+  const translator = writingTranslators.get(writingLanguage(meta));
+  return translator ? translator.t(key, vars) : t(key, vars);
+}
+function writingKindName(kind, meta = book) {
+  const key = { chapter: 'Chapter', unnumbered: 'Unnumbered Chapter', contents: 'Contents', cover: 'Cover',
+    copyright: 'Copyright', dedication: 'Dedication', epigraph: 'Epigraph', prologue: 'Prologue',
+    part: 'Part', epilogue: 'Epilogue', acknowledgments: 'Acknowledgments', about: 'About the Author' }[kind];
+  return key ? writingText(key, null, meta) : kind;
+}
+function writingDictionary(code) {
+  if (code === 'en') return 'en-US';
+  if (code === 'pt') return 'pt-BR';
+  if (SPELL_LANGUAGE_NAMES[code]) return code;
+  const base = code.split('-')[0];
+  return SPELL_LANGUAGE_NAMES[base] ? base : 'en-US';
 }
 function quoteStyle() {
   const code = writingLanguage();
