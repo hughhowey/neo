@@ -2813,9 +2813,10 @@ ipcMain.on('pagewidth:state', (_e, v) => {
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 // macOS only: hold a letter for the accent picker (View → Press and Hold for
-// Accents). Kept in settings.json; absent means on.
+// Accents). Kept in settings.json; off unless the writer turns it on (the
+// picker once re-emitted held keys as phantom letters, so held keys repeat).
 function pressAndHoldOn() {
-  return process.platform === 'darwin' && readSettings().pressAndHold !== false;
+  return process.platform === 'darwin' && readSettings().pressAndHold === true;
 }
 ipcMain.on('pressHold:get', (e) => { e.returnValue = pressAndHoldOn(); });
 function setPressAndHold(on) {
@@ -3708,9 +3709,9 @@ app.whenReady().then(() => {
       logError('paths', err);
     }
 
-    // macOS press-and-hold: hold a letter for the accent picker. On by
-    // default; View → Press and hold for accents turns it off, and then held
-    // keys simply repeat (the picker once re-emitted keys as phantom letters).
+    // macOS press-and-hold: off by default, so held keys simply repeat (the
+    // picker once re-emitted keys as phantom letters); View → Press and hold
+    // for accents turns the accent picker on.
     if (process.platform === 'darwin') {
       try {
         const { systemPreferences } = require('electron');

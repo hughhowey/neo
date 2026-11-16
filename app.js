@@ -16260,7 +16260,7 @@ function alignedProseHtml(html, value) {
   holder.innerHTML = html;
   let changed = false;
   for (const p of holder.querySelectorAll(':scope > p')) {
-    if (p.matches('.scene-break, .ghost, .poetry, .flush') || [...p.classList].some((c) => c.startsWith('sp-'))) continue;
+    if (p.matches('.scene-break, .ghost, .poetry, .flush, .litrpg') || [...p.classList].some((c) => c.startsWith('sp-'))) continue;
     const target = value === 'left' ? '' : value;
     if (p.style.textAlign === target) continue;
     if (target) p.style.textAlign = target;
