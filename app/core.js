@@ -304,6 +304,7 @@ const FEATURES = [
   { key: 'pages', label: tk('Page views'), desc: tk('See the book as printed pages, two side by side, and choose the page width.'), pocket: false },
   { key: 'focus', label: tk('Focus mode'), desc: tk('Dim everything but the sentence or paragraph you’re writing.'), pocket: false },
   { key: 'readAloud', label: tk('Read aloud and Look Up'), desc: tk('Hear your words in your computer’s voice; look up a selected word.'), pocket: false },
+  { key: 'projectSearch', label: tk('Find across the book'), desc: tk('Find can look through the notes, outline and Darlings too, not only the page you’re on.'), pocket: false },
   { key: 'vim', label: tk('Vim keys'), desc: tk('Move around the page with h j k l and friends, the vim way.'), pocket: true },
   { key: 'exports', label: tk('More exports'), desc: tk('Manuscript Format, plain text, Markdown and web page, and Import Chapters.'), pocket: true, pocketDesc: tk('Plain text, Markdown and web page, beside Word and EPUB.') }
 ];

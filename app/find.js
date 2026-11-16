@@ -23,6 +23,8 @@ function openSearch(fromVim = false) {
   // ⌘F again from the bar itself keeps the place it first came from
   if (sel && sel.rangeCount && editableOf(sel.getRangeAt(0))) searchHome = sel.getRangeAt(0).cloneRange();
   searchFromVim = fromVim;
+  $('#search-scope').hidden = !featureOn('projectSearch');
+  if (fromVim || !featureOn('projectSearch')) $('#search-scope').value = 'tab';
   $('#searchbar').hidden = false;
   const inp = $('#search-input');
   if (preset) inp.value = preset;
@@ -32,6 +34,15 @@ function openSearch(fromVim = false) {
 }
 
 function closeSearch() {
+  projectSearchTicket++;
+  projectNavigateTicket++;
+  projectSearchNavigating = false;
+  projectSearchMatches = [];
+  projectNotesCache.clear();
+  projectReturnRange = null;
+  $('#project-search-results').hidden = true;
+  $('#project-search-toggle').setAttribute('aria-expanded', 'false');
+  $('#project-search-results').replaceChildren();
   $('#searchbar').hidden = true;
   searchState = { matches: [], idx: -1, query: '' };
   searchFromVim = false;
@@ -48,7 +59,8 @@ function closeSearch() {
 function returnFromSearch() {
   const m = searchState.idx >= 0 && searchState.matches[searchState.idx];
   let r = null;
-  if (m && m.range.startContainer.isConnected) { r = m.range.cloneRange(); r.collapse(true); }
+  if (projectReturnRange?.startContainer.isConnected) { r = projectReturnRange.cloneRange(); r.collapse(true); }
+  else if (m && m.range.startContainer.isConnected) { r = m.range.cloneRange(); r.collapse(true); }
   else if (searchHome && searchHome.startContainer.isConnected) r = searchHome.cloneRange();
   const fromVim = searchFromVim;
   closeSearch();
@@ -168,8 +180,22 @@ function findRanges(q) {
 
 // Scan the whole tab every time. Matches are highlighted, not selected.
 function runSearch() {
+  const ticket = ++projectSearchTicket;
+  $('#search-scope').hidden = !featureOn('projectSearch');
+  if (!featureOn('projectSearch')) $('#search-scope').value = 'tab';
   const q = $('#search-input').value;
   searchState = { matches: [], idx: -1, query: q, tab: currentTab };
+  if (projectSearchOn()) {
+    closeCardEditor(); // commit the outline card the writer just left for Find
+    $('#project-search-toggle').hidden = false;
+    $('#searchbar').classList.add('find-only');
+    paintHighlights();
+    projectSearchPending = runProjectSearch(q, ticket);
+    return projectSearchPending;
+  }
+  $('#project-search-results').hidden = true;
+  $('#project-search-toggle').hidden = true;
+  projectReturnRange = null;
   $('#searchbar').classList.toggle('find-only', currentTab !== 'manuscript');
   if (!q) {
     $('#search-count').textContent = '';
@@ -184,6 +210,7 @@ function runSearch() {
 
 // only runs when the user asks (Enter / arrows)
 function gotoMatch(i) {
+  if (projectSearchOn()) return gotoProjectMatch(i);
   const m = searchState.matches;
   if (!m.length) return;
   searchState.idx = ((i % m.length) + m.length) % m.length;
@@ -196,7 +223,8 @@ function gotoMatch(i) {
 }
 
 function freshSearchIfStale() {
-  if (searchState.query !== $('#search-input').value || searchState.tab !== currentTab) runSearch();
+  if (searchState.query !== $('#search-input').value || searchState.tab !== currentTab) return runSearch();
+  if (projectSearchOn()) return projectSearchPending;
 }
 
 // put rep where a match was. A match across formatting takes the formatting
@@ -217,6 +245,7 @@ function replaceRange(range, rep) {
 }
 
 function replaceCurrent() {
+  if (projectSearchOn()) return;
   if (currentTab !== 'manuscript') return;
   freshSearchIfStale();
   if (!searchState.matches.length) { toast(t('No matches')); return; }
@@ -244,6 +273,7 @@ function replaceCurrent() {
 
 // Every chapter, front to back
 function replaceAllMatches() {
+  if (projectSearchOn()) return;
   const q = $('#search-input').value;
   if (!q || currentTab !== 'manuscript') return;
   snapshotStructure('replace all');
@@ -269,8 +299,9 @@ $('#search-input').addEventListener('input', () => {
   clearTimeout(saveTimers.search);
   saveTimers.search = setTimeout(runSearch, 250);
 });
-$('#search-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); freshSearchIfStale(); gotoMatch(searchState.idx + (e.shiftKey ? -1 : 1)); }
+$('#search-input').addEventListener('keydown', async (e) => {
+  if (e.key === 'Tab' && projectSearchOn()) return; // no Replace: Tab reaches the scope and result buttons
+  if (e.key === 'Enter') { e.preventDefault(); await freshSearchIfStale(); gotoMatch(searchState.idx + (e.shiftKey ? -1 : 1)); }
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnFromSearch(); }
   // Tab (and ⇧Tab) steps between Find and Replace, like any two fields;
   // Esc is the way back into the text, at the match
@@ -288,11 +319,216 @@ function findFieldTab(e, to) {
   el.focus();
   el.select();
 }
-$('#search-next').onclick = () => { freshSearchIfStale(); gotoMatch(searchState.idx + 1); };
-$('#search-prev').onclick = () => { freshSearchIfStale(); gotoMatch(searchState.idx - 1); };
 $('#replace-one').onclick = replaceCurrent;
 $('#replace-all').onclick = replaceAllMatches;
 $('#search-close').onclick = closeSearch;
+$('#search-next').onclick = async () => { await freshSearchIfStale(); gotoMatch(searchState.idx + 1); };
+$('#search-prev').onclick = async () => { await freshSearchIfStale(); gotoMatch(searchState.idx - 1); };
+$('#search-scope').onchange = () => { projectReturnRange = null; runSearch(); };
+
+// Whole-project Find is read-only. It reads only this book's note pages,
+// once per search session; manuscript/outline/Darlings come from live state.
+let projectSearchTicket = 0;
+let projectSearchPending = Promise.resolve();
+let projectNavigateTicket = 0;
+let projectSearchNavigating = false;
+let projectSearchMatches = [];
+let projectReturnRange = null;
+const projectNotesCache = new Map();
+const projectSearchOn = () => featureOn('projectSearch') && $('#search-scope').value === 'project';
+const PROJECT_SEARCH_LIMIT = 200;
+
+function projectRanges(root, q) {
+  const found = [];
+  if (!root || !q) return found;
+  for (const nodes of textRuns(root)) {
+    const run = nodes.filter((n) => !n.parentElement?.closest('.ghost, .footnote-list, .walk-note, script, style'));
+    for (const m of matchSpans(run.map((n) => n.textContent), q)) {
+      const range = document.createRange();
+      range.setStart(run[m.from[0]], m.from[1]);
+      range.setEnd(run[m.to[0]], m.to[1]);
+      const text = run.map((n) => n.textContent).join('');
+      const start = run.slice(0, m.from[0]).reduce((n, p) => n + p.textContent.length, 0) + m.from[1];
+      found.push({ range, text, start });
+    }
+  }
+  return found;
+}
+
+function projectTextRoot(text, html = false) {
+  const template = document.createElement('template');
+  template.innerHTML = '<div></div>';
+  const root = template.content.firstElementChild;
+  if (html) root.innerHTML = text || '';
+  else root.textContent = text || '';
+  return root;
+}
+
+async function projectSources(bookId) {
+  const sources = [];
+  const add = (source, root) => { if (root) sources.push({ ...source, root }); };
+  add({ kind: 'book-title', label: t('Book title') }, $('#tp-title'));
+  for (const ch of book.chapterOrder) {
+    const label = chapterHeading(ch) || chapterName(ch);
+    add({ kind: 'title', ch, label: t('Chapter title') + ' · ' + label }, document.querySelector(`.chapter[data-id="${ch}"] .ch-title`));
+    add({ kind: 'manuscript', ch, label: t('Manuscript') + ' · ' + label }, chapterBodyEl(ch));
+    add({ kind: 'outline', ch, label: tabName('outline') + ' · ' + label }, projectTextRoot((book.chapterNotes || {})[ch]));
+    for (const sec of (book.sectionNotes || {})[ch] || []) {
+      add({ kind: 'section', ch, sec: sec.id, label: tabName('outline') + ' · ' + label }, projectTextRoot(sec.text));
+    }
+  }
+  for (const card of book.looseCards || []) {
+    add({ kind: 'loose', id: card.id, label: t('Loose cards') }, projectTextRoot(card.text));
+  }
+  for (const [id, text] of Object.entries(book.sceneNotes || {})) {
+    add({ kind: 'scene', id, label: tabName('outline') }, projectTextRoot(text));
+  }
+  for (const d of darlings) {
+    add({ kind: 'darling', id: d.id, label: t('Darlings') + ' · ' + (d.chapterLabel || '') }, projectTextRoot(d.html || d.text, !!d.html));
+  }
+  const pages = ['book', ...book.chapterOrder.filter((c) => isStory(c))];
+  const notes = await Promise.allSettled(pages.map(async (page) => {
+    const kind = notesKind(page);
+    const label = t('Notes') + ' · ' + (page === 'book' ? t('The Book') : notesLabel(page));
+    const key = bookId + '/' + kind;
+    const ed = $('#aux-editor');
+    let html;
+    if (currentTab === 'notes' && ed.dataset.book === bookId && ed.dataset.kind === kind) html = ed.innerHTML;
+    else if (auxPending[key]) html = auxPending[key].html;
+    else {
+      if (!projectNotesCache.has(key)) projectNotesCache.set(key, window.neo.readAux(bookId, kind));
+      try { html = await projectNotesCache.get(key); }
+      catch (err) { projectNotesCache.delete(key); throw err; }
+    }
+    return { kind: 'notes', page, label, root: projectTextRoot(html, true) };
+  }));
+  return { sources: sources.concat(notes.filter((n) => n.status === 'fulfilled').map((n) => n.value)), incomplete: notes.some((n) => n.status === 'rejected') };
+}
+
+async function runProjectSearch(q, ticket) {
+  const list = $('#project-search-results');
+  list.replaceChildren();
+  list.hidden = !q;
+  $('#project-search-toggle').setAttribute('aria-expanded', q ? 'true' : 'false');
+  projectSearchMatches = [];
+  projectReturnRange = null;
+  if (!q || !book) { $('#search-count').textContent = ''; return; }
+  $('#search-count').textContent = t('Searching…');
+  const bookId = book.id;
+  try {
+    const { sources, incomplete } = await projectSources(bookId);
+    if (ticket !== projectSearchTicket || !book || book.id !== bookId || !projectSearchOn() || $('#searchbar').hidden) return;
+    let total = 0;
+    for (const source of sources) {
+      projectRanges(source.root, q).forEach((m, occurrence) => {
+        total++;
+        if (projectSearchMatches.length < PROJECT_SEARCH_LIMIT) projectSearchMatches.push({ source, occurrence, text: m.text, start: m.start });
+      });
+    }
+    $('#search-count').textContent = total ? t('{n} found', { n: total }) : t('none');
+    const message = (text) => { const p = document.createElement('p'); p.className = 'project-search-status'; p.textContent = text; list.appendChild(p); };
+    if (incomplete) message(t('Some notes could not be searched. Try again.'));
+    if (total > PROJECT_SEARCH_LIMIT) message(t('Showing the first {n} results. Refine your search for more.', { n: PROJECT_SEARCH_LIMIT }));
+    if (!total && !incomplete) message(t('No matches'));
+    projectSearchMatches.forEach((m, i) => {
+      const row = document.createElement('button');
+      row.className = 'project-search-result';
+      const label = document.createElement('span'); label.className = 'project-search-label'; label.textContent = m.source.label;
+      const snippet = document.createElement('span'); snippet.className = 'project-search-snippet';
+      const from = Math.max(0, m.start - 45);
+      const end = Math.min(m.text.length, m.start + q.length + 65);
+      snippet.append(document.createTextNode((from ? '…' : '') + m.text.slice(from, m.start)));
+      const mark = document.createElement('mark'); mark.textContent = m.text.slice(m.start, m.start + q.length); snippet.appendChild(mark);
+      snippet.append(document.createTextNode(m.text.slice(m.start + q.length, end) + (end < m.text.length ? '…' : '')));
+      row.append(label, snippet);
+      row.onclick = () => gotoProjectMatch(i);
+      list.appendChild(row);
+    });
+  } catch (err) {
+    if (ticket !== projectSearchTicket) return;
+    $('#search-count').textContent = t('Search unavailable');
+    window.neo.logError('project search: ' + (err.message || err));
+  }
+}
+
+async function projectResultRoot(source, bookId) {
+  if (['manuscript', 'title', 'book-title'].includes(source.kind)) {
+    switchTab('manuscript');
+    if (source.kind === 'book-title') return $('#tp-title');
+    return source.kind === 'manuscript' ? chapterBodyEl(source.ch) : document.querySelector(`.chapter[data-id="${source.ch}"] .ch-title`);
+  }
+  if (source.kind === 'notes') {
+    switchTab('notes');
+    openNotesPage(source.page);
+    for (let n = 0; n < 250; n++) {
+      if (!book || book.id !== bookId || currentTab !== 'notes' || notesPage !== source.page) return null;
+      const ed = $('#aux-editor');
+      if (ed.dataset.book === bookId && ed.dataset.kind === notesKind(source.page)) return ed;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return null;
+  }
+  if (source.kind === 'darling') {
+    switchTab('darlings');
+    const index = darlings.findIndex((d) => d.id === source.id);
+    return index < 0 ? null : $$('#darlings-list .darling')[index]?.firstElementChild;
+  }
+  switchTab('outline');
+  if (source.kind === 'loose') {
+    const cell = $$('#loose-list .ob-cell').find((c) => c.dataset.loose === source.id);
+    $('#side-pane').classList.add('open');
+    return cell?.querySelector('.ob-text');
+  }
+  if (boardShowing()) {
+    const cell = $$('#outline-board .ob-cell').find((c) => source.kind === 'scene' ? c.dataset.sid === source.id :
+      c.dataset.ch === source.ch && (source.kind === 'section' ? c.dataset.sec === source.sec : c.dataset.kind === 'chapter'));
+    return cell?.querySelector('.ob-text');
+  }
+  return $$('#outline-list .ol-line').find((c) => c.dataset.chId === source.ch &&
+    (source.kind === 'section' ? c.dataset.secId === source.sec : c.classList.contains('ol-chapter')))?.querySelector('.ol-text');
+}
+
+async function gotoProjectMatch(i) {
+  if (!projectSearchMatches.length || !book) return;
+  const index = ((i % projectSearchMatches.length) + projectSearchMatches.length) % projectSearchMatches.length;
+  const m = projectSearchMatches[index];
+  const bookId = book.id;
+  const query = $('#search-input').value;
+  const ticket = ++projectNavigateTicket;
+  projectSearchNavigating = true;
+  try {
+    const root = await projectResultRoot(m.source, bookId);
+    if (ticket !== projectNavigateTicket || !book || book.id !== bookId || !projectSearchOn() || query !== $('#search-input').value || $('#searchbar').hidden) return;
+    const match = projectRanges(root, query)[m.occurrence];
+    if (!match) { toast(t('That result changed. Search again.')); runSearch(); return; }
+    searchState.idx = index;
+    searchState.tab = currentTab;
+    projectReturnRange = match.range;
+    if (window.CSS && CSS.highlights && window.Highlight) CSS.highlights.set('neo-search-current', new Highlight(match.range));
+    const el = match.range.startContainer.parentElement;
+    // Once chosen, put the results away so they cannot cover the match.
+    // The bar's Results button brings the same list back without rereading.
+    $('#project-search-results').hidden = true;
+    $('#project-search-toggle').setAttribute('aria-expanded', 'false');
+    $('#search-input').focus({ preventScroll: true });
+    el.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
+    $$('.project-search-result').forEach((row, n) => row.setAttribute('aria-current', n === index ? 'true' : 'false'));
+    $('#search-count').textContent = t('{i} of {n}', { i: index + 1, n: projectSearchMatches.length });
+  } catch (err) {
+    window.neo.logError('project search navigation: ' + (err.message || err));
+    if (ticket === projectNavigateTicket) toast(t('That result changed. Search again.'));
+  } finally { if (ticket === projectNavigateTicket) projectSearchNavigating = false; }
+}
+
+$('#project-search-results').onkeydown = (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnFromSearch(); }
+};
+$('#project-search-toggle').onclick = () => {
+  const list = $('#project-search-results');
+  list.hidden = !list.hidden;
+  $('#project-search-toggle').setAttribute('aria-expanded', list.hidden ? 'false' : 'true');
+  if (!list.hidden) (list.querySelector('[aria-current="true"]') || list.querySelector('button'))?.focus();
+};
 
 /* ================================================================== */
 /*  IMPORT                                                             */

@@ -37,6 +37,7 @@ function harness() {
     t: (s) => s,
     toast: (msg) => toasts.push(msg),
     book: { id: 'b1' },
+    projectNotesCache: new Map(), // whole-project Find's note reads (app/find.js)
     window: { neo },
     console,
   });

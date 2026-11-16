@@ -1544,6 +1544,18 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
 }
 #searchbar button:hover { color: var(--accent); border-color: var(--accent); }
 #search-count { font-size: 11px; color: var(--muted); min-width: 52px; text-align: center; }
+#search-scope { background: var(--bg); color: var(--muted); border: 1px solid var(--muted); border-radius: 5px; padding: 5px; }
+#project-search-results {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 50vh;
+  overflow-y: auto; overscroll-behavior: contain; padding: 6px; background: var(--pane);
+  border: 1px solid var(--muted); border-radius: 6px;
+}
+#searchbar .project-search-result { display: block; width: 100%; text-align: left; border: 0; padding: 8px; }
+#searchbar .project-search-result:hover, #searchbar .project-search-result[aria-current="true"] { background: var(--bg); }
+.project-search-label, .project-search-snippet { display: block; overflow-wrap: anywhere; }
+.project-search-label { color: var(--accent); font-size: 11px; margin-bottom: 4px; }
+.project-search-snippet mark { background: var(--accent); color: #191919; }
+.project-search-status { padding: 8px; color: var(--muted); font-size: 12px; }
 
 #goal-counter.goal-met { color: var(--accent); }
 #import-btn {

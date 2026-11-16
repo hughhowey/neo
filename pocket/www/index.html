@@ -145,13 +145,19 @@
     <!-- Find & replace -->
     <div id="searchbar" hidden>
       <input id="search-input" data-i18n-placeholder placeholder="Find" data-i18n-label="Find" spellcheck="false" />
-      <span id="search-count"></span>
+      <select id="search-scope" data-i18n-label="Search scope" hidden>
+        <option value="tab" data-i18n>Current tab</option>
+        <option value="project" data-i18n>Whole project</option>
+      </select>
+      <span id="search-count" role="status" aria-live="polite"></span>
+      <button id="project-search-toggle" aria-controls="project-search-results" aria-expanded="false" data-i18n hidden>Results</button>
       <button id="search-prev" data-i18n-title title="Previous (⇧Enter)" data-i18n-label="Previous (⇧Enter)">&#8593;</button>
       <button id="search-next" data-i18n-title title="Next (Enter)" data-i18n-label="Next (Enter)">&#8595;</button>
       <input id="replace-input" data-i18n-placeholder placeholder="Replace with" data-i18n-label="Replace with" spellcheck="false" />
       <button id="replace-one" data-i18n>Replace</button>
       <button id="replace-all" data-i18n>All</button>
       <button id="search-close" data-i18n-title title="Close (Esc)" data-i18n-label="Close (Esc)">&#10005;</button>
+      <div id="project-search-results" data-i18n-label="Project search results" role="region" hidden></div>
     </div>
 
   </div>

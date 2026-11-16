@@ -280,7 +280,7 @@ function switchTab(name) {
   flushAux();
 
   // an open Find follows the tab (Notes arrives from disk, so it looks later)
-  const findHere = () => { if (!$('#searchbar').hidden) runSearch(); };
+  const findHere = () => { if (!$('#searchbar').hidden && !projectSearchNavigating) runSearch(); };
   if (name === 'manuscript') {
     paper.hidden = false;
     aux.hidden = true;

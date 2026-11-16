@@ -74,6 +74,7 @@ async function setFeature(key, on) {
     if (currentTab === 'manuscript') queueSideCards();
     else switchTab(currentTab); // the Outline's view, the Notes pages, the right-hand pane
   }
+  if (!$('#searchbar').hidden) runSearch();
 }
 
 // ---- the window ----

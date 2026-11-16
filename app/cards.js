@@ -2673,6 +2673,7 @@ function flushAux() {
   if (auxDirty && ed.dataset.kind && ed.dataset.book) {
     const key = ed.dataset.book + '/' + ed.dataset.kind;
     auxPending[key] = { bookId: ed.dataset.book, kind: ed.dataset.kind, html: ed.innerHTML, inFlight: false };
+    if (projectNotesCache.has(key)) projectNotesCache.set(key, Promise.resolve(ed.innerHTML));
     auxDirty = false;
   }
   for (const key of Object.keys(auxPending)) {

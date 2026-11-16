@@ -408,6 +408,7 @@ $('#editor-view').addEventListener('wheel', (e) => {
   if (e.ctrlKey) return; // pinch-zoom gesture, not a scroll
   if (scroller.contains(e.target)) return; // native scrolling handles it
   if ($('#nav-pane').contains(e.target) || $('#side-pane').contains(e.target)) return;
+  if ($('#project-search-results')?.contains(e.target)) return;
   scroller.scrollTop += e.deltaY;
 }, { passive: true });
 
