@@ -78,8 +78,10 @@ test('[[ at the start of an empty line makes a box line, and the brackets go', a
 
 test('undo right after brings back the [[ as typed', async () => {
   await press('z', 'z', [MOD]);
-  await tick(150);
-  let ps = await paras();
+  // the undo is NEO's structural one, which finishes after a read of the
+  // chapter: a busy Mac took longer than a fixed wait
+  let ps;
+  for (let i = 0; i < 40; i++) { ps = await paras(); if (ps[0].cls === '') break; await tick(50); }
   assert.equal(ps[0].cls, '');
   assert.equal(ps[0].text, '[[');
   // and again, for the rest
