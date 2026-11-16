@@ -2763,7 +2763,7 @@ function renderDarlings() {
   const wrap = $('#darlings-list');
   wrap.innerHTML = '';
   if (darlings.length === 0) {
-    wrap.innerHTML = `<div class="darlings-empty">${t('When a beautiful paragraph is gumming up the works, select it and drag it onto the Darlings tab below.')}<br>${t('It leaves your manuscript but it is never lost.')}</div>`;
+    wrap.innerHTML = `<div class="darlings-empty">${NO_HOVER ? t('When a beautiful paragraph is gumming up the works, select it and tap the Darlings tab below.') : t('When a beautiful paragraph is gumming up the works, select it and drag it onto the Darlings tab below.')}<br>${t('It leaves your manuscript but it is never lost.')}</div>`;
     return;
   }
   for (const d of darlings) {

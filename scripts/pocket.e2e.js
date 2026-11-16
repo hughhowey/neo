@@ -173,6 +173,41 @@ async function main() {
       assert.deepEqual(errors, []);
     });
 
+    // a touch screen can't drag a selection onto Darlings (#524): a tap sends it
+    await test('a tap on Darlings with a passage selected sends it there; without one it opens the tab', async () => {
+      await js(`switchTab('manuscript')`);
+      await tick(300);
+      const before = await js('darlings.length');
+      await js(`(() => {
+        const body = document.querySelector('.chapter-body');
+        const p = document.createElement('p');
+        p.textContent = 'A darling too lovely to keep.';
+        body.appendChild(p);
+        const r = document.createRange();
+        r.selectNodeContents(p);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        const tab = document.querySelector('.tab.darlings');
+        tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+        s.removeAllRanges(); // the tap clears the selection before the click
+        tab.click();
+      })()`);
+      await tick(500);
+      assert.equal(await js('currentTab'), 'manuscript', 'the tap sent the passage, not the writer');
+      assert.equal(await js('darlings.length'), before + 1);
+      assert.match(await js('darlings[0].text || darlings[0].html || ""'), /too lovely to keep/);
+      assert.equal(await js(`document.querySelector('.chapter-body').textContent.includes('too lovely')`), false, 'it left the manuscript');
+      await js(`(() => {
+        getSelection().removeAllRanges();
+        const tab = document.querySelector('.tab.darlings');
+        tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+        tab.click();
+      })()`);
+      await tick(400);
+      assert.equal(await js('currentTab'), 'darlings', 'with nothing selected the tap opens Darlings');
+      await js(`switchTab('manuscript')`);
+      assert.deepEqual(errors, []);
+    });
+
     await test('a book still opens cleanly after all that', async () => {
       assert.deepEqual(errors, []);
     });
