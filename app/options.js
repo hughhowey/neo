@@ -104,6 +104,7 @@ async function openOptions() {
         <section>
           <h3>${t('Writing')}</h3>
           ${check('markdown', !markdownOff(), t('Markdown emphasis'), t('*italic* and **bold** typed as you write become italic and bold.'))}
+          ${check('autoCloseQuotes', autoCloseQuotesOn(), t('Close quotes as you open them'), t('Typing an opening quotation mark adds the closing one after the cursor. Typing it again steps past it.'))}
           ${check('nbspMarks', !!library.nbspMarks, t('Non-breaking marks'), t('Tint the spaces and hyphens that hold a line together.'))}
           ${pressHoldShown ? check('pressHold', !!pressHoldOn, t('Press and hold for accents'), t('Hold a letter for é, ñ, ç and the rest. Off, held keys repeat.')) : ''}
           <label class="opt-row opt-select"><span class="opt-label">${t('New books open to')}</span>
@@ -151,6 +152,7 @@ async function openOptions() {
     const on = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (opt.startsWith('feature:')) { await setFeature(opt.slice(8), on); paintAll(); return; }
     if (opt === 'markdown') { if (on) delete library.markdownOff; else library.markdownOff = true; await writeLibrary(library); return; }
+    if (opt === 'autoCloseQuotes') { if (on) library.autoCloseQuotes = true; else delete library.autoCloseQuotes; await writeLibrary(library); return; }
     if (opt === 'nbspMarks') { if (!!on !== nbspMarksEnabled) toggleNbspMarks(); return; }
     if (opt === 'pressHold') { window.neo.setPressHold(!!on); pressHoldOn = !!on; return; }
     if (opt === 'writingStyle') {

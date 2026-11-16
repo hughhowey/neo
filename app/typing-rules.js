@@ -770,6 +770,8 @@ function smartKeys(e, body) {
   if (!sel.rangeCount) return;
   const range = sel.getRangeAt(0);
 
+  if (e.key === 'Backspace' && autoCloseQuotesOn() && quotePairBackspace(range, bookQuotes(body))) { e.preventDefault(); return; }
+
   const prevChars = (n) => {
     if (!range.collapsed) return '';
     const node = range.startContainer;
@@ -814,10 +816,65 @@ function smartKeys(e, body) {
   if (e.key === '"' || e.key === "'") {
     e.preventDefault();
     const double = e.key === '"';
-    const ch = typedQuote(e.key, prevChars(8), double ? bookQuotes(body) : null, double ? null : singleQuotes(body),
-      (q, straight) => quoteIsOpen(range, q, straight));
+    const q = double ? bookQuotes(body) : null;
+    const isOpen = (marks, straight) => quoteIsOpen(range, marks, straight);
+    const pairing = double && autoCloseQuotesOn() && range.collapsed;
+    // closing, right before the mark that closes it: step over that mark
+    if (pairing && quoteIsOpen(range, q, '"') && textAt(range, 0, q.close.length) === q.close) {
+      caretBy(range, q.close.length);
+      return;
+    }
+    const opens = double && quoteOpens(e.key, prevChars(8), q, isOpen);
+    // opening, with nothing straight after it (a quote typed before a word
+    // opens around words already written): both marks, the caret between
+    if (pairing && opens && !/^[\p{L}\p{N}]/u.test(textAt(range, 0, 1))) {
+      document.execCommand('insertText', false, q.open + q.close);
+      caretBy(window.getSelection().getRangeAt(0), -q.close.length);
+      return;
+    }
+    const ch = typedQuote(e.key, prevChars(8), q, double ? null : singleQuotes(body), isOpen);
     document.execCommand('insertText', false, ch);
   }
+}
+
+// Options → Close quotes as you open them (#270): a typed " that opens a
+// quotation puts its closing mark in too, the caret between, in one step
+// that ⌘Z takes back whole. Typing " right before that closing mark steps
+// over it, and Backspace between an empty pair takes both. Only double
+// quotes: ' is mostly an apostrophe. Off unless the writer turns it on.
+const autoCloseQuotesOn = () => !!library && !!library.autoCloseQuotes;
+// the text from the caret (at > 0, after it; at < 0, before it), in the
+// caret's own text node: '' where the node ends
+function textAt(range, at, len) {
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return '';
+  const from = range.startOffset + at;
+  if (from < 0) return '';
+  return node.textContent.slice(from, from + len);
+}
+function caretBy(range, n) {
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return;
+  const at = Math.max(0, Math.min(node.textContent.length, range.startOffset + n));
+  const r = document.createRange();
+  r.setStart(node, at);
+  r.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+function quotePairBackspace(range, q) {
+  if (!range.collapsed) return false;
+  if (textAt(range, -q.open.length, q.open.length) !== q.open || textAt(range, 0, q.close.length) !== q.close) return false;
+  const node = range.startContainer;
+  const r = document.createRange();
+  r.setStart(node, range.startOffset - q.open.length);
+  r.setEnd(node, range.startOffset + q.close.length);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  document.execCommand('delete');
+  return true;
 }
 
 // Is a quotation open at the caret, in the paragraph so far?
@@ -857,11 +914,7 @@ function quoteOpenIn(text, q, straight = '') {
 // is only an apostrophe); isOpen(marks, straight): is a quotation in those
 // marks open in the paragraph so far (quoteIsOpen).
 function typedQuote(key, before, q, sq, isOpen) {
-  const last = before.slice(-1);
-  let opening = quoteOpensAfter(before);
-  // after a dash, a quote usually closes speech that was cut off ("I was
-  // just—"); it opens one only when no quotation is open in the paragraph
-  if (last === '—' || last === '–') opening = !isOpen(key === '"' ? q : { open: '‘', close: '’' }, key === '"' ? '"' : '');
+  const opening = quoteOpens(key, before, q, isOpen);
   if (key === '"') return opening ? q.open : q.close;
   // most languages type ' as an apostrophe only; English, Dutch and
   // German also open (and German closes) single quotes with it
@@ -871,6 +924,14 @@ function typedQuote(key, before, q, sq, isOpen) {
   // quotation that is open in the paragraph
   if (sq.close !== '’' && isOpen(sq, '')) return sq.close;
   return '’';
+}
+// Does this typed " or ' open a quotation (rather than close one)?
+function quoteOpens(key, before, q, isOpen) {
+  const last = before.slice(-1);
+  // after a dash, a quote usually closes speech that was cut off ("I was
+  // just—"); it opens one only when no quotation is open in the paragraph
+  if (last === '—' || last === '–') return !isOpen(key === '"' ? q : { open: '‘', close: '’' }, key === '"' ? '"' : '');
+  return quoteOpensAfter(before);
 }
 // Does a quote typed after this text open one? At the start, after a space
 // or a bracket, or after an opening mark (»› and „‚ nest), it does. But
