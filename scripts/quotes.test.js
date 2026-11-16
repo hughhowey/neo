@@ -16,8 +16,34 @@ const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 const between = (from, to) => app.slice(app.indexOf(from), app.indexOf(to));
 const context = vm.createContext({ library: null, book: null, chapterHTML: {}, NeoI18n: { getLocale: () => 'en' } });
 vm.runInContext(between('function quoteOpenIn(', '// A hyphen standing on its own'), context);
-vm.runInContext('this.api = { typedQuote, quoteOpenIn, bookQuotes, singleQuotes };', context);
-const { typedQuote, quoteOpenIn, bookQuotes, singleQuotes } = context.api;
+vm.runInContext('this.api = { typedQuote, quoteOpenIn, bookQuotes, singleQuotes, incomingQuotes, quoteRuns };', context);
+const { typedQuote, quoteOpenIn, bookQuotes, singleQuotes, incomingQuotes, quoteRuns } = context.api;
+
+test('incoming prose curves the quotes and apostrophe reported in #506', () => {
+  const q = { open: '“', close: '”' }, sq = { open: '‘', close: '’' };
+  assert.equal(incomingQuotes("'You aren't,' she replied.", q, sq), '‘You aren’t,’ she replied.');
+  assert.equal(incomingQuotes('“Already curved,” she said.', q, sq), '“Already curved,” she said.');
+  assert.equal(incomingQuotes('"', q, sq, '“I was just—'), '”');
+  assert.equal(incomingQuotes("'t", q, sq, 'can'), '’t');
+});
+
+test('incoming quotes keep context across formatting runs and leave metadata alone', () => {
+  const runs = [{ text: "'You ", b: true }, { text: "aren't", i: true }, { text: ",' she replied." }, { mark: 'note-1' }, { fn: 'fn-1' }];
+  quoteRuns(runs, { open: '“', close: '”' }, { open: '‘', close: '’' });
+  assert.equal(runs.map((r) => r.text || '').join(''), '‘You aren’t,’ she replied.');
+  assert.equal(runs[0].b, true);
+  assert.equal(runs[1].i, true);
+  assert.equal(runs[3].mark, 'note-1');
+  assert.equal(runs[4].fn, 'fn-1');
+});
+
+test('incoming prose uses the writing language, just like typing', () => {
+  for (const lang of ['en', 'fr', 'de', 'de-CH', 'sv', 'pt-PT', 'pl']) {
+    context.library = { spellLanguage: lang };
+    const input = '"Hello," she said. "I was just—"';
+    assert.equal(incomingQuotes(input, bookQuotes(), singleQuotes()), type(lang, input), lang);
+  }
+});
 
 // Type keys into an empty paragraph, writing in lang. chapter: text already in
 // the chapter, which tells bookQuotes the marks the book is set in.
