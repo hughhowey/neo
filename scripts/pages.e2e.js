@@ -305,9 +305,14 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
   assert.equal(setup.split, 2, 'the paragraph runs across the page break ' + JSON.stringify(setup));
   assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret ' + JSON.stringify(setup));
   await tick(600);
+  // the first letter settles where the caret is: a caret put there by a
+  // script, not a click, a Mac may first bring into view. Every letter after
+  // it is #453's: each one bobbed the page
+  for (const type of ['keyDown', 'char', 'keyUp']) wc.sendInputEvent({ type, keyCode: 'h' });
+  await tick(600);
   const start = await js(`Math.round(document.getElementById('paper-scroll').scrollTop)`);
   await js(`window.__painted = []`);
-  for (const ch of 'harbor') {
+  for (const ch of 'arbor') {
     wc.sendInputEvent({ type: 'keyDown', keyCode: ch });
     wc.sendInputEvent({ type: 'char', keyCode: ch });
     wc.sendInputEvent({ type: 'keyUp', keyCode: ch });

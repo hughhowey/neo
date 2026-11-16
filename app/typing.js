@@ -1027,8 +1027,10 @@ function handleEnter(e, body, chId) {
       resetNativeUndo();
       // no input event follows a break made by hand, so the caret is kept in
       // sight here, as typing keeps it: a break near the window's foot pushed
-      // the line below it until the next key
-      if (!typewriterEnabled) revealCaret();
+      // the line below it until the next key. Once more in the next frame:
+      // on a Mac the *** line settles its height a moment later and pushed
+      // the caret's line out of sight again
+      if (!typewriterEnabled) { revealCaret(); requestAnimationFrame(() => { if (!typewriterEnabled) revealCaret(); }); }
       breakRun++;
       return true;
     }
