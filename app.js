@@ -13116,6 +13116,19 @@ async function loadSnaps(bookId, fresh) {
     s.files = new Set(r.files);
     snaps.push(s);
   }
+  // Folder names have second precision. Their count/kind/random suffix is
+  // not creation order: tied names need the milliseconds already in the
+  // commit file, or an incremental chapter can end up before its source.
+  const seconds = new Map();
+  for (const s of snaps) seconds.set(s.at, (seconds.get(s.at) || 0) + 1);
+  for (const s of snaps) {
+    if (seconds.get(s.at) < 2) continue;
+    const meta = JSON.parse(await window.neo.snapshotRead(bookId, s.name, 'snapshot.json'));
+    const at = Date.parse(meta.at);
+    if (!Number.isFinite(at) || Math.floor(at / 1000) !== s.at / 1000) throw new Error('Invalid snapshot time: ' + s.name);
+    s.at = at;
+    s.meta = meta;
+  }
   snaps.sort((a, b) => a.at - b.at || (a.name < b.name ? -1 : 1));
   snapCache = { bookId, snaps };
   return snaps;
@@ -13146,10 +13159,14 @@ async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
   const texts = {};
   for (const c of order) texts[c] = htmlOf(c);
   const snaps = await loadSnaps(bookId);
-  const now = Date.now();
-  if (ifNoneToday && snaps.some((s) => new Date(s.at).toDateString() === new Date(now).toDateString())) return null;
+  const wallTime = Date.now();
+  if (ifNoneToday && snaps.some((s) => new Date(s.at).toDateString() === new Date(wallTime).toDateString())) return null;
   const last = snaps[snaps.length - 1] || null;
   const lastMeta = last ? await snapMeta(bookId, last) : null;
+  // Serialized snapshots must remain ordered even in the same millisecond
+  // or when the device clock moves backwards.
+  const lastTime = lastMeta && Date.parse(lastMeta.at);
+  const now = Number.isFinite(lastTime) ? Math.max(wallTime, lastTime + 1) : wallTime;
   const hashes = {};
   const words = {};
   const changed = [];
@@ -13170,6 +13187,7 @@ async function takeSnapshotNow(kind, htmlOf, { ifNoneToday }) {
   const meta = { v: 1, at: new Date(now).toISOString(), kind, title: book.title || '', chapterOrder: order, chapterTitles: titles, chapterKinds: kinds, hashes, words, changed, total };
   await window.neo.snapshotWrite(bookId, name, 'snapshot.json', JSON.stringify(meta, null, 1));
   const snap = parseSnapName(name);
+  snap.at = now;
   snap.files = new Set([...changed.map((c) => c + '.html'), 'snapshot.json']);
   snap.meta = meta;
   snaps.push(snap);
