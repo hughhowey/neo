@@ -47,9 +47,10 @@ function litrpgKey(e, body) {
   return true;
 }
 
-// Enter in a box (⇧Enter too) is the box's next line. Enter on the box's
-// last line when it's empty closes the box: that line becomes prose. An
-// empty line inside a box stays, as a blank line in it.
+// Enter in a box is the box's next line. Enter on the box's last line when
+// it's empty closes the box: that line becomes prose. ⇧Enter never closes
+// it: a blank line in the box, wherever the caret is. An empty line inside
+// a box stays, as a blank line in it.
 function litrpgEnter(e, body, chId) {
   if (e.key !== 'Enter' || e.altKey) return false;
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey) return false; // ⌘Enter: full screen
@@ -61,7 +62,7 @@ function litrpgEnter(e, body, chId) {
   enterRun = 0;
   const next = block.nextElementSibling;
   const last = !(next && next.classList.contains('litrpg'));
-  if (last && block.textContent === '') {
+  if (last && block.textContent === '' && !e.shiftKey) {
     snapshotStructure('litrpg box to prose');
     block.classList.remove('litrpg');
     placeCaret(block, 0);

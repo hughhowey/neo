@@ -3329,6 +3329,10 @@ function buildMenu() {
           click: () => sendToWindow({ type: 'help' })
         },
         {
+          label: t('What’s New in NEO…'),
+          click: () => sendToWindow({ type: 'whatsNew' })
+        },
+        {
           label: t('NEO for iPad and iPhone…'),
           click: () => { showPocketInfo().catch((err) => logError('pocket info', err)); }
         },

@@ -49,6 +49,7 @@ function buildPrintHtml(d, o) {
     let afterBreak = false;
     return paras.map((p, i) => {
       if (p.sceneBreak) { afterBreak = true; return '<p class="brk">*&#8195;*&#8195;*</p>'; }
+      if (p.blank) return '<p class="blank">&#160;</p>';
       const inner = atFoot(p.html.replace(/^<p[^>]*>|<\/p>$/g, ''), p);
       if (p.litrpg) { afterBreak = false; return `<p class="${litrpgClass(paras, i)}">${inner || '&#8203;'}</p>`; }
       if (p.poetry) { afterBreak = false; return `<p class="poetry"${p.align ? ` style="text-align:${p.align}"` : ''}>${inner}</p>`; }
@@ -426,6 +427,7 @@ function buildTxt(data) {
     if (ch.heading) out += `${plainHeading(ch).toUpperCase()}\n\n`;
     const notes = [];
     ch.paras.forEach((p, i) => {
+      if (p.blank) { out += '\n'; return; } // the blank line the page shows
       // a LitRPG box: its lines one under the other, spaces as typed
       if (p.litrpg) {
         out += p.text + '\n' + (ch.paras[i + 1] && ch.paras[i + 1].litrpg ? '' : '\n');
@@ -458,6 +460,7 @@ function buildMd(data) {
     if (ch.heading) out += `\n## ${mdMeta(plainHeading(ch))}\n\n`;
     const notes = [];
     ch.paras.forEach((p, i) => {
+      if (p.blank) { out += '&nbsp;\n\n'; return; } // the blank line the page shows
       // a LitRPG box: a fenced block, which keeps its spaces and monospace
       if (p.litrpg) {
         const top = !(ch.paras[i - 1] && ch.paras[i - 1].litrpg);
@@ -558,6 +561,7 @@ function buildHtml(data, opts = {}) {
     let afterBreak = false; // a story's line of speech after *** keeps its indent
     return paras.map((p) => {
       if (p.sceneBreak) { afterBreak = initial; return '<p class="brk">***</p>'; }
+      if (p.blank) return '<p class="blank">&#160;</p>';
       if (p.litrpg) { afterBreak = false; return `<p class="${litrpgClass(paras, paras.indexOf(p))}">${p.html.replace(/^<p[^>]*>|<\/p>$/g, '') || '&#8203;'}</p>`; }
       if (p.poetry) { afterBreak = false; return p.html; }
       let html = p.html;
@@ -1135,7 +1139,8 @@ function docxEntriesOf(data) {
         body.push(docxP(paraRuns(p.html), { style: 'LitRPG', keepNext: !end, spaceBefore: top ? 240 : 0, spaceAfter: end ? 240 : 0, line: 240 }));
         return;
       }
-      if (p.sceneBreak) body.push(docxP([{ text: '***' }], { style: 'SceneBreak' }));
+      if (p.blank) body.push(docxP([], { style: 'BodyText' }));
+      else if (p.sceneBreak) body.push(docxP([{ text: '***' }], { style: 'SceneBreak' }));
       else if (p.poetry) body.push(docxP(paraRuns(p.html), { style: 'Poetry', align: p.align === 'center' || p.align === 'right' ? p.align : '' }));
       else if (p.align === 'center' || p.align === 'right') body.push(docxP(paraRuns(p.html), { style: 'BodyTextNoIndent', align: p.align }));
       else body.push(docxP(paraRuns(p.html), { style: p.flush ? 'BodyTextNoIndent' : 'BodyText' }));
@@ -1262,6 +1267,7 @@ ${ch.subtitle ? `<p class="sub">${escXml(ch.subtitle)}</p>` : ''}${ch.byline ? `
     let first = true;
     const paras = ch.paras.map((p, i) => {
       if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
+      if (p.blank) return '<p class="blank">&#160;</p>';
       if (p.litrpg) return `<p class="${litrpgClass(ch.paras, i)}">${xhtmlRuns(p) || '&#8203;'}</p>`;
       const classes = [];
       if (p.poetry) classes.push('poetry');
@@ -1514,7 +1520,7 @@ async function shelfBookData(shelf, opts = {}) {
       // chapters the writer gave it run on, a scene break between them)
       const paras = [];
       for (const chId of m.chapterOrder || []) {
-        const p = parasFromHtml(await window.neo.readChapter(m.id, chId));
+        const p = parasFromHtml(await window.neo.readChapter(m.id, chId), { blanks: true });
         if (!p.length) continue;
         if (paras.length) paras.push({ sceneBreak: true, poetry: false, text: '', runs: [], align: '', html: '' });
         paras.push(...p);
@@ -1535,7 +1541,7 @@ async function shelfBookData(shelf, opts = {}) {
     for (const chId of m.chapterOrder || []) {
       const kind = chapterKind(chId, m);
       if (!STORY_KINDS.includes(kind) && kind !== 'part') continue;
-      const paras = parasFromHtml(await window.neo.readChapter(m.id, chId));
+      const paras = parasFromHtml(await window.neo.readChapter(m.id, chId), { blanks: kind !== 'part' });
       if (paras.length || kind === 'part') chapters.push({ chId, kind, paras });
     }
     while (chapters.length && chapters[chapters.length - 1].kind === 'part') chapters.pop();
@@ -2003,6 +2009,58 @@ async function showAbout() {
   bd.querySelector('.m-ok').focus();
 }
 
+// WHAT'S NEW — Help → What's New in NEO…, and once after an update.
+// The notes are whats-new.json (newest release first, in English), shipped
+// with NEO so they're there offline. A writer who updates sees the notes
+// for the releases since the one they last saw, once, at launch: before a
+// word is typed, never in the middle of one. A fresh install skips them
+// (the welcome is enough), and so does Pocket, which has its own versions.
+const WHATS_NEW_SEEN = 'neo.whatsNewSeen';
+async function whatsNewNotes() {
+  try { return await (await fetch(new URL('whats-new.json', location.href))).json(); } catch { return []; }
+}
+const versionParts = (v) => String(v || '0').split('.').map((n) => parseInt(n, 10) || 0);
+function versionNewer(a, b) {
+  const x = versionParts(a); const y = versionParts(b);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+}
+async function whatsNewAtLaunch(existing) {
+  if (IS_POCKET || !window.neo.appVersion) return;
+  const now = await window.neo.appVersion();
+  let seen = null;
+  try { seen = localStorage.getItem(WHATS_NEW_SEEN); } catch { /* storage off: show nothing */ return; }
+  try { localStorage.setItem(WHATS_NEW_SEEN, now); } catch { /* ignore */ }
+  if (!existing || (seen && !versionNewer(now, seen))) return;
+  const notes = (await whatsNewNotes()).filter((r) => !versionNewer(r.version, now) && (!seen || versionNewer(r.version, seen)));
+  // the first time this runs, after the update that brought it: just this release
+  if (notes.length) showWhatsNew(seen ? notes : notes.slice(0, 1));
+}
+async function showWhatsNew(notes) {
+  if (!notes) notes = (await whatsNewNotes()).slice(0, 3);
+  if (!notes.length || document.querySelector('.whats-new')) return;
+  const bd = document.createElement('div');
+  bd.className = 'modal-backdrop';
+  const inline = (s) => escHtml(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  bd.innerHTML = `
+    <div class="modal whats-new">
+      <h2>${t('What’s New in NEO')}</h2>
+      <div class="wn-list">${notes.map((r) => `
+        <h3>NEO ${escHtml(r.version)}</h3>
+        <ul>${(r.items || []).map((it) => `<li>${inline(it)}</li>`).join('')}</ul>`).join('')}
+      </div>
+      <div style="margin-top:16px;text-align:center">
+        <button class="m-ok btn-gold">${t('Back to writing')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bd);
+  const close = () => bd.remove();
+  bd.querySelector('.m-ok').onclick = close;
+  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  bd.addEventListener('mousedown', (e) => { if (e.target === bd) close(); });
+  bd.querySelector('.m-ok').focus();
+}
+
 // Text size and the reset travel with page zoom; the menu item and the
 // keyboard fallback share this so the two cannot drift.
 async function setEditorFontSize(value) {
@@ -2036,6 +2094,7 @@ window.neo.onMenu(async (msg) => {
   }
   if (msg.type === 'help') showHelp();
   if (msg.type === 'about') showAbout();
+  if (msg.type === 'whatsNew') showWhatsNew();
   if (msg.type === 'checkUpdate') checkForUpdate();
   if (msg.type === 'update') updateMessage(msg);
   if (msg.type === 'export') doExport(msg.format);

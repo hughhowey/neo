@@ -29,10 +29,12 @@ async function loadLibrary() {
   if (untouched.length) await writeLibrary(library);
   await decideMoreFeatures();
   if (window.neo.writingStyleState) window.neo.writingStyleState(library.writingStyle);
-  if (!library.firstRunDone) {
+  const existing = !!library.firstRunDone;
+  if (!existing) {
     showFirstRun();
   }
   renderShelves();
+  whatsNewAtLaunch(existing);
 }
 
 function showFirstRun() {

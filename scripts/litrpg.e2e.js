@@ -150,6 +150,26 @@ test('Enter on an empty last line ends the box; that line is prose', async () =>
   assert.equal(ps[4].cls, '');
 });
 
+test('Shift+Enter on an empty last line gives the box a blank line instead of closing it', async () => {
+  await caret(4, 0, 1); // the line under ROLL, in chapter two: make a fresh box there
+  await press('Enter', '\r');
+  await caret(4, 0, 1);
+  await type('[[');
+  await type('HP 4');
+  await press('Enter', '\r');
+  await press('Enter', '\r', ['shift']);
+  await type('MP 2');
+  let ps = await paras(1);
+  assert.deepEqual(ps.slice(4, 7).map((p) => [p.cls, p.text]), [['litrpg', 'HP 4'], ['litrpg', ''], ['litrpg', 'MP 2']]);
+  // and plain Enter twice still ends it
+  await press('Enter', '\r');
+  await press('Enter', '\r');
+  ps = await paras(1);
+  assert.equal(ps[7].cls, '');
+  // tidy: take the test lines back out
+  await js(`(() => { const b = document.querySelectorAll('.chapter-body')[1]; [...b.children].slice(4, 8).forEach((p) => p.remove()); syncChapter(b, book.chapterOrder[1]); })()`);
+});
+
 test('an empty line inside a box stays in it', async () => {
   await caret(1, 0);
   await press('Enter', '\r');
@@ -304,6 +324,40 @@ test('the one font helper: scripts and manuscripts carry Courier Prime, with its
   assert.equal(r.sp, r.ms);
   assert.match(r.sp, /size-adjust: 79\.5%/, 'the Korean face keeps its measures');
   assert.equal(r.none, '');
+});
+
+test('a blank line on the page is a blank line in the book (#461): one for a run, none at the ends', async () => {
+  const r = await js(`(() => {
+    const kinds = (html, o) => parasFromHtml(html, o).map((p) => p.blank ? 'blank' : p.text);
+    return {
+      on: kinds('<p><br></p><p>a</p><p><br></p><p><br></p><p>b</p><p><br></p>', { blanks: true }),
+      off: kinds('<p>a</p><p><br></p><p>b</p>')
+    };
+  })()`);
+  assert.deepEqual(r.on, ['a', 'blank', 'b']);
+  assert.deepEqual(r.off, ['a', 'b'], 'pages and part titles read as before');
+  // in the book's own exports
+  await js(`(() => { const b = document.querySelectorAll('.chapter-body')[1]; const p = [...b.children].find((x) => x.textContent === 'One more line.'); p.insertAdjacentHTML('afterend', '<p><br></p>'); syncChapter(b, book.chapterOrder[1]); })()`);
+  const out = await js(`(async () => {
+    const e = buildDocxEntries();
+    return { html: buildHtml(bookExportData(), {}), epub: (await buildEpubEntries()).find((x) => x.path === 'OEBPS/ch2.xhtml').content,
+      docx: e.find((x) => x.path === 'word/document.xml').content, txt: buildTxt() };
+  })()`);
+  assert.match(out.html, /One more line\.<\/p>\n<p class="blank">&#160;<\/p>\n<p>/);
+  assert.match(out.epub, /One more line\.<\/p>\n<p class="blank">&#160;<\/p>/);
+  assert.match(out.docx, /One more line\.<\/w:t><\/w:r><\/w:p><w:p><w:pPr><w:pStyle w:val="BodyText"\/>[^]*?<\/w:pPr><\/w:p><w:p>/);
+  assert.ok(out.txt.includes('One more line.\n\n\nAnd the last.'), JSON.stringify(out.txt.slice(-120)));
+});
+
+test('Help → What’s New in NEO shows the notes, and Esc closes them', async () => {
+  await js(`showWhatsNew()`);
+  await tick(300);
+  const r = await js(`(() => { const m = document.querySelector('.whats-new'); return m && { h: m.querySelector('h3').textContent, items: m.querySelectorAll('li').length, code: !!m.querySelector('code') }; })()`);
+  assert.ok(r && r.items > 0, JSON.stringify(r));
+  assert.match(r.h, /^NEO \d/);
+  assert.ok(r.code, 'the `[[` shows as type');
+  await js(`document.querySelector('.whats-new').closest('.modal-backdrop').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  assert.equal(await js(`!!document.querySelector('.whats-new')`), false);
 });
 
 test('a book without boxes carries no box face', async () => {

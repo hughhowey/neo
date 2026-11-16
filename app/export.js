@@ -16,7 +16,10 @@ function safeName(s) {
 // Stray spans, inline styles, trailing <br>s, and the no-break spaces the
 // old engine planted all stop at this door (healStrayNbsp); the writer's
 // own no-break spaces go through.
-function parasFromHtml(html) {
+// { blanks: true } (a story's text, for the exports): an empty line on the
+// page is a blank line in the book too, one for a run of them, none at the
+// chapter's top or end. What NEO shows is what the book gets (#461).
+function parasFromHtml(html, { blanks = false } = {}) {
   const holder = document.createElement('div');
   holder.innerHTML = html || '';
   // an unwritten outline section is a ghost paragraph plus the scene break
@@ -51,15 +54,24 @@ function parasFromHtml(html) {
   // an empty line inside a box is a blank line in it; at a box's edge, or
   // as the whole box, it's nothing
   const has = (p) => p && (p.sceneBreak || p.text);
-  return paras.filter((p, i) => {
+  const kept = paras.filter((p, i) => {
     if (has(p)) return true;
-    if (!p.litrpg) return false;
+    if (!p.litrpg) {
+      if (!blanks || p.runs.some((r) => r.fn !== undefined)) return false;
+      p.blank = true;
+      p.poetry = p.flush = false;
+      p.align = '';
+      p.html = '<p class="blank">&#160;</p>';
+      return true;
+    }
     let a = i - 1;
     while (a >= 0 && paras[a].litrpg && !has(paras[a])) a--;
     let b = i + 1;
     while (b < paras.length && paras[b].litrpg && !has(paras[b])) b++;
     return !!(paras[a] && paras[a].litrpg && has(paras[a]) && paras[b] && paras[b].litrpg && has(paras[b]));
   });
+  if (!blanks) return kept;
+  return kept.filter((p, i) => !p.blank || (i > 0 && i < kept.length - 1 && !kept[i - 1].blank && kept.slice(i + 1).some((q) => !q.blank)));
 }
 
 // The book's entries as the builders lay them out. Chapters, a prologue and
@@ -83,7 +95,7 @@ function exportChapters() {
     if (kind === 'part') { parts += 1; inPart = true; } else if (BACK_KINDS.includes(kind)) inPart = false;
     if (kind === 'contents') { if (contentsAt < 0) contentsAt = sections.length; continue; }
     const el = document.querySelector(`.chapter[data-id="${chId}"] .chapter-body`);
-    const paras = parasFromHtml(el ? el.innerHTML : (chapterHTML[chId] || ''));
+    const paras = parasFromHtml(el ? el.innerHTML : (chapterHTML[chId] || ''), { blanks: STORY_KINDS.includes(kind) });
     if (FRONT_PAGES.includes(kind)) {
       if (paras.length) push({ kind, heading: '', label: kindName(kind), level: 0, paras });
       continue;
@@ -158,7 +170,7 @@ function manuscriptSections() {
   const { sections } = exportChapters();
   return sections.filter((s) => s.kind === 'chapter' || s.kind === 'part' || s.kind === 'epigraph').map((s) => ({
     kind: s.kind, heading: s.heading || '', partTitle: s.partTitle || '',
-    paras: s.paras.map((p) => ({ sceneBreak: p.sceneBreak, poetry: p.poetry, flush: p.flush, litrpg: !!p.litrpg, align: p.align, runs: p.runs || [] })),
+    paras: s.paras.map((p) => ({ sceneBreak: p.sceneBreak, blank: !!p.blank, poetry: p.poetry, flush: p.flush, litrpg: !!p.litrpg, align: p.align, runs: p.runs || [] })),
     words: s.paras.reduce((n, p) => n + (p.sceneBreak ? 0 : countWords(p.text || '')), 0)
   }));
 }

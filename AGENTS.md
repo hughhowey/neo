@@ -93,7 +93,7 @@ A book whose `book.json` says `"format": "screenplay"` is a script. Right-click 
 
 `[[` typed at the very start of a line makes it a box line: `<p class="litrpg">` (LITRPG BOXES in `app/`, `litrpgKey` from `smartKeys`, so Pocket's typed keys reach it too). No menu item and no Show More Features switch: the brackets are the whole door (Hugh's call, Nov 2026). ⌘Z right after brings the `[[` back.
 
-- Lines in a row are one box. Enter (⇧Enter too) is the box's next line; Enter on the box's empty last line ends it, and that line is prose; an empty line inside a box stays. Backspace at the start of a box's first line makes it prose.
+- Lines in a row are one box. Enter is the box's next line; Enter on the box's empty last line ends it, and that line is prose; ⇧Enter is always another line in the box (a blank one, never the end); an empty line inside a box stays. Backspace at the start of a box's first line makes it prose.
 - Inside a box the smart typing stands aside (quotes, dashes, ellipsis, capitals, Markdown emphasis), and every space is kept, for columns. A box is never the opening paragraph: the drop cap goes to the first prose line (`openingPara`).
 - Text pasted into a box keeps its lines and spaces (`pasteIntoBox`); NEO's own copied box lines paste as box lines (`pasteBoxesFromNeo`).
 - Face: IBM Plex Mono, bundled as TrueType in `fonts/` (OFL). It's embedded in the PDF and paperback (`exportFontFaces`) and carried as files in the EPUB (`litrpgEpubFonts`, only the styles a box uses). Word gets the `LitRPG` paragraph style in Courier New: a border and gray fill that Word draws as one box over the run of lines. Manuscript Format has the same style (and Courier Prime in its PDF).
@@ -247,6 +247,10 @@ Tests use `node:test` and load the window's code (`appSource()`) or `spell-worke
 
 `node scripts/check-romanian-package.js <Resources dir>` compares a packaged app's dictionaries to the source tree. `node scripts/benchmark-spellcheck.js` times the checker. Neither is an npm script.
 
+## What's New
+
+`whats-new.json` (newest release first, English, `**bold**` and `` `code` `` allowed) is Help → What's New in NEO…, and, once at launch after an update, the notes for the releases since the one this device last saw (`neo.whatsNewSeen` in localStorage). A fresh install and Pocket skip it. Add the next release's notes before `npm run release`; `scripts/whats-new.test.js` checks the file.
+
 ## Handing changes to Hugh
 
 Hugh pushes and releases himself and isn't a git user. Hand him work as a git bundle of main..your-branch, built on the latest origin/main, then tell him: save it to Downloads, `npm run bundle`. To ship a desktop release: `npm run release`. Both commands check their footing and stop with a plain sentence instead of half-finishing. Don't give him raw git or npm version steps when these cover it.
@@ -256,6 +260,7 @@ Hugh pushes and releases himself and isn't a git user. Hand him work as a git bu
 - A new filesystem operation needs a handler, a `libName()` boundary, and a `preload.js` method. Match the existing IPC names (`library:`, `book:`, `chapter:`, `aux:`, `json:`, `cover:`).
 - A new writer-visible string needs `t()` and a template refresh.
 - A new way to remove text needs a recovery path and a sentence in the UI that says where the words went.
+- An empty line in a story's text is a blank line in every export (`parasFromHtml(html, { blanks: true })`: a `blank` paragraph, one for a run, none at a chapter's top or end; pages and part titles read without them). What the page shows is what the book gets.
 - Export formats are assembled in `app/` and written by `export:save` in `main.js`. EPUB is a zip built in memory. PDF is printed from temporary HTML.
 - A keyboard shortcut's letter is matched with `keyLetter(e)` in `app/` (the character typed, falling back to the US place for non-Latin layouts), never `e.code` alone: Dvorak, BÉPO and AZERTY writers lose the key otherwise (#546, #536).
 - Errors in the main process are appended to `neo-errors.log` via `logError`. Renderer failures go through `window.neo.logError`. Do not swallow a save failure; `persistChapter` rolls `savedHTML` back so the next flush retries.

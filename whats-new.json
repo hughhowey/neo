@@ -1,0 +1,14 @@
+[
+  {
+    "version": "2.0.0",
+    "items": [
+      "**LitRPG boxes.** Type `[[` at the start of a line for a gray, monospace box: rolls, stats, system messages. Enter adds a line, Enter on an empty last line ends the box, ⇧Enter adds a blank line inside it. Boxes go out to Word, PDF, EPUB and the paperback.",
+      "**A blank line is a blank line.** An empty line on the page now comes out as an empty line in every export.",
+      "**Find & Replace:** Tab moves between the Find and Replace boxes.",
+      "**Keyboard shortcuts follow your keyboard.** On Dvorak, AZERTY, BÉPO and other layouts, ⌘B is the key marked B.",
+      "**Align Book Prose** (Format menu) sets every prose paragraph in the book to left, centered, right or justified at once.",
+      "**Press and hold for accents** (View menu, Mac) brings back the accent picker for writers who want it.",
+      "**NEO for iPad:** the arrow keys on a keyboard move the cursor again."
+    ]
+  }
+]

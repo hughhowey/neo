@@ -568,6 +568,13 @@ body.night .ps-paper .ps-body.empty::before, body.night .ps-paper .tp-field:empt
   padding: 34px 38px; width: 480px; max-height: 85vh; overflow-y: auto;
 }
 .modal h2 { font-weight: 400; color: var(--accent); margin-bottom: 10px; }
+/* Help → What's New in NEO… (and once after an update) */
+.modal.whats-new { width: 480px; }
+.whats-new .wn-list { max-height: 55vh; overflow-y: auto; text-align: left; }
+.whats-new h3 { font-weight: 400; font-size: 13px; letter-spacing: 2px; color: var(--muted, inherit); margin: 14px 0 6px; text-transform: uppercase; }
+.whats-new ul { margin: 0; padding-left: 18px; }
+.whats-new li { margin: 5px 0; line-height: 1.45; }
+.whats-new code { font-family: var(--litrpg-font); font-size: 0.92em; padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, currentColor 10%, transparent); }
 .modal p { font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
 .modal label { display: block; font-size: 13px; margin-bottom: 16px; }
 .modal input {

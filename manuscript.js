@@ -24,7 +24,7 @@
 //     font: 'times' | 'courier', paper: 'Letter' | 'A4', lang: 'en-US',
 //     short: true when it's one story with no chapters,
 //     sections: [{ kind: 'chapter' | 'part' | 'epigraph', heading, partTitle,
-//                  paras: [{ sceneBreak, poetry, flush, litrpg, align,
+//                  paras: [{ sceneBreak, blank, poetry, flush, litrpg, align,
 //                            runs: [{ text, b, i, u, s, br } | { fn: note }] }] }]
 //   }
 
@@ -161,6 +161,7 @@
           lead = false;
           // a LitRPG box: lines in a row share one border and gray fill,
           // single-spaced in Courier New, a line's room above and below
+          if (x.blank) { out.push(p([], { style: 'Manuscript', pageBreak })); return; } // a blank line, as on the page
           if (x.litrpg) {
             const top = !(paras[i - 1] && paras[i - 1].litrpg);
             const end = !(paras[i + 1] && paras[i + 1].litrpg);
@@ -335,6 +336,7 @@ ${headers.map((h) => `<Relationship Id="${h.id}" Type="http://schemas.openxmlfor
         const list = sec.paras || [];
         const paras = list.map((x, i) => {
           if (x.sceneBreak) return '<p class="brk">#</p>';
+          if (x.blank) return '<p class="blank">&#160;</p>';
           if (x.litrpg) {
             const edge = [list[i - 1] && list[i - 1].litrpg ? '' : 'lt-top', list[i + 1] && list[i + 1].litrpg ? '' : 'lt-end'].filter(Boolean).join(' ');
             return `<p class="litrpg${edge ? ' ' + edge : ''}">${runsHtml(boxSpaces(x.runs)) || '&#8203;'}</p>`;
