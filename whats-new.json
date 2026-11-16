@@ -2,17 +2,8 @@
   {
     "version": "2.0.0",
     "items": [
-      "**One NEO, with Options.** NEO → Options… (File → Options… on Windows and Linux) gathers NEO's features in one place: outline cards, notes pages, poetry, footnotes, pen names, page views, focus, vim keys, more exports and the rest. Turn on what you use; the menus show only what's on. The settings that were menu ticks (Markdown emphasis, the languages, interface size and others) live there too. Your NEO looks just as it did yesterday.",
-      "**LitRPG boxes.** Type `[[` at the start of a line for a gray, monospace box: rolls, stats, system messages. Enter adds a line, Enter on an empty last line ends the box, ⇧Enter adds a blank line inside it. Boxes go out to Word, PDF, EPUB and the paperback.",
-      "**A blank line is a blank line.** An empty line on the page now comes out as an empty line in every export.",
-      "**Find & Replace:** Tab moves between the Find and Replace boxes.",
-      "**Keyboard shortcuts follow your keyboard.** On Dvorak, AZERTY, BÉPO and other layouts, ⌘B is the key marked B.",
-      "**Align Book Prose** (Format menu) sets every prose paragraph in the book to left, centered, right or justified at once.",
-      "**Press and hold for accents** (Options, Mac) brings back the accent picker for writers who want it.",
-      "**Chapter titles show as you type them,** capitals or not, and every export keeps them that way.",
-      "**The paperback:** a slightly larger drop cap that stands level with the tall letters beside it, and a little more room inside LitRPG boxes.",
-      "**NEO for iPad:** the arrow keys on a keyboard move the cursor again.",
-      "**NEO Pocket gets Options** (⋯ → Options…): outline cards, notes pages, poetry, footnotes, pen names, vim keys and plain text, Markdown and web page exports, on when you want them."
+      "**NEO Options.** NEO → Options… (File → Options… on Windows and Linux) gathers NEO's features in one place: outline cards, notes pages, poetry, footnotes, pen names, page views, focus, vim keys, more exports and the rest. Turn on what you use; the menus show only what's on.",
+      "**NEO Pocket gets Options as well** (⋯ → Options…): outline cards, notes pages, poetry, footnotes, pen names, vim keys and plain text, Markdown and web page exports, on when you want them."
     ]
   }
 ]

@@ -115,6 +115,26 @@ test('the keys of features that are off do nothing: footnote, poetry', async () 
   assert.equal(await js(`document.querySelector('.chapter-body').innerHTML`), before);
 });
 
+test('a footnote the book already holds stays: it shows, opens, edits and exports with Footnotes off', async () => {
+  await clickTab('manuscript');
+  assert.equal(await js(`featureOn('footnotes')`), false);
+  await js(`(() => {
+    const p = document.querySelector('.chapter-body > p');
+    p.appendChild(footnoteMark('Written before the switch.'));
+    syncChapter(p.closest('.chapter-body'), p.closest('.chapter').dataset.id);
+  })()`);
+  await tick(100);
+  assert.equal(await js(`document.querySelectorAll('.chapter-body .fn').length`), 1);
+  await js(`document.querySelector('.chapter-body .fn').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+  await tick(150);
+  assert.equal(await js(`!!document.querySelector('.fn-box')`), true, 'a click opens the note');
+  await js(`document.querySelector('.fn-box textarea, .fn-box [contenteditable]') && closeFootnote()`);
+  await js(`closeFootnote()`);
+  const html = await js(`buildHtml(bookExportData(), {})`);
+  assert.match(html, /Written before the switch\./, 'the note goes out in the export');
+  await js(`(() => { const f = document.querySelector('.chapter-body .fn'); const body = f.closest('.chapter-body'); f.remove(); syncChapter(body, body.closest('.chapter').dataset.id); })()`);
+});
+
 test('the shortcuts window lists only what\'s showing', async () => {
   const rows = await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[1]))`);
   assert.ok(rows.includes('Insert a placeholder note'));

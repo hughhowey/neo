@@ -243,7 +243,7 @@ ${cap ? `p.first:not(.dialogue)::first-letter { initial-letter: ${DROP_CAP_SIZE}
 p.brk { text-align: center; margin: 0.7em 0; break-after: avoid; letter-spacing: 0.1em; }
 p.poetry { margin: 0.5em 1.5em; text-align: left; }
 p.poetry + p.poetry { margin-top: 0; }
-${litrpgCss('p.litrpg', { size: '0.78em', side: '0.15in', pad: '0.17in', edge: '0.65em', fill: '#ebebeb', line: '#9a9a9a', gap: '0.9em' })}
+${litrpgCss('p.litrpg', { size: '0.78em', side: '0.15in', pad: '0.12in', fill: '#ebebeb', line: '#9a9a9a', gap: '1.3em' })}
 .backpage p.hy { text-indent: 0; margin-bottom: 0.7em; }
 .also p { text-align: center; font-style: italic; margin: 0 0 0.45em; }
 .note .reach-hd { margin-top: 1.4em; text-align: center; letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.85em; }

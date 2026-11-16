@@ -290,9 +290,9 @@ test('the KDP paperback interior sets the box too', async () => {
   assert.match(html, /<p class="litrpg lt-top">level up!/);
   assert.match(html, /p\.litrpg \{ font-family: 'IBM Plex Mono'/);
   assert.match(html, /<p class="hy first">Prose again/);
-  // a little room inside the box, and a cap that stands at the tall letters, two lines deep
-  assert.match(html, /p\.litrpg \{[^}]*padding: 0 0\.17in/);
-  assert.match(html, /p\.litrpg\.lt-top \{[^}]*padding-top: 0\.65em/);
+  // white space above and below the box, and a cap that stands at the tall letters, two lines deep
+  assert.match(html, /p\.litrpg\.lt-top \{ margin-top: 1\.3em/);
+  assert.match(html, /p\.litrpg\.lt-end \{ margin-bottom: 1\.3em/);
   assert.match(html, /initial-letter: 2\.15 3/);
 });
 
@@ -373,10 +373,10 @@ test('a blank line on the page is a blank line in the book (#461): one for a run
 test('Help → What’s New in NEO shows the notes, and Esc closes them', async () => {
   await js(`showWhatsNew()`);
   await tick(300);
-  const r = await js(`(() => { const m = document.querySelector('.whats-new'); return m && { h: m.querySelector('h3').textContent, items: m.querySelectorAll('li').length, code: !!m.querySelector('code') }; })()`);
+  const r = await js(`(() => { const m = document.querySelector('.whats-new'); return m && { h: m.querySelector('h3').textContent, items: m.querySelectorAll('li').length, bold: !!m.querySelector('li strong, li b') }; })()`);
   assert.ok(r && r.items > 0, JSON.stringify(r));
   assert.match(r.h, /^NEO \d/);
-  assert.ok(r.code, 'the `[[` shows as type');
+  assert.ok(r.bold, 'the **bold** lead shows bold');
   await js(`document.querySelector('.whats-new').closest('.modal-backdrop').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   assert.equal(await js(`!!document.querySelector('.whats-new')`), false);
 });
