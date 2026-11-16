@@ -1,0 +1,7 @@
+{
+  "name": "dictionary-de-ch",
+  "version": "2017.1.22",
+  "description": "Swiss Standard German Hunspell dictionary (igerman98 frami, de_CH), as shipped by LibreOffice, in UTF-8",
+  "license": "(GPL-2.0-only OR GPL-3.0-only)",
+  "files": ["index.aff", "index.dic", "README_de_DE_frami.txt", "NOTICE.txt", "COPYING_GPLv2", "COPYING_GPLv3", "COPYING_OASIS.txt"]
+}

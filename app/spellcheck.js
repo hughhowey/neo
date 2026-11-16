@@ -208,7 +208,7 @@ function toggleSpellcheck() {
 // the library, and re-check whatever is on screen
 const SPELL_LANGUAGE_NAMES = {
   'en-US': t('US English'), 'en-GB': t('UK English'), 'en-CA': t('Canadian English'),
-  'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'),
+  'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'), 'de-CH': t('Swiss German'),
   nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
 };
 async function changeSpellLanguage(code) {

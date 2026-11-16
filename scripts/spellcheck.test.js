@@ -109,6 +109,44 @@ test('Danish ships with its license on desktop and in Pocket', () => {
   assert.match(pocket, /meta\.files/);
 });
 
+test('Swiss German: ss, never ß, umlauts, inflections and suggestions (#483)', async () => {
+  const dir = path.join(root, 'node_modules/dictionary-de-ch');
+  // LibreOffice's de_CH_frami in UTF-8: the sums NOTICE.txt gives, and the
+  // one changed line that says so
+  const notice = fs.readFileSync(path.join(dir, 'NOTICE.txt'), 'utf8');
+  for (const f of ['index.aff', 'index.dic']) {
+    const sum = require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(dir, f))).digest('hex');
+    assert.ok(notice.includes(`${sum}  ${f}`), f);
+  }
+  assert.match(fs.readFileSync(path.join(dir, 'index.aff'), 'utf8'), /^SET UTF-8$/m);
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'de-CH', dir })).ok, true);
+  const good = await send({ type: 'check', words: ['Strasse', 'Strassen', 'grüssen', 'heisst', 'Fussball', 'Häuser', 'Müesli', 'Velo', 'Schriftstellerin', 'Bücher', 'schön', 'Zürich'] });
+  for (const [word, ok] of Object.entries(good.result)) assert.equal(ok, true, word);
+  // ß is German, not Swiss
+  const bad = await send({ type: 'check', words: ['Straße', 'grüßen', 'heißt', 'Fußball', 'Häsuer', 'Schriftstelerin'] });
+  for (const [word, ok] of Object.entries(bad.result)) assert.equal(ok, false, word);
+  assert.ok((await send({ type: 'suggest', word: 'Häsuer' })).result.includes('Häuser'));
+  // and back and forth with German, which keeps its ß
+  assert.equal((await send({ type: 'load', language: 'de', dir: path.join(root, 'node_modules/dictionary-de') })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['Straße'] })).result.Straße, true);
+  assert.equal((await send({ type: 'load', language: 'de-CH', dir })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['Straße'] })).result.Straße, false);
+});
+
+test('Swiss German ships with its license on desktop and in Pocket', () => {
+  const pkg = JSON.parse(source('package.json'));
+  assert.equal(pkg.dependencies['dictionary-de-ch'], 'file:dictionaries/de-CH');
+  assert.ok(pkg.build.asarUnpack.includes('node_modules/dictionary-de-ch/**'));
+  const ch = JSON.parse(source('dictionaries/de-CH/package.json'));
+  assert.equal(ch.license, '(GPL-2.0-only OR GPL-3.0-only)');
+  for (const f of ch.files) assert.ok(fs.existsSync(path.join(root, 'dictionaries/de-CH', f)), f);
+  for (const f of ['index.aff', 'index.dic', 'NOTICE.txt', 'COPYING_GPLv2', 'COPYING_GPLv3', 'README_de_DE_frami.txt']) assert.ok(ch.files.includes(f), f);
+  assert.match(source('dictionaries/de-CH/COPYING_GPLv2'), /GNU GENERAL PUBLIC LICENSE\s+Version 2/);
+  assert.match(source('dictionaries/de-CH/COPYING_GPLv3'), /GNU GENERAL PUBLIC LICENSE\s+Version 3/);
+  assert.match(source('main.js'), /'de-CH': \{ label: 'Deutsch \(Schweiz\)', pkg: 'dictionary-de-ch' \}/);
+});
+
 test('Ukrainian: every apostrophe, ґ, hyphenated words and suggestions', async () => {
   const send = spellWorker();
   const dir = path.join(root, 'node_modules/dictionary-uk');
@@ -414,7 +452,7 @@ test('spellcheck follows the interface until a dictionary is picked; nothing is 
   }
 
   // a dictionary picked in Edit → Spellcheck Language wins, whatever the interface
-  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv', 'da']) {
+  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv', 'da', 'de-CH']) {
     const explicit = mainContext(temp, 'ro-RO', {}, { spellLanguage: code });
     assert.equal(explicit.loads[0].language, code);
     assert.equal(explicit.read().spellLanguage, code);

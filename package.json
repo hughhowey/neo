@@ -121,6 +121,7 @@
       "node_modules/dictionary-pt/**",
       "node_modules/dictionary-hu/**",
       "node_modules/dictionary-da/**",
+      "node_modules/dictionary-de-ch/**",
       "node_modules/dictionary-sv/**",
       "node_modules/dictionary-uk/**"
     ],
@@ -172,6 +173,7 @@
     "@farscrl/hunspell-wasm": "1.0.1",
     "dictionary-da": "file:dictionaries/da",
     "dictionary-de": "^3.0.0",
+    "dictionary-de-ch": "file:dictionaries/de-CH",
     "dictionary-el": "^4.0.0",
     "dictionary-en-au": "^3.0.0",
     "dictionary-en-ca": "^3.0.0",
