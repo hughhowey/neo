@@ -2620,6 +2620,7 @@ const SPELL_LANGUAGES = {
   'uk': { label: 'Українська', pkg: 'dictionary-uk' },
   'sv': { label: 'Svenska', pkg: 'dictionary-sv' },
   'da': { label: 'Dansk', pkg: 'dictionary-da' },
+  'nb': { label: 'Norsk (bokmål)', pkg: 'dictionary-nb' },
   'el': { label: 'Ελληνικά', pkg: 'dictionary-el' }
 };
 

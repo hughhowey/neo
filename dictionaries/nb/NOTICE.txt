@@ -1,0 +1,35 @@
+Norwegian Bokmål spelling dictionary
+
+NEO distributes the Norwegian Bokmål (nb_NO) dictionary and affix data of
+LibreOffice's Norwegian dictionaries, version 3.0 (maintainer Lars
+Bungum), as published by the LibreOffice project. NEO's MIT license does
+not replace the dictionary's terms, which are:
+
+- the word list (index.dic): Ordbanken, Nasjonalbiblioteket, under
+  Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/),
+  with new headwords from the 2018-2024 revision of Bokmålsordboka,
+  CLARINO Bergen / Språkbanken (http://hdl.handle.net/11509/152), under
+  CLARIN PUB +BY, and Språkrådet's words of the year;
+- the affix file (index.aff): the spell-norwegian project, under the GNU
+  General Public License version 2 (COPYING).
+
+The upstream notice, with every source and its attribution, is
+README_NO.txt.
+
+Source availability
+
+index.aff and index.dic are LibreOffice's no/nb_NO.aff and
+no/nb_NO.dic, unchanged but for their names. They ship with every
+packaged app, beside this notice, in
+  app.asar.unpacked/node_modules/dictionary-nb/
+and in NEO Pocket in dict/nb/.
+
+Upstream: https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/no
+(commit c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb)
+
+SHA-256
+  b9e828538222b3580d8adb4660d5bae9bc1fbe42e7c21fd3e01970efed96b4f8  index.aff
+  aadaf9ea6b437b4edada54a2084e1c8dc00029addc6dfb4e15637f8e798dacc1  index.dic
+
+The Nynorsk, thesaurus and hyphenation files of the same upstream folder
+are not included.

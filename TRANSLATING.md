@@ -22,7 +22,7 @@ NEO currently speaks:
 | `ko` | 한국어 | complete, machine-assisted: native review welcome |
 | `vi` | Tiếng Việt | complete |
 
-Spellchecking (Edit → Spellcheck Language) covers English, French, Spanish, German, Dutch, Polish, Brazilian Portuguese, Romanian, Russian, Ukrainian, Hungarian, Swedish and Danish. The engine is Hunspell itself, compiled to WebAssembly, so every dictionary loads in well under a second. Italian is left out because the only Hunspell dictionary on npm is GPL-3.0-only, which does not sit well in an MIT app. The Brazilian Portuguese interface starts with the Brazilian dictionary; the European Portuguese interface leaves the choice to the writer, since spellings differ.
+Spellchecking (Edit → Spellcheck Language) covers English, French, Spanish, German, Dutch, Polish, Brazilian Portuguese, Romanian, Russian, Ukrainian, Hungarian, Swedish, Danish and Norwegian Bokmål. The engine is Hunspell itself, compiled to WebAssembly, so every dictionary loads in well under a second. Italian is left out because the only Hunspell dictionary on npm is GPL-3.0-only, which does not sit well in an MIT app. The Brazilian Portuguese interface starts with the Brazilian dictionary; the European Portuguese interface leaves the choice to the writer, since spellings differ.
 
 Spellcheck starts off on every launch. Choosing a dictionary does not turn it on. If the interface starts in Romanian and the library has no saved spellcheck language, NEO selects and saves Romanian. Explicit dictionary choices survive interface-language changes. Other interface languages keep their existing defaults.
 
@@ -33,6 +33,13 @@ The Swedish dictionary (`sv`, **Svenska** in Edit → Spellcheck Language) is G�
 The Ukrainian dictionary is LibreOffice's uk_UA (from the dict_uk project), kept in `dictionaries/uk` under its MPL 1.1 license; the npm `dictionary-uk` package is GPL-3.0 and stays out. A suggestion with an apostrophe (м'ясо) goes onto the page with ’.
 
 The Hungarian dictionary is LibreOffice's Magyar Ispell 1.9, kept in `dictionaries/hu` (the npm `dictionary-hu` package rejected common accusatives like *könyvet*). They are underlined in blue; right-click shows the fix and why. Each rule is a plain pattern run on the writer's computer, and fires only where a mistake is very likely.
+
+### Norwegian Bokmål
+
+The Norwegian dictionary (`nb`, **Norsk (bokmål)** under Spellcheck language in Options) is LibreOffice's Norwegian dictionaries 3.0 (maintainer Lars Bungum), Bokmål only, kept in `dictionaries/nb`. It includes the new words of the 2018–2024 revision of Bokmålsordboka; Nynorsk (*ikkje*) is not Bokmål and is underlined. Quotation marks are «…», as Språkrådet sets them; `'` is the apostrophe ’. The Danish abbreviations (*f.eks., bl.a., dvs., osv.*), with *iflg., ifm., ift., mtp.*, don't end a sentence.
+
+- **Source.** `index.aff` and `index.dic` are `no/nb_NO.aff` and `no/nb_NO.dic` from [LibreOffice/dictionaries](https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/no) at commit `c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb`, byte for byte, renamed only (UTF-8 upstream). Their SHA-256 sums are in `dictionaries/nb/NOTICE.txt`, and the tests check them. Nynorsk, the thesaurus and hyphenation are left out. (The npm package `dictionary-nb` is older and GPL-2.0 throughout.)
+- **License.** The word list is Nasjonalbiblioteket's Ordbanken under CC BY 4.0, with CLARINO Bergen / Språkbanken's new headwords under CLARIN PUB +BY: attribution only. The affix file is the spell-norwegian project's, under GPL 2.0 only. The upstream notice (`README_NO.txt`), `NOTICE.txt` and `COPYING` go beside the data on desktop (`app.asar.unpacked/node_modules/dictionary-nb/`) and in Pocket (`dict/nb/`). The word list is 9.3 MB, about half of Greek's.
 
 ### Danish
 

@@ -121,6 +121,7 @@
       "node_modules/dictionary-pt/**",
       "node_modules/dictionary-hu/**",
       "node_modules/dictionary-da/**",
+      "node_modules/dictionary-nb/**",
       "node_modules/dictionary-sv/**",
       "node_modules/dictionary-uk/**"
     ],
@@ -180,6 +181,7 @@
     "dictionary-es": "^4.0.0",
     "dictionary-fr": "^3.0.0",
     "dictionary-hu": "file:dictionaries/hu",
+    "dictionary-nb": "file:dictionaries/nb",
     "dictionary-nl": "^2.0.0",
     "dictionary-pl": "^2.0.0",
     "dictionary-pt": "4.0.0",

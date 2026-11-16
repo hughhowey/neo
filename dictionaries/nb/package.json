@@ -1,0 +1,7 @@
+{
+  "name": "dictionary-nb",
+  "version": "3.0.0",
+  "description": "Norwegian Bokmål Hunspell dictionary (LibreOffice dict-no 3.0), as shipped by LibreOffice",
+  "license": "(GPL-2.0-only AND CC-BY-4.0)",
+  "files": ["index.aff", "index.dic", "README_NO.txt", "NOTICE.txt", "COPYING"]
+}

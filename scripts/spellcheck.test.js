@@ -109,6 +109,49 @@ test('Danish ships with its license on desktop and in Pocket', () => {
   assert.match(pocket, /meta\.files/);
 });
 
+test('Norwegian Bokmål: the pinned LibreOffice dictionary, æ ø å, inflections, compounds and suggestions (#284)', async () => {
+  const dir = path.join(root, 'node_modules/dictionary-nb');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version, '3.0.0');
+  // the files are LibreOffice's, unchanged: their SHA-256 is the one NOTICE.txt gives
+  const notice = fs.readFileSync(path.join(dir, 'NOTICE.txt'), 'utf8');
+  for (const f of ['index.aff', 'index.dic']) {
+    const sum = require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(dir, f))).digest('hex');
+    assert.ok(notice.includes(`${sum}  ${f}`), f);
+  }
+  assert.match(fs.readFileSync(path.join(dir, 'index.aff'), 'utf8'), /^SET UTF-8$/m);
+  const send = spellWorker();
+  assert.equal((await send({ type: 'load', language: 'nb', dir })).ok, true);
+  const good = await send({ type: 'check', words: [
+    'jeg', 'ikke', 'boka', 'boken', 'bøker', 'forfatter', 'forfatteren', 'kjærlighet', 'år', 'blåbær',
+    'skrivebord', 'sykepleier', 'fotballspiller', 'Tromsø', 'Øyvind'
+  ] });
+  for (const [word, ok] of Object.entries(good.result)) assert.equal(ok, true, word);
+  // typos, and Nynorsk's ikkje, are not Bokmål
+  const bad = await send({ type: 'check', words: ['forfater', 'kjærlihet', 'sykeplejer', 'aar', 'hjemmme', 'ikkje'] });
+  for (const [word, ok] of Object.entries(bad.result)) assert.equal(ok, false, word);
+  for (const [typo, fix] of [['forfater', 'forfatter'], ['kjærlihet', 'kjærlighet']]) {
+    assert.ok((await send({ type: 'suggest', word: typo })).result.includes(fix), typo);
+  }
+  // and back and forth with Danish
+  assert.equal((await send({ type: 'load', language: 'da', dir: path.join(root, 'node_modules/dictionary-da') })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['kjærlighet'] })).result.kjærlighet, false);
+  assert.equal((await send({ type: 'load', language: 'nb', dir })).ok, true);
+  assert.equal((await send({ type: 'check', words: ['kjærlighet'] })).result.kjærlighet, true);
+});
+
+test('Norwegian Bokmål ships with its notice and licenses on desktop and in Pocket', () => {
+  const pkg = JSON.parse(source('package.json'));
+  assert.equal(pkg.dependencies['dictionary-nb'], 'file:dictionaries/nb');
+  assert.ok(pkg.build.asarUnpack.includes('node_modules/dictionary-nb/**'));
+  const nb = JSON.parse(source('dictionaries/nb/package.json'));
+  assert.equal(nb.license, '(GPL-2.0-only AND CC-BY-4.0)');
+  for (const f of nb.files) assert.ok(fs.existsSync(path.join(root, 'dictionaries/nb', f)), f);
+  for (const f of ['index.aff', 'index.dic', 'NOTICE.txt', 'COPYING', 'README_NO.txt']) assert.ok(nb.files.includes(f), f);
+  assert.match(source('dictionaries/nb/COPYING'), /GNU GENERAL PUBLIC LICENSE\s+Version 2/);
+  assert.match(source('dictionaries/nb/README_NO.txt'), /CC BY 4\.0/);
+  assert.match(source('main.js'), /'nb': \{ label: 'Norsk \(bokmål\)', pkg: 'dictionary-nb' \}/);
+});
+
 test('Ukrainian: every apostrophe, ґ, hyphenated words and suggestions', async () => {
   const send = spellWorker();
   const dir = path.join(root, 'node_modules/dictionary-uk');
@@ -414,7 +457,7 @@ test('spellcheck follows the interface until a dictionary is picked; nothing is 
   }
 
   // a dictionary picked in Edit → Spellcheck Language wins, whatever the interface
-  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv', 'da']) {
+  for (const code of ['en-US', 'en-GB', 'fr', 'ro', 'sv', 'da', 'nb']) {
     const explicit = mainContext(temp, 'ro-RO', {}, { spellLanguage: code });
     assert.equal(explicit.loads[0].language, code);
     assert.equal(explicit.read().spellLanguage, code);

@@ -101,8 +101,8 @@ async function spellScanEl(el, key) {
 // "— Quanto falta? — perguntou ele" and "…and then" are the writer's.
 const capsRanges = new Map(); // key → [Range]
 const CAPS_ABBREV = new Set(['mr', 'mrs', 'ms', 'dr', 'st', 'jr', 'sr', 'vs', 'etc', 'e.g', 'i.e', 'cf', 'approx', 'no', 'vol', 'pp', 'p', 'fig', 'ca', 'mt', 'ft', 'lt', 'sgt', 'capt', 'col', 'gen', 'prof', 'rev', 'hon', 'inc', 'ltd', 'co', 'ave', 'a.m', 'p.m', 'sra', 'sr', 'srta', 'dra', 'av', 'ex', 'z.b', 'bzw', 'ggf', 'usw', 'm', 'mme', 'mlle',
-  // Danish: "vi købte f.eks. æbler" goes on in lowercase
-  'f.eks', 'bl.a', 'dvs', 'osv', 'mv', 'evt', 'jf', 'kl', 'nr', 'pga', 'mht', 'inkl']);
+  // Danish and Norwegian: "vi købte f.eks. æbler" goes on in lowercase
+  'f.eks', 'bl.a', 'dvs', 'osv', 'mv', 'evt', 'jf', 'kl', 'nr', 'pga', 'mht', 'inkl', 'iflg', 'ifm', 'ift', 'mtp']);
 function capitalSlips(el) {
   const out = [];
   if (typeof el.matches !== 'function' || !el.matches('.chapter-body')) return out;
@@ -209,7 +209,7 @@ function toggleSpellcheck() {
 const SPELL_LANGUAGE_NAMES = {
   'en-US': t('US English'), 'en-GB': t('UK English'), 'en-CA': t('Canadian English'),
   'en-AU': t('Australian English'), fr: t('French'), es: t('Spanish'), de: t('German'),
-  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish')
+  nl: t('Dutch'), pl: t('Polish'), 'pt-BR': t('Brazilian Portuguese'), ro: t('Romanian'), ru: t('Russian'), uk: t('Ukrainian'), hu: t('Hungarian'), sv: t('Swedish'), da: t('Danish'), nb: t('Norwegian (Bokmål)')
 };
 async function changeSpellLanguage(code) {
   const ok = await window.neo.setSpellLanguage(code);

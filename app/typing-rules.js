@@ -927,6 +927,7 @@ const QUOTE_STYLES = {
   hu: { open: '„', close: '”' },
   sv: { open: '”', close: '”' },
   da: { open: '»', close: '«' },                          // »…« (or „…“, kept by bookQuotes)
+  nb: { open: '«', close: '»' },                          // Norwegian: «…», as Språkrådet sets it
   ko: { open: '“', close: '”', singles: true }            // ‘…’ inside, as in English
 };
 // The single quotation marks, where ' types them: English and Dutch ‘…’;
