@@ -520,10 +520,27 @@ function caretRect() {
   if (!sc || !sel.rangeCount || !sc.contains(sel.anchorNode)) return null;
   const r = sel.getRangeAt(0).cloneRange();
   r.collapse(false);
+  const node = r.endContainer.nodeType === Node.ELEMENT_NODE ? r.endContainer : r.endContainer.parentElement;
+  // an empty line has no text to measure: its paragraph does. (Asked for a
+  // caret's box there, a Mac answered with the line above it, and a line
+  // made at the window's foot stayed just out of sight.)
+  const line = node && node.closest ? node.closest('p') : null;
+  if (line && line.textContent === '') return line.getBoundingClientRect();
+  // a letter's box beside the caret, where there is one: a bare caret at
+  // the top of a page is measured at the top of its paragraph, on the page
+  // before (#453), and on a Mac that sent the typewriter a page away
+  if (r.endContainer.nodeType === Node.TEXT_NODE) {
+    const t = r.endContainer;
+    const at = r.endOffset;
+    const ch = document.createRange();
+    if (at < t.length && t.data[at] !== '\n') { ch.setStart(t, at); ch.setEnd(t, at + 1); } else if (at > 0) { ch.setStart(t, at - 1); ch.setEnd(t, at); }
+    if (!ch.collapsed) {
+      const box = [...ch.getClientRects()].pop();
+      if (box && box.height) return box;
+    }
+  }
   const rect = r.getBoundingClientRect();
   if (rect.height) return rect;
-  // an empty line has no text to measure: its paragraph does
-  const node = r.endContainer.nodeType === Node.ELEMENT_NODE ? r.endContainer : r.endContainer.parentElement;
   return node ? node.getBoundingClientRect() : null;
 }
 

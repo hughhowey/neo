@@ -509,7 +509,7 @@ document.addEventListener('selectionchange', () => {
   if (!el || !el.closest || !el.closest('.chapter-body')) return;
   requestAnimationFrame(() => {
     try {
-      let rect = sel.getRangeAt(0).getBoundingClientRect();
+      let rect = caretRect();
       if (!rect || (rect.top === 0 && rect.height === 0)) rect = el.getBoundingClientRect();
       const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 30;
       const scroller = $('#paper-scroll');
