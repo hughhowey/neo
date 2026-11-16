@@ -50,13 +50,21 @@
     "one": "NEO draft — {title} — {n} word — {date}",
     "other": "NEO draft — {title} — {n} words — {date}"
   },
-  "Sprint complete — {n} words. Well earned.": {
-    "one": "Sprint complete — {n} word. Well earned.",
-    "other": "Sprint complete — {n} words. Well earned."
+  "Sprint Complete: {n} words in {time} ({rate} words/hr)": {
+    "one": "Sprint Complete: {n} word in {time} ({rate} words/hr)",
+    "other": "Sprint Complete: {n} words in {time} ({rate} words/hr)"
   },
-  "Sprint ended — {n} words in {min} min": {
-    "one": "Sprint ended — {n} word in {min} min",
-    "other": "Sprint ended — {n} words in {min} min"
+  "Last sprint: {n} words in {time} ({rate} words/hr)": {
+    "one": "Last sprint: {n} word in {time} ({rate} words/hr)",
+    "other": "Last sprint: {n} words in {time} ({rate} words/hr)"
+  },
+  "{n} mins": {
+    "one": "{n} min",
+    "other": "{n} mins"
+  },
+  "{n} seconds": {
+    "one": "{n} second",
+    "other": "{n} seconds"
   },
   "{n} chapters changed": {
     "one": "{n} chapter changed",
