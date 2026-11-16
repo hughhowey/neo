@@ -295,10 +295,10 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     new ResizeObserver(() => window.__painted.push(Math.round(sc.scrollTop))).observe(probe);
     let k = 0;
     (function frame() { if (!probe.isConnected) return; probe.style.width = (1 + (k++ % 2)) + 'px'; requestAnimationFrame(frame); })();
-    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top };
+    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top, caretTop: r.getBoundingClientRect().top, innerHeight, scrollTop: sc.scrollTop, pages: [...body.getClientRects()].slice(0, 3).map((x) => [Math.round(x.top), Math.round(x.bottom)]), para: [...across.getClientRects()].map((x) => [Math.round(x.top), Math.round(x.bottom)]) };
   })()`);
-  assert.equal(setup.split, 2, 'the paragraph runs across the page break');
-  assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret');
+  assert.equal(setup.split, 2, 'the paragraph runs across the page break ' + JSON.stringify(setup));
+  assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret ' + JSON.stringify(setup));
   await tick(600);
   const start = await js(`Math.round(document.getElementById('paper-scroll').scrollTop)`);
   await js(`window.__painted = []`);

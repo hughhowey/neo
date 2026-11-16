@@ -49,7 +49,9 @@ async function type(text) {
     await tick(60);
   }
 }
+const { editKey } = require('./e2e-keys');
 async function chord(keyCode) {
+  if (['x', 'c', 'v', 'a', 'z'].includes(keyCode.toLowerCase())) { await editKey(wc, keyCode); await tick(60); return; }
   wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers: [MOD] });
   wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers: [MOD] });
   await tick(60);
