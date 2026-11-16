@@ -52,6 +52,24 @@ const found = (q) => js(`(() => { $('#search-input').value = ${JSON.stringify(q)
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
+test('Tab in Find goes to Replace, and Tab (or Shift+Tab) there comes back', async () => {
+  await setPage(PAGE);
+  await js(`openSearch()`);
+  await tick(100);
+  const key = async (mods = []) => {
+    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Tab', modifiers: mods });
+    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Tab', modifiers: mods });
+    await tick(60);
+    return js('document.activeElement && document.activeElement.id');
+  };
+  await js(`$('#search-input').focus()`);
+  assert.equal(await key(), 'replace-input');
+  assert.equal(await key(), 'search-input');
+  assert.equal(await key(['shift']), 'replace-input');
+  assert.equal(await key(['shift']), 'search-input');
+  await js(`closeSearch()`);
+});
+
 test('Find finds a word or phrase wherever italic, bold or a split run cuts it', async () => {
   await setPage(PAGE);
   assert.deepEqual(await found('The Hunger Games'), ['The Hunger Games']);

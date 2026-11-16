@@ -3032,7 +3032,7 @@ function wireChapterBody(body, chId) {
     else enterRun = 0;
     // ⌘Z right after a break operation undoes the break via the structural
     // stack — the engine's own undo never saw it and would corrupt the page
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && breakRun > 0 && undoStack.length) {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && keyLetter(e) === 'z' && breakRun > 0 && undoStack.length) {
       e.preventDefault();
       breakRun--;
       structuralUndo();
@@ -3259,11 +3259,20 @@ function emptyChapterBackspace(e, body, chId) {
 // ⌘B / ⌘I applied by hand: the engine's native handling scrolls the
 // selection "into view" and mis-measures NEO's transformed page column,
 // throwing the reader to the top of the screen. Style, don't scroll.
+// The letter a shortcut's key stands for: the character it types, so ⌘B
+// is B on Dvorak, BÉPO and AZERTY wherever their B sits (#546, #536); on a
+// keyboard whose key types no Latin letter (Russian, Greek, Ukrainian), the
+// letter at that place on a US keyboard, as the system's own shortcuts do.
+function keyLetter(e) {
+  const k = String(e.key || '').toLowerCase();
+  if (/^[a-z]$/.test(k)) return k;
+  return /^Key[A-Z]$/.test(e.code || '') ? e.code.slice(3).toLowerCase() : '';
+}
 function styleKeepScroll(e) {
   if (!(e.metaKey || e.ctrlKey) || e.altKey) return false;
   const cmd = e.shiftKey
-    ? (e.key.toLowerCase() === 's' ? 'strikeThrough' : null)
-    : ({ b: 'bold', i: 'italic', u: 'underline' })[e.key.toLowerCase()];
+    ? (keyLetter(e) === 's' ? 'strikeThrough' : null)
+    : ({ b: 'bold', i: 'italic', u: 'underline' })[keyLetter(e)];
   if (!cmd) return false;
   e.preventDefault();
   const sc = $('#paper-scroll');
@@ -4989,7 +4998,7 @@ document.addEventListener('keydown', (e) => {
   if (MODIFIER_KEYS.has(e.key)) return; // the ⌘ or Ctrl of ⌘Z, on its way
   const just = mdJustSet;
   mdJustSet = null;
-  if (!just || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.code !== 'KeyZ') return;
+  if (!just || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || keyLetter(e) !== 'z') return;
   e.preventDefault();
   e.stopPropagation();
   for (let i = 0; i < just.steps; i++) document.execCommand('undo');
@@ -5038,7 +5047,7 @@ document.addEventListener('keydown', (e) => {
   if (MODIFIER_KEYS.has(e.key)) return; // the ⌘ or Ctrl of ⌘Z, on its way
   const just = dashJustSet;
   dashJustSet = null;
-  if (!just || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.code !== 'KeyZ' || !just.block.isConnected) return;
+  if (!just || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || keyLetter(e) !== 'z' || !just.block.isConnected) return;
   e.preventDefault();
   e.stopPropagation();
   selectChars(just.block, just.at, just.at + just.to.length);
@@ -5104,7 +5113,7 @@ document.addEventListener('keydown', (e) => {
   if (MODIFIER_KEYS.has(e.key)) return; // the ⌘ or Ctrl of ⌘Z, on its way
   const just = capJustSet;
   capJustSet = null;
-  if (!just || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.code !== 'KeyZ' || !just.block.isConnected) return;
+  if (!just || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || keyLetter(e) !== 'z' || !just.block.isConnected) return;
   e.preventDefault();
   e.stopPropagation();
   selectChars(just.block, just.at, just.at + 1);
@@ -5446,7 +5455,7 @@ function titleEnter(e) {
 // Fountain and Final Draft. A book's title page is designed by its exports.
 $('#tp-title').addEventListener('keydown', (e) => {
   if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-  const k = ({ KeyB: 'b', KeyU: 'u', KeyI: 'i' })[e.code];
+  const k = ({ b: 'b', u: 'u', i: 'i' })[keyLetter(e)];
   if (!k) return;
   e.preventDefault();
   if (!book || !isScript()) return;
@@ -5520,20 +5529,20 @@ document.addEventListener('keydown', (e) => {
   }
   if ($('#editor-view').hidden) return;
   const cmd = e.metaKey || e.ctrlKey;
-  if (cmd && e.shiftKey && e.code === 'KeyX') {
+  if (cmd && e.shiftKey && keyLetter(e) === 'x') {
     e.preventDefault();
     if (currentTab === 'manuscript') insertPlaceholder();
   }
-  if (cmd && e.shiftKey && e.code === 'KeyD') {
+  if (cmd && e.shiftKey && keyLetter(e) === 'd') {
     e.preventDefault();
     if (currentTab === 'manuscript') darlingFromKeyboard();
   }
-  if (cmd && e.shiftKey && !e.altKey && e.code === 'KeyN') {
+  if (cmd && e.shiftKey && !e.altKey && keyLetter(e) === 'n') {
     e.preventDefault();
     if (currentTab === 'manuscript' && !fnBox && moreOn()) insertFootnote();
   }
   // ⌘S takes a snapshot of the book (SNAPSHOTS)
-  if (cmd && !e.altKey && !e.shiftKey && (e.code === 'KeyS' || e.key === 's')) {
+  if (cmd && !e.altKey && !e.shiftKey && keyLetter(e) === 's') {
     e.preventDefault();
     snapshotNow();
   }
@@ -13094,6 +13103,7 @@ function snapsToThin(snaps, now) {
 // Any failure stops the pass with the source still in place, so the next
 // snapshot tries again.
 async function thinSnapshots(neo, bookId, snaps, now) {
+  if (snaps.uncertain) return; // see loadSnaps
   for (const gone of snapsToThin(snaps, now)) {
     const i = snaps.findIndex((s) => s.name === gone);
     const next = snaps[i + 1];
@@ -13188,14 +13198,25 @@ async function loadSnaps(bookId, fresh) {
   // commit file, or an incremental chapter can end up before its source.
   const seconds = new Map();
   for (const s of snaps) seconds.set(s.at, (seconds.get(s.at) || 0) + 1);
+  // A commit file that can't be read (or a time that doesn't fit its
+  // folder) keeps the folder's second, and the list is marked uncertain:
+  // the book still takes new snapshots, but nothing is thinned (thinning
+  // carries words forward in order, so it waits for an order it can trust).
+  let uncertain = false;
   for (const s of snaps) {
     if (seconds.get(s.at) < 2) continue;
-    const meta = JSON.parse(await window.neo.snapshotRead(bookId, s.name, 'snapshot.json'));
-    const at = Date.parse(meta.at);
-    if (!Number.isFinite(at) || Math.floor(at / 1000) !== s.at / 1000) throw new Error('Invalid snapshot time: ' + s.name);
-    s.at = at;
-    s.meta = meta;
+    try {
+      const meta = JSON.parse(await window.neo.snapshotRead(bookId, s.name, 'snapshot.json'));
+      const at = Date.parse(meta.at);
+      if (!Number.isFinite(at) || Math.floor(at / 1000) !== s.at / 1000) { uncertain = true; continue; }
+      s.at = at;
+      s.meta = meta;
+    } catch (err) {
+      uncertain = true;
+      window.neo.logError('snapshot time ' + s.name + ': ' + (err && err.message || err));
+    }
   }
+  if (uncertain) snaps.uncertain = true;
   snaps.sort((a, b) => a.at - b.at || (a.name < b.name ? -1 : 1));
   snapCache = { bookId, snaps };
   return snaps;
@@ -14513,7 +14534,7 @@ document.addEventListener('keydown', (e) => {
   const cmd = e.metaKey || e.ctrlKey;
   // on Linux, Ctrl+Shift+U belongs to the input method (it types a Unicode
   // character by its code), so Read Aloud there is Ctrl+Shift+K (#287)
-  if (cmd && e.shiftKey && !e.altKey && e.code === (IS_LINUX ? 'KeyK' : 'KeyU')) {
+  if (cmd && e.shiftKey && !e.altKey && keyLetter(e) === (IS_LINUX ? 'k' : 'u')) {
     if (!book || $('#editor-view').hidden || !moreOn()) return;
     e.preventDefault();
     e.stopPropagation();
@@ -14798,24 +14819,22 @@ $('#search-input').addEventListener('input', () => {
 $('#search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); freshSearchIfStale(); gotoMatch(searchState.idx + (e.shiftKey ? -1 : 1)); }
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnFromSearch(); }
-  if (e.key === 'Tab' && !e.shiftKey) {
-    const m = searchState.matches[Math.max(0, searchState.idx)];
-    if (m) {
-      e.preventDefault();
-      const sel = window.getSelection();
-      const r = m.range.cloneRange();
-      r.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(r);
-      const body = m.range.startContainer.parentElement.closest('[contenteditable="true"]');
-      if (body) body.focus();
-    }
-  }
+  // Tab (and ⇧Tab) steps between Find and Replace, like any two fields;
+  // Esc is the way back into the text, at the match
+  if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) findFieldTab(e, '#replace-input');
 });
 $('#replace-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); replaceCurrent(); }
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnFromSearch(); }
+  if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) findFieldTab(e, '#search-input');
 });
+function findFieldTab(e, to) {
+  if ($('#searchbar').classList.contains('find-only')) { e.preventDefault(); return; } // no Replace here: Tab stays put
+  e.preventDefault();
+  const el = $(to);
+  el.focus();
+  el.select();
+}
 $('#search-next').onclick = () => { freshSearchIfStale(); gotoMatch(searchState.idx + 1); };
 $('#search-prev').onclick = () => { freshSearchIfStale(); gotoMatch(searchState.idx - 1); };
 $('#replace-one').onclick = replaceCurrent;

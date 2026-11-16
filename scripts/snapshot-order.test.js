@@ -16,7 +16,8 @@ function library() {
     async snapshotList() { return Object.entries(files).reverse().map(([name, data]) => ({ name, files: Object.keys(data) })); },
     async snapshotRead(id, name, file) { reads.push([name, file]); if (!(file in files[name])) throw new Error('unavailable'); return files[name][file]; },
     async snapshotWrite(id, name, file, text) { files[name] ||= {}; if (file in files[name]) return false; files[name][file] = text; return true; },
-    async snapshotRemove(id, name) { delete files[name]; }
+    async snapshotRemove(id, name) { delete files[name]; },
+    logError() {}
   };
   const ctx = vm.createContext({ window: { neo }, snapsCan: () => true, renderSnapList() {}, logSnap(e) { throw e; },
     htmlWords: (html) => html.split(/\s+/).filter(Boolean).length });
@@ -52,13 +53,16 @@ test('only tied seconds read metadata; unfinished folders are ignored', async ()
   assert.equal(lib.reads.length, 0);
 });
 
-test('unreadable or invalid tied metadata stops loading before any thinning', async () => {
+test('unreadable or invalid tied metadata still loads, but nothing is thinned', async () => {
   for (const bad of ['{', '{}', '{"at":"invalid"}', JSON.stringify({ at: new Date(SECOND + 2000).toISOString() })]) {
     const lib = library();
-    const old = lib.add(SECOND + 100, 2, { 'a.html': 'keep me' });
-    lib.add(SECOND + 900, 1, { 'a.html': 'next' });
+    const old = lib.add(SECOND + 100, 2, { 'a.html': 'keep me' }, 'd');
+    lib.add(SECOND + 900, 1, { 'a.html': 'next' }, 'd');
     lib.files[old]['snapshot.json'] = bad;
-    await assert.rejects(lib.loadSnaps('test', true));
+    const list = await lib.loadSnaps('test', true);
+    assert.equal(list.length, 2);
+    assert.equal(list.uncertain, true);
+    await lib.thinSnapshots(lib.neo, 'test', list, SECOND + 40 * 86400000);
     assert.equal(lib.files[old]['a.html'], 'keep me');
   }
 });
