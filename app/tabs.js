@@ -5,7 +5,10 @@
 /* ================================================================== */
 
 $$('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'darlings' && darlingFromTap()) return;
+    switchTab(tab.dataset.tab);
+  });
   tab.addEventListener('dblclick', async () => {
     const kind = tab.dataset.tab;
     if (kind !== 'notes' && kind !== 'outline') return;
@@ -43,6 +46,36 @@ darlingsTab.addEventListener('dragover', (e) => {
   darlingsTab.classList.add('drag-over');
 });
 darlingsTab.addEventListener('dragleave', () => darlingsTab.classList.remove('drag-over'));
+
+// A touch screen can't drag a selection (on Android the drag scrolls the
+// page, #524). There, with a passage selected in the manuscript, a tap on
+// Darlings sends it, as a drop would; with nothing selected the tap opens the
+// tab, as always. The selection is kept as the finger lands: by the click,
+// the tap may have cleared it.
+let tapRange = null;
+darlingsTab.addEventListener('pointerdown', () => {
+  tapRange = null;
+  if (!NO_HOVER || currentTab !== 'manuscript') return;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) return;
+  const range = sel.getRangeAt(0);
+  const at = (node) => (node.nodeType === Node.TEXT_NODE ? node.parentElement : node);
+  const body = at(range.startContainer)?.closest?.('.chapter-body');
+  if (!body || at(range.endContainer)?.closest?.('.chapter-body') !== body) return;
+  tapRange = range.cloneRange();
+});
+function darlingFromTap() {
+  const range = tapRange;
+  tapRange = null;
+  if (!range || currentTab !== 'manuscript') return false;
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  const holder = document.createElement('div');
+  holder.appendChild(range.cloneContents());
+  moveSelectionToDarlings(holder.innerHTML, range.toString());
+  return true;
+}
 darlingsTab.addEventListener('drop', async (e) => {
   e.preventDefault();
   darlingsTab.classList.remove('drag-over');
