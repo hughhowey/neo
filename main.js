@@ -2611,6 +2611,7 @@ const SPELL_LANGUAGES = {
   'fr': { label: 'Français', pkg: 'dictionary-fr' },
   'es': { label: 'Español', pkg: 'dictionary-es' },
   'de': { label: 'Deutsch', pkg: 'dictionary-de' },
+  'de-CH': { label: 'Deutsch (Schweiz)', pkg: 'dictionary-de-ch' },
   'nl': { label: 'Nederlands', pkg: 'dictionary-nl' },
   'pl': { label: 'Polski', pkg: 'dictionary-pl' },
   'pt-BR': { label: 'Português (Brasil)', pkg: 'dictionary-pt' },

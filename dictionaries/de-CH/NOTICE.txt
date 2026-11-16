@@ -1,0 +1,38 @@
+Swiss Standard German spelling dictionary
+
+NEO distributes the Swiss German (de_CH) "frami" dictionary and affix
+data, as published by the LibreOffice project, under its GNU General
+Public License option (version 2 or version 3). The OASIS 0.1
+alternative is not removed. NEO's MIT license does not replace the
+dictionary's.
+
+Based on the igerman98 dictionary by Björn Jacke
+(https://www.j3e.de/ispell/igerman98/), with the "frami" additions by
+Franz Michael Baumann. Swiss spelling: ss, never ß.
+The upstream notice is README_de_DE_frami.txt (ISO-8859-1, as published);
+the license texts are COPYING_GPLv2, COPYING_GPLv3 and COPYING_OASIS.txt.
+
+Source availability
+
+index.aff and index.dic are LibreOffice's de/de_CH_frami.aff and
+de/de_CH_frami.dic, converted from ISO-8859-1 to UTF-8 (iconv), with the
+affix file's "SET ISO8859-1" line changed to "SET UTF-8" to match.
+Nothing else is changed. NEO's WebAssembly Hunspell matches words as
+UTF-8, so the ISO-8859-1 originals reject every word with an umlaut.
+They ship with every packaged app, beside this notice, in
+  app.asar.unpacked/node_modules/dictionary-de-ch/
+and in NEO Pocket in dict/de-CH/.
+
+Upstream: https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/de
+(commit c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb, 2026-11-06)
+
+SHA-256 of the upstream files
+  d86884be4c3f07e5e08057884856feabf2872b4e2f90a587a11376082bc4126b  de_CH_frami.aff
+  80a4df38cdc3e16d2f042f8eba4a99668ab9c075662e4262c62f8bba46c7bd16  de_CH_frami.dic
+
+SHA-256 of the files NEO ships
+  dc312eb01c299b489aa384af2cc1f521af06be38c950ba7c5e75e549c6fbbc09  index.aff
+  31c7e7696916bf7f0a163a3185df38887d6087883421241777f5704aaf542147  index.dic
+
+The thesaurus and hyphenation files of the same upstream folder are not
+included.

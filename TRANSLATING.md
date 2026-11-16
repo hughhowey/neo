@@ -22,7 +22,7 @@ NEO currently speaks:
 | `ko` | 한국어 | complete, machine-assisted: native review welcome |
 | `vi` | Tiếng Việt | complete |
 
-Spellchecking (Edit → Spellcheck Language) covers English, French, Spanish, German, Dutch, Polish, Brazilian Portuguese, Romanian, Russian, Ukrainian, Hungarian, Swedish and Danish. The engine is Hunspell itself, compiled to WebAssembly, so every dictionary loads in well under a second. Italian is left out because the only Hunspell dictionary on npm is GPL-3.0-only, which does not sit well in an MIT app. The Brazilian Portuguese interface starts with the Brazilian dictionary; the European Portuguese interface leaves the choice to the writer, since spellings differ.
+Spellchecking (Edit → Spellcheck Language) covers English, French, Spanish, German, Swiss Standard German, Dutch, Polish, Brazilian Portuguese, Romanian, Russian, Ukrainian, Hungarian, Swedish and Danish. The engine is Hunspell itself, compiled to WebAssembly, so every dictionary loads in well under a second. Italian is left out because the only Hunspell dictionary on npm is GPL-3.0-only, which does not sit well in an MIT app. The Brazilian Portuguese interface starts with the Brazilian dictionary; the European Portuguese interface leaves the choice to the writer, since spellings differ.
 
 Spellcheck starts off on every launch. Choosing a dictionary does not turn it on. If the interface starts in Romanian and the library has no saved spellcheck language, NEO selects and saves Romanian. Explicit dictionary choices survive interface-language changes. Other interface languages keep their existing defaults.
 
@@ -33,6 +33,16 @@ The Swedish dictionary (`sv`, **Svenska** in Edit → Spellcheck Language) is G�
 The Ukrainian dictionary is LibreOffice's uk_UA (from the dict_uk project), kept in `dictionaries/uk` under its MPL 1.1 license; the npm `dictionary-uk` package is GPL-3.0 and stays out. A suggestion with an apostrophe (м'ясо) goes onto the page with ’.
 
 The Hungarian dictionary is LibreOffice's Magyar Ispell 1.9, kept in `dictionaries/hu` (the npm `dictionary-hu` package rejected common accusatives like *könyvet*). They are underlined in blue; right-click shows the fix and why. Each rule is a plain pattern run on the writer's computer, and fires only where a mistake is very likely.
+
+### Swiss Standard German
+
+The Swiss dictionary (`de-CH`, **Deutsch (Schweiz)** under Spellcheck language in Options) spells the Swiss way: *Strasse*, *grüssen*, *heisst*, never ß; *Straße* is underlined. It is LibreOffice's `de_CH_frami` (igerman98 with Franz Michael Baumann's additions), kept in `dictionaries/de-CH`. The npm `dictionary-de-ch` is left out: it holds the German words with ß. Quotation marks are «…» (`QUOTE_STYLES['de-CH']`); a book already set in »…« or „…“ keeps it.
+
+- **Source.** `index.aff` and `index.dic` are `de/de_CH_frami.aff` and `de/de_CH_frami.dic` from [LibreOffice/dictionaries](https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/de) at commit `c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb`, converted from ISO-8859-1 to UTF-8 with the affix file's `SET` line changed to match. NEO's WebAssembly Hunspell matches words as UTF-8, so the originals reject every word with an umlaut. The upstream and shipped SHA-256 sums are in `dictionaries/de-CH/NOTICE.txt`, and the tests check the shipped ones. The thesaurus and hyphenation files are left out.
+- **License.** igerman98 by Björn Jacke, frami by Franz Michael Baumann, under GPL 2 or GPL 3 (or OASIS 0.1), the same terms as the German dictionary NEO already ships. The upstream notice, `NOTICE.txt` and the license texts go beside the data on desktop (`app.asar.unpacked/node_modules/dictionary-de-ch/`) and in Pocket (`dict/de-CH/`).
+- **Words.** It has the standard language, with some Helvetisms (*Velo*, *Müesli*) but not everyday Swiss words such as *Gipfeli*; Add to Dictionary takes those.
+
+To update it, fetch the two files from a newer LibreOffice commit, convert them (`iconv -f ISO-8859-1 -t UTF-8`, then `SET UTF-8`), and put the new sums in `NOTICE.txt`.
 
 ### Danish
 
