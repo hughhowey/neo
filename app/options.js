@@ -71,6 +71,7 @@ async function setFeature(key, on) {
   reportFeatures();
   applyLook();
   if (book && !$('#editor-view').hidden) {
+    renderNav();
     if (currentTab === 'manuscript') queueSideCards();
     else switchTab(currentTab); // the Outline's view, the Notes pages, the right-hand pane
   }

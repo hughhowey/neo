@@ -6,6 +6,7 @@
 
 let chapterDragActive = false;
 let navRefreshPending = false;
+let navSectionDrag = null;
 
 function renderNav() {
   if (!book) return; // a refresh queued just before the shelf came back
@@ -28,6 +29,8 @@ function renderNav() {
   // a keyboard user on a chapter row keeps their place through the rebuild
   const focusedRow = document.activeElement && document.activeElement.classList.contains('n-row') &&
     document.activeElement.matches(':focus-visible') ? document.activeElement.closest('.nav-item').dataset.id : null;
+  const focusedScene = document.activeElement?.closest('.nav-scene');
+  const sceneFocus = focusedScene && { ch: focusedScene.dataset.ch, seg: focusedScene.dataset.seg };
   list.innerHTML = '';
   book.chapterNotes = book.chapterNotes || {};
   const solo = soloStory();
@@ -139,13 +142,101 @@ function renderNav() {
       story ? t('{n} words', { n: words }) : '',
       flagged ? t('Unresolved placeholder') : ''
     ].filter(Boolean).join(', '));
+    if (story && featureOn('sceneNav')) renderNavScenes(item, chId);
     list.appendChild(gap(i));
     list.appendChild(item);
     if (chId === focusedRow) rowEl.focus({ preventScroll: true });
+    if (sceneFocus?.ch === chId) item.querySelector(`.nav-scene[data-seg="${sceneFocus.seg}"]`)?.focus({ preventScroll: true });
   });
   list.appendChild(gap(book.chapterOrder.length));
   justAddedEntry = null;
   renderContentsLists();
+}
+
+// The same manuscript sections as the outline cards, without another set
+// of ids or saved text. A single uninterrupted chapter needs no extra row.
+function renderNavScenes(item, chId) {
+  const segs = chapterSegments(chId);
+  if (segs.length < 2) return;
+  const group = document.createElement('div');
+  group.className = 'nav-scenes';
+  segs.forEach((seg, index) => {
+    const row = document.createElement('button');
+    row.className = 'nav-scene';
+    row.dataset.ch = chId;
+    row.dataset.seg = String(index);
+    const label = (seg.id && sectionNote(chId, seg.id)?.text) || seg.first || t('Scene {n}', { n: index + 1 });
+    const text = document.createElement('span');
+    text.className = 'nav-scene-label';
+    text.textContent = label;
+    const words = document.createElement('span');
+    words.className = 'n-words';
+    words.textContent = fmtNum(seg.words);
+    row.append(text, words);
+    row.title = t('Go to scene; drag to move. Alt+↑/↓ reorders within the chapter.');
+    row.setAttribute('aria-label', t('Scene {n}: {text}, {words} words', { n: index + 1, text: label, words: seg.words }));
+    // Resolve against the original paragraph/break, not a stale array index
+    // if the writer split a scene before the debounced nav redraw.
+    const source = { ch: chId, marker: seg.ps[0] || seg.brk };
+    row.onclick = (e) => {
+      e.stopPropagation();
+      const at = navSectionIndex(source);
+      if (at < 0) { renderNav(); return; }
+      switchTab('manuscript');
+      goToSegment(chId, chapterSegments(chId)[at]);
+    };
+    row.onkeydown = (e) => {
+      if (!e.altKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const at = navSectionIndex(source);
+      const count = chapterSegments(chId).length;
+      if (at < 0 || (e.key === 'ArrowUp' ? at === 0 : at === count - 1)) return;
+      const before = e.key === 'ArrowUp' ? at - 1 : at + 2;
+      moveSection(chId, at, { ch: chId, before: before >= count ? null : before });
+      renderNav();
+      const moved = navSectionIndex(source);
+      const chapter = document.querySelector(`.nav-item[data-id="${chId}"]`);
+      chapter?.querySelector(`.nav-scene[data-seg="${moved}"]`)?.focus({ preventScroll: true });
+    };
+    row.oncontextmenu = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const target = await popMenu(e.clientX, e.clientY, book.chapterOrder.filter((c) => isStory(c) && c !== chId)
+        .map((c) => ({ label: chapterName(c), value: c })), { title: t('Move scene to chapter'), from: row });
+      const at = navSectionIndex(source);
+      if (target && at >= 0 && book.chapterOrder.includes(target) && isStory(target)) {
+        moveSection(chId, at, { ch: target, before: null });
+        renderNav();
+      }
+    };
+    row.draggable = true;
+    row.ondragstart = (e) => {
+      e.stopPropagation();
+      navSectionDrag = source;
+      e.dataTransfer.setData('application/x-neo-section', chId);
+      e.dataTransfer.effectAllowed = 'move';
+      chapterDragActive = true;
+      row.classList.add('dragging');
+      $('#nav-pane').classList.add('open');
+    };
+    row.ondragend = finishChapterDrag;
+    group.appendChild(row);
+  });
+  item.appendChild(group);
+}
+
+function navSectionIndex(source) {
+  return chapterSegments(source.ch).findIndex((s) => s.ps[0] === source.marker || s.brk === source.marker);
+}
+
+function navSectionTarget(e) {
+  const item = e.target.closest('.nav-item');
+  if (!item || !isStory(item.dataset.id)) return null;
+  const row = e.target.closest('.nav-scene');
+  if (!row) return { ch: item.dataset.id, before: null, parent: item.querySelector('.nav-scenes') || item, next: null };
+  const after = e.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+  return { ch: row.dataset.ch, before: Number(row.dataset.seg) + (after ? 1 : 0), parent: row.parentElement, next: after ? row.nextSibling : row };
 }
 
 // the first words of a page, for its box in the Chapters pane
@@ -267,6 +358,7 @@ $('#nav-pane').addEventListener('mouseleave', () => {
 function finishChapterDrag(e) {
   if (!chapterDragActive) return;
   chapterDragActive = false;
+  navSectionDrag = null;
   navList.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
   const ind = navList.querySelector('.nav-drop-ind');
   if (ind) ind.remove();
@@ -296,6 +388,15 @@ function navDropInd() {
 // (documents dropped in as chapters are behind Show More Features)
 const navFileDrag = (e) => e.dataTransfer.types.includes('Files') && !!book && !isScript() && featureOn('exports');
 navList.addEventListener('dragover', (e) => {
+  if (navSectionDrag && e.dataTransfer.types.includes('application/x-neo-section')) {
+    const to = navSectionTarget(e);
+    const ind = navDropInd();
+    if (!to) { ind.remove(); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    to.parent.insertBefore(ind, to.next);
+    return;
+  }
   if (!e.dataTransfer.types.includes('application/x-neo-chapter') && !navFileDrag(e)) return;
   e.preventDefault();
   const ind = navDropInd();
@@ -317,6 +418,16 @@ navList.addEventListener('dragleave', (e) => {
   if (ind) ind.remove();
 });
 navList.addEventListener('drop', async (e) => {
+  if (navSectionDrag && e.dataTransfer.types.includes('application/x-neo-section')) {
+    const source = navSectionDrag;
+    const to = navSectionTarget(e);
+    const at = navSectionIndex(source);
+    e.preventDefault();
+    document.querySelector('.nav-drop-ind')?.remove();
+    if (to && at >= 0) moveSection(source.ch, at, { ch: to.ch, before: to.before });
+    navRefreshPending = true;
+    return;
+  }
   if (e.dataTransfer.files && e.dataTransfer.files.length && navFileDrag(e)) {
     e.preventDefault();
     const ind = document.querySelector('.nav-drop-ind');
