@@ -286,7 +286,11 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     const r = document.createRange(); r.setStart(text, at + 4); r.collapse(true);
     getSelection().removeAllRanges(); getSelection().addRange(r);
     const sc = document.getElementById('paper-scroll');
-    sc.scrollTop += r.getBoundingClientRect().top - window.innerHeight * 0.45;
+    // placed by the letter's own box: a collapsed caret at the top of a page
+    // is what Chromium mis-measures (#453), and on a Mac it put the caret
+    // below the window before a letter was typed
+    const letter = document.createRange(); letter.setStart(text, at + 4); letter.setEnd(text, at + 5);
+    sc.scrollTop += letter.getBoundingClientRect().top - window.innerHeight * 0.45;
     // what each frame paints: a ResizeObserver runs after the frame's
     // animation callbacks and before its paint
     window.__painted = [];
@@ -296,7 +300,7 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     new ResizeObserver(() => window.__painted.push(Math.round(sc.scrollTop))).observe(probe);
     let k = 0;
     (function frame() { if (!probe.isConnected) return; probe.style.width = (1 + (k++ % 2)) + 'px'; requestAnimationFrame(frame); })();
-    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top, caretTop: r.getBoundingClientRect().top, innerHeight, scrollTop: sc.scrollTop, pages: [...body.getClientRects()].slice(0, 3).map((x) => [Math.round(x.top), Math.round(x.bottom)]), para: [...across.getClientRects()].map((x) => [Math.round(x.top), Math.round(x.bottom)]) };
+    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top, caretTop: letter.getBoundingClientRect().top, innerHeight, scrollTop: sc.scrollTop, pages: [...body.getClientRects()].slice(0, 3).map((x) => [Math.round(x.top), Math.round(x.bottom)]), para: [...across.getClientRects()].map((x) => [Math.round(x.top), Math.round(x.bottom)]) };
   })()`);
   assert.equal(setup.split, 2, 'the paragraph runs across the page break ' + JSON.stringify(setup));
   assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret ' + JSON.stringify(setup));
