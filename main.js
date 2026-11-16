@@ -3107,6 +3107,15 @@ function buildMenu() {
             { label: t('Justify'), accelerator: 'CmdOrCtrl+Shift+J', type: 'radio', checked: viewState.align === 'justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
           ]
         },
+        {
+          more: true,
+          visible: !scriptState.on,
+          enabled: bookOpenState,
+          label: t('Align Book Prose'),
+          submenu: [['Left', 'left'], ['Center', 'center'], ['Right', 'right'], ['Justify', 'justify']].map(([label, value]) => ({
+            label: t(label), click: () => sendToWindow({ type: 'alignBook', value })
+          }))
+        },
         { type: 'separator' },
         { label: t('Larger Text'), accelerator: 'CmdOrCtrl-Plus', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
         { label: t('Smaller Text'), accelerator: 'CmdOrCtrl-Minus', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
