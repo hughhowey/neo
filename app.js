@@ -3260,8 +3260,8 @@ function emptyChapterBackspace(e, body, chId) {
 function styleKeepScroll(e) {
   if (!(e.metaKey || e.ctrlKey) || e.altKey) return false;
   const cmd = e.shiftKey
-    ? (e.code === 'KeyS' ? 'strikeThrough' : null)
-    : ({ KeyB: 'bold', KeyI: 'italic', KeyU: 'underline' })[e.code];
+    ? (e.key.toLowerCase() === 's' ? 'strikeThrough' : null)
+    : ({ b: 'bold', i: 'italic', u: 'underline' })[e.key.toLowerCase()];
   if (!cmd) return false;
   e.preventDefault();
   const sc = $('#paper-scroll');
