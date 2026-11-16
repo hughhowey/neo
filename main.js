@@ -1157,18 +1157,49 @@ ipcMain.handle('chapter:delete', (_e, bookId, chapterId) => {
   return true;
 });
 
+// A notes or outline page (aux:*): the same revision contract as chapters.
+// A page the disk can't read is an error, never an empty page: an empty read
+// that is then saved would wipe the page.
+function readAuxFile(file) {
+  try { return fs.readFileSync(file, 'utf8'); } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+// The displaced disk text is kept as <page>.bak, or .bak2, .bak3 … when that
+// name holds other words. A retry that finds its own copy already there adds nothing.
+function keepAuxBackup(file, text) {
+  for (let n = 1; n < 1000; n++) {
+    const bak = file + (n === 1 ? '.bak' : '.bak' + n);
+    const have = readAuxFile(bak);
+    if (have === text) return bak;
+    if (have === null) { writeFileDurable(bak, text); return bak; }
+  }
+  throw new Error('too many kept copies of ' + path.basename(file));
+}
+
 ipcMain.handle('aux:read', (_e, bookId, name) => {
-  // name: 'notes' | 'outline'
+  // name: 'notes' | 'outline' | 'notes-<chapter>'
   const file = path.join(bookDir(bookId), libName(name) + '.html');
-  const read = () => { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } };
+  const read = () => readAuxFile(file) || '';
   return afterLocal([file], read, () => '');
 });
 
-ipcMain.handle('aux:write', (_e, bookId, name, html) => {
+// `expected` is the text the window last read or wrote for this page (as for
+// chapter:write). When the file holds words the new text lacks, another device
+// wrote it since: the file's text is kept as a .bak beside the page before the
+// new text goes in, so neither version is lost. Returns {kept: '<name>.bak'}
+// when that happened, else true.
+ipcMain.handle('aux:write', (_e, bookId, name, html, expected) => {
   const file = path.join(bookDir(bookId), libName(name) + '.html');
   if (isCloudOnly(file)) { requestDownload([file]); throw cloudError(file); }
+  let kept = null;
+  if (typeof expected === 'string') {
+    const cur = readAuxFile(file);
+    if (cur !== null && chapterDiverged(cur, expected, html)) kept = keepAuxBackup(file, cur);
+  }
   writeFileDurable(file, html);
-  return true;
+  return kept ? { kept: path.basename(kept) } : true;
 });
 
 // Snapshots of a book (SNAPSHOTS in app.js): book-…/snapshots/<name>/ holds the
