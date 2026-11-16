@@ -1,7 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["print/**"],
-  "plugins": ["import", "node", "promise"],
+  "ignorePatterns": [
+    "print/**"
+  ],
+  "plugins": [
+    "import",
+    "node",
+    "promise"
+  ],
   "categories": {
     "correctness": "off"
   },
@@ -15,13 +21,41 @@
   },
   "rules": {
     "no-var": "error",
-    "accessor-pairs": ["error", { "setWithoutGet": true, "enforceForClassMembers": true }],
-    "array-callback-return": ["error", { "allowImplicit": false, "checkForEach": false }],
+    "accessor-pairs": [
+      "error",
+      {
+        "setWithoutGet": true,
+        "enforceForClassMembers": true
+      }
+    ],
+    "array-callback-return": [
+      "error",
+      {
+        "allowImplicit": false,
+        "checkForEach": false
+      }
+    ],
     "constructor-super": "error",
-    "curly": ["error", "multi-line"],
+    "curly": [
+      "error",
+      "multi-line"
+    ],
     "default-case-last": "error",
-    "eqeqeq": ["error", "always", { "null": "ignore" }],
-    "new-cap": ["error", { "newIsCap": true, "capIsNew": false, "properties": true }],
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "new-cap": [
+      "error",
+      {
+        "newIsCap": true,
+        "capIsNew": false,
+        "properties": true
+      }
+    ],
     "no-array-constructor": "error",
     "no-async-promise-executor": "error",
     "no-caller": "error",
@@ -30,7 +64,12 @@
     "no-compare-neg-zero": "error",
     "no-cond-assign": "error",
     "no-const-assign": "error",
-    "no-constant-condition": ["error", { "checkLoops": false }],
+    "no-constant-condition": [
+      "error",
+      {
+        "checkLoops": false
+      }
+    ],
     "no-control-regex": "error",
     "no-debugger": "error",
     "no-delete-var": "error",
@@ -38,7 +77,12 @@
     "no-dupe-keys": "error",
     "no-duplicate-case": "error",
     "no-useless-backreference": "error",
-    "no-empty": ["error", { "allowEmptyCatch": true }],
+    "no-empty": [
+      "error",
+      {
+        "allowEmptyCatch": true
+      }
+    ],
     "no-empty-character-class": "error",
     "no-empty-pattern": "error",
     "no-eval": "error",
@@ -53,14 +97,27 @@
     "no-invalid-regexp": "error",
     "no-irregular-whitespace": "error",
     "no-iterator": "error",
-    "no-labels": ["error", { "allowLoop": false, "allowSwitch": false }],
+    "no-labels": [
+      "error",
+      {
+        "allowLoop": false,
+        "allowSwitch": false
+      }
+    ],
     "no-lone-blocks": "error",
     "no-loss-of-precision": "error",
     "no-misleading-character-class": "error",
     "no-prototype-builtins": "error",
     "no-useless-catch": "error",
     "no-useless-constructor": "error",
-    "no-use-before-define": ["error", { "functions": false, "classes": false, "variables": false }],
+    "no-use-before-define": [
+      "error",
+      {
+        "functions": false,
+        "classes": false,
+        "variables": false
+      }
+    ],
     "no-multi-str": "error",
     "no-new": "error",
     "no-new-func": "error",
@@ -69,8 +126,16 @@
     "no-proto": "error",
     "no-redeclare": "error",
     "no-regex-spaces": "error",
-    "no-return-assign": ["error", "except-parens"],
-    "no-self-assign": ["error", { "props": true }],
+    "no-return-assign": [
+      "error",
+      "except-parens"
+    ],
+    "no-self-assign": [
+      "error",
+      {
+        "props": true
+      }
+    ],
     "no-self-compare": "error",
     "no-sequences": "error",
     "no-shadow-restricted-names": "error",
@@ -80,11 +145,24 @@
     "no-throw-literal": "error",
     "no-unexpected-multiline": "error",
     "no-unmodified-loop-condition": "error",
-    "no-unneeded-ternary": ["error", { "defaultAssignment": false }],
+    "no-unneeded-ternary": [
+      "error",
+      {
+        "defaultAssignment": false
+      }
+    ],
     "no-unreachable": "error",
     "no-unsafe-finally": "error",
     "no-unsafe-negation": "error",
-    "no-unused-vars": ["error", { "vars": "all", "args": "after-used", "argsIgnorePattern": "^_", "ignoreRestSiblings": true }],
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "argsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
+      }
+    ],
     "no-useless-call": "error",
     "no-useless-computed-key": "error",
     "no-useless-escape": "error",
@@ -92,24 +170,67 @@
     "no-useless-return": "error",
     "no-void": "error",
     "no-with": "error",
-    "prefer-const": ["error", { "destructuring": "all" }],
+    "prefer-const": [
+      "error",
+      {
+        "destructuring": "all"
+      }
+    ],
     "prefer-promise-reject-errors": "error",
     "symbol-description": "error",
-    "unicode-bom": ["error", "never"],
-    "use-isnan": ["error", { "enforceForSwitchCase": true, "enforceForIndexOf": true }],
-    "valid-typeof": ["error", { "requireStringLiterals": true }],
-    "yoda": ["error", "never"],
+    "unicode-bom": [
+      "error",
+      "never"
+    ],
+    "use-isnan": [
+      "error",
+      {
+        "enforceForSwitchCase": true,
+        "enforceForIndexOf": true
+      }
+    ],
+    "valid-typeof": [
+      "error",
+      {
+        "requireStringLiterals": true
+      }
+    ],
+    "yoda": [
+      "error",
+      "never"
+    ],
     "import/export": "error",
     "import/first": "error",
-    "import/no-absolute-path": ["error", { "esmodule": true, "commonjs": true, "amd": false }],
+    "import/no-absolute-path": [
+      "error",
+      {
+        "esmodule": true,
+        "commonjs": true,
+        "amd": false
+      }
+    ],
     "import/no-duplicates": "error",
     "import/no-named-default": "error",
     "import/no-webpack-loader-syntax": "error",
     "promise/param-names": "error",
     "guard-for-in": "error",
-    "node/handle-callback-err": ["error", "^(err|error)$"],
+    "node/handle-callback-err": [
+      "error",
+      "^(err|error)$"
+    ],
     "node/no-exports-assign": "error",
     "node/no-new-require": "error",
     "node/no-path-concat": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "app/**"
+      ],
+      "rules": {
+        "no-unused-vars": "off",
+        "prefer-const": "off"
+      }
+    }
+  ]
 }

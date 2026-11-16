@@ -21,7 +21,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `main.js` | Window, menus, every filesystem operation, import parsing, PDF, backups |
 | `preload.js` | The entire renderer API, `window.neo` |
 | `index.html` | Two views: `#bookshelf-view` and `#editor-view`. CSP is `script-src 'self'` |
-| `app.js` | The whole UI, in banner-marked sections. Search for the banner before reading the file |
+| `app/*.js` | The whole UI (the window), one file per area, loaded in order by `index.html` and Pocket's page (`scripts/app-files.js` holds the order). They share one global scope, as one file did |
 | `styles.css` | All styling. Tokens are CSS variables at the top |
 | `covers.js` | Shelf covers in the window: seeded canvas art plus real title type. `window.NeoCovers` |
 | `art.js` | Painted covers in the main process. OpenAI only. Title and author are never sent to the image model |
@@ -35,28 +35,31 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
 
-`app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, manuscript format.
+The window's files, in load order: `core` (state, helpers, the library), `shelf` (bookshelf, bound shelves), `editor` (open, render), `typing`, `paragraphs` (poetry, flush), `litrpg`, `typing-rules` (scene breaks, the opening line, paste, emphasis, capitals, quotes, dashes), `vim`, `screenplay`, `footnotes` (and placeholders, stickies), `nav` (and notes pages), `tabs` (and the structured outline), `cards`, `saving` (counters, saving, snapshots, refresh), `undo` (and read aloud), `find` (and import), `spellcheck` (and typewriter, focus, goals, cover art settings), `menu`, `options` (features and the Options window), `export` (and manuscript format), `print` (paperback, the export builders), `startup` (safety net, fonts, accessibility, launch). Inside each, section banners look like `/*  SAVING  */`.
 
-Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app.js` handles it on `window.neo.onMenu`.
+- Code that runs while a file loads (not inside a function that waits for the writer) may only call what earlier files define: a later file isn't there yet. Event handlers, menu messages and anything after the library loads are free to call anything.
+- A `let` shared between files must stay `let` (lint can't see another file's assignment, so `prefer-const` and `no-unused-vars` are off for `app/`).
+- Tests read the whole window with `require('./app-files').appSource()`.
 
-## Simple NEO and Show More Features
+Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app/menu.js` and the others handle it on `window.neo.onMenu`.
 
-NEO opens simple. File → Show More Features (`library.moreFeatures`) brings back the rest: SIMPLE NEO near the end of `app.js`, and `moreState` / `simpleTemplate` in `main.js`.
+## Features and Options
 
-- A menu item behind the switch carries `more: true` in `buildMenu()`; `simpleTemplate` leaves it (and the separators it would strand) out. A key, right-click choice or pane behind it asks `moreOn()` in `app.js`.
-- Behind the switch now: alignment, poetry paragraphs, footnotes (⌘⇧N), Markdown emphasis (*italic* typed; off in simple NEO), Other Font…, non-breaking marks, pages views, page width, interface size, focus mode, vim keys, read aloud, Look Up, the tab keys, chapter notes pages, outline cards (loose cards, cards beside the page), New Books Open To, painted covers and Cover Art…, pen names, binding shelves, duplicate, Reshelve, scripts and Fountain/Final Draft import, Import Chapters, txt/md/html exports, Chapter Titles Only, the shelf anthology, Manuscript Format, and the two language menus.
-- Simple NEO treats those settings as NEO's defaults (`applyLook`) and never erases them: the writer's choices wait in library.json for the switch.
-- Simple NEO's own, because the writer's eyes decide them: the page (View → Page: Night, Paper, Light) and Brighter Interface. Both are in the menu without the switch and in Pocket's ⋯ sheet, and `brightNow` never asks `moreOn()`. A library with a brighter interface set is no sign of more (`usesMoreFeatures`).
-- Nothing a book already holds is hidden. A script, footnote, poetry paragraph, bound shelf, painted cover, loose card or chapter notes page with notes on it opens and exports as before, and other pen names stay reachable.
-- A book's right-click in simple NEO is the larger cards (`optionModal`), with no cover menu: art is dragged onto the book; New cover and Remove cover art stand with the rest. Word goals are set in Goals, inside the book, never from the shelf.
-- The shortcuts window (`bookShortcutSections`) lists a key only when its feature is showing.
-- A library from before the switch is decided once (`decideMoreFeatures`): on when it uses something behind it, off otherwise (with one toast saying where things went).
-- Pocket (Android and iOS) is always simple and has no switch; its ⋯ sheet in `pocket/www/index.html` offers only simple NEO's choices.
-- A new feature goes behind the switch unless Hugh says it belongs in simple NEO. `scripts/simple-neo.test.js`, `npm run test:simple`.
+One NEO for everyone. NEO → Options… (File → Options… off the Mac; FEATURES & OPTIONS in `app/options.js`) turns NEO's features on and off and holds the settings that used to be menu ticks. The features are `FEATURES` in `app/core.js`; `featureOn(key)` asks whether one is on (`library.features`, in library.json, so every device of the library follows it).
+
+- A menu item that belongs to a feature carries `feature: '<key>'` in `buildMenu()`; `featureTemplate` leaves it out (and the separators it would strand) while that feature is off. The window reports the features with `window.neo.featuresState` (`reportFeatures`). A key, right-click choice or pane asks `featureOn('<key>')`.
+- The features: `cards` (outline cards, loose cards, cards beside the page), `notesPages` (chapter notes pages), `poetry`, `footnotes`, `formatting` (alignment, Align Book Prose, Other Font…), `penNames` (pen names, binding shelves, the anthology, Duplicate, Reshelve), `covers` (painted covers, Cover Art…), `pages` (Show Pages, two pages, page width), `focus`, `readAloud` (and Look Up), `vim`, `exports` (Manuscript Format, txt/md/html, Import Chapters). Scripts, LitRPG boxes, the tab keys and Fountain/Final Draft import are for everyone.
+- The settings in Options: Markdown emphasis (`library.markdownOff`), non-breaking marks, press and hold for accents (Mac), new books open to, chapter titles only (with More exports), the interface and spellcheck languages, the interface size. Menus hold actions; Options holds settings. The page (Night, Paper, Light), Brighter Interface, Typewriter Scrolling, the fonts and drop cap stay in the menus: the writer's eyes decide them while writing.
+- A feature that's off takes NEO's defaults (`applyLook`) and never erases the writer's choices: they wait in library.json for its return.
+- Nothing a book already holds is hidden. A footnote, poetry paragraph, bound shelf, painted cover, loose card or chapter notes page with notes on it opens and exports as before, and other pen names stay reachable.
+- A new library starts with every feature off and Markdown typing off. A library from before 2.0 is set up once (`setupFeatures`): Show More Features on → every feature on (vim keys only if they were on); off → every feature off and simple NEO's quiet defaults written in; older still → judged by what it uses.
+- Pocket shows a feature only where its `FEATURES` entry says `pocket: true` (cards, notes pages, poetry, footnotes, pen names, vim, and More exports as txt/md/html; `pocketDesc` is its wording there). The rest need the desktop. Its ⋯ sheet has Options… at the foot, and rows for poetry and the extra exports while those are on. On Pocket, Options lists only its own features, and Turn all on/off leaves the desktop's alone. `npm run test:pocket` runs Pocket's own page with a stand-in for Capacitor's Filesystem.
+- The shortcuts window (`bookShortcutSections`) lists a key only when its feature is on.
+- A new feature gets an entry in `FEATURES` (off for a new library) unless Hugh says it's for everyone. `scripts/features.test.js`, `npm run test:options`.
 
 ## Outline cards
 
-The Outline tab shows the book as index cards (OUTLINE CARDS in `app.js`) unless `library.outlineView` is `'list'`. A script's Outline is always cards, one per scene (`scriptScenes`): heading, length in eighths, cast, and a note in `book.sceneNotes`, keyed by `data-scene-id` on the heading line. Dragging a scene card calls `spMoveScene`.
+The Outline tab shows the book as index cards (OUTLINE CARDS in `app/`) unless `library.outlineView` is `'list'`. A script's Outline is always cards, one per scene (`scriptScenes`): heading, length in eighths, cast, and a note in `book.sceneNotes`, keyed by `data-scene-id` on the heading line. Dragging a scene card calls `spMoveScene`.
 
 - Cards come from the manuscript, not a separate structure: each chapter is cut at its `p.scene-break` lines (`chapterSegments`). A section that holds a `p[data-sec-id]` belongs to that note in `book.sectionNotes`; the first section to carry an id owns it, because paragraphs split from a written ghost inherit the id. Others show their first line.
 - Moving a card moves its paragraphs and *** between chapter bodies, then `syncChapter` and `orderSectionNotes`. Every move takes a `snapshotStructure` first.
@@ -74,7 +77,7 @@ Brighter Interface is two settings: `library.uiBright` while writing (and on the
 
 ## Screenplays
 
-A book whose `book.json` says `"format": "screenplay"` is a script. Right-click (long-press) a shelf's + for New Script. The SCREENPLAYS section of `app.js` holds the feature; `scripts/screenplay.test.js` tests its rules.
+A book whose `book.json` says `"format": "screenplay"` is a script. Right-click (long-press) a shelf's + for New Script. `app/screenplay.js` holds the feature; `scripts/screenplay.test.js` tests its rules.
 
 - The whole script is one chapter, so selection and the arrow keys run through every scene. Scenes are found by their headings.
 - Each line is a `<p>` whose class is its element: `sp-heading`, `sp-character`, `sp-paren`, `sp-dialogue`, `sp-transition`, `sp-shot`. Action has no class.
@@ -83,11 +86,22 @@ A book whose `book.json` says `"format": "screenplay"` is a script. Right-click 
 - `data-newpage` on a line is the writer's own page break (right-click → Page Break Here; Backspace at the line's start removes it). Unlike the screen marks it is saved, and it travels as `===` in Fountain and `StartsNewPage="Yes"` in Final Draft.
 - A script's style lives in its `book.json`: `underlineHeadings: true` (Format → Underline Scene Headings) and `contd: false` ((CONT'D) turned off).
 - A script exports as a PDF (letter, printed with `print: 'screenplay'`), Fountain or Final Draft (`.fdx`). The book formats don't apply.
-- A `.fountain` or `.fdx` file dropped on a shelf or picked with Import becomes a new script. `importFile` in `main.js` only reads the file; `spFromFountain` and `spFromFdx` in `app.js` sort it into elements. Both readers are plain string functions, so the tests cover them (`scripts/fixtures/` holds a Final Draft file written by screenplain, an outside tool).
+- A `.fountain` or `.fdx` file dropped on a shelf or picked with Import becomes a new script. `importFile` in `main.js` only reads the file; `spFromFountain` and `spFromFdx` in `app/` sort it into elements. Both readers are plain string functions, so the tests cover them (`scripts/fixtures/` holds a Final Draft file written by screenplain, an outside tool).
+
+## LitRPG boxes
+
+`[[` typed at the very start of a line makes it a box line: `<p class="litrpg">` (LITRPG BOXES in `app/`, `litrpgKey` from `smartKeys`, so Pocket's typed keys reach it too). No menu item and no feature switch: the brackets are the whole door (Hugh's call, Nov 2026). ⌘Z right after brings the `[[` back.
+
+- Lines in a row are one box. Enter is the box's next line; Enter on the box's empty last line ends it, and that line is prose; ⇧Enter is always another line in the box (a blank one, never the end); an empty line inside a box stays. Backspace at the start of a box's first line makes it prose.
+- Inside a box the smart typing stands aside (quotes, dashes, ellipsis, capitals, Markdown emphasis), and every space is kept, for columns. A box is never the opening paragraph: the drop cap goes to the first prose line (`openingPara`).
+- Text pasted into a box keeps its lines and spaces (`pasteIntoBox`); NEO's own copied box lines paste as box lines (`pasteBoxesFromNeo`).
+- Face: IBM Plex Mono, bundled as TrueType in `fonts/` (OFL). It's embedded in the PDF and paperback (`exportFontFaces`) and carried as files in the EPUB (`litrpgEpubFonts`, only the styles a box uses). Word gets the `LitRPG` paragraph style in Courier New: a border and gray fill that Word draws as one box over the run of lines. Manuscript Format has the same style (and Courier Prime in its PDF).
+- In the HTML-based exports (PDF, paperback, EPUB) a run of spaces goes out as alternating no-break spaces (`litrpgSpaces`) so no reader collapses a column, and box lines carry `lt-top` / `lt-end` for their edges. Markdown gets a fenced block, plain text the lines as typed.
+- `npm run test:litrpg` (`scripts/litrpg.e2e.js`; `OUT=<folder>` keeps the exported files and a picture of the page).
 
 ## Manuscript format
 
-File → Export → Manuscript Format… (MANUSCRIPT FORMAT in `app.js`, the pages in `manuscript.js`) writes the open book the way agents and editors ask for it (William Shunn's novel format): a title page with the writer's contact block, "about 90,000 words" (`roundWords`: to the thousand from 10,000 up, else the hundred) and the title and byline halfway down, no header; then the story numbered from 1 under "Surname / TITLE / page", double-spaced 12 point Times New Roman (or Courier), one-inch margins, every paragraph indented half an inch, each chapter on a new page a third of the way down, `#` for scene breaks, parts on their own page, an epigraph kept, END at the close. The copyright, dedication, contents, acknowledgments and about pages stay out. One story with no chapters gets the short-story layout (title halfway down page 1, the text under it, the header from page 2).
+File → Export → Manuscript Format… (MANUSCRIPT FORMAT in `app/`, the pages in `manuscript.js`) writes the open book the way agents and editors ask for it (William Shunn's novel format): a title page with the writer's contact block, "about 90,000 words" (`roundWords`: to the thousand from 10,000 up, else the hundred) and the title and byline halfway down, no header; then the story numbered from 1 under "Surname / TITLE / page", double-spaced 12 point Times New Roman (or Courier), one-inch margins, every paragraph indented half an inch, each chapter on a new page a third of the way down, `#` for scene breaks, parts on their own page, an epigraph kept, END at the close. The copyright, dedication, contents, acknowledgments and about pages stay out. One story with no chapters gets the short-story layout (title halfway down page 1, the text under it, the header from page 2).
 
 - **.docx** (`docxEntries`): the title page is its own section with no header, the story the next one with `pgNumType start=1` and a PAGE field in `header1.xml`; a short story is one section with `titlePg` and an empty first-page header. A `settings.xml` keeps Word out of Compatibility Mode. Saved through `export:save`.
 - **PDF** (`html`): one page for Paged.js, the header in `@page`'s `@top-right` margin box, `@page titlepage` without it; `print:manuscript` lays it out with `renderPaged` (the story's first section is `.pg1`, so it's page 1) and saves it. It shares the print window with the paperback, so each refuses while the other runs. Courier Prime (bundled) goes into the PDF; Word gets Courier New.
@@ -96,9 +110,9 @@ File → Export → Manuscript Format… (MANUSCRIPT FORMAT in `app.js`, the pag
 
 ## Paperbacks for KDP
 
-Export → Paperback for KDP… (also on the shelf's right-click Export) writes a print interior PDF and a cover template PDF beside it. `printPaperback` and `buildPrintHtml` are the PRINT BOOK section of `app.js`; `makePaperback`, `renderPaged` and `kdpCoverHtml` are in `main.js`, behind `print:paperback`.
+Export → Paperback for KDP… (also on the shelf's right-click Export) writes a print interior PDF and a cover template PDF beside it. `printPaperback` and `buildPrintHtml` are in `app/print.js` (PRINT BOOK); `makePaperback`, `renderPaged` and `kdpCoverHtml` are in `main.js`, behind `print:paperback`.
 
-- Trims are KDP's four most-used: 5×8, 5.25×8, 5.5×8.5, 6×9 (`PRINT_TRIMS` in `app.js`, `KDP_TRIMS` in `main.js`). Paper thickness, page limits and the inside-margin bands (`kdpGutterMin`) come from KDP's help pages; NEO adds a quarter inch to the minimum. If the page count crosses a band, the book is laid out again with the wider margin.
+- Trims are KDP's four most-used: 5×8, 5.25×8, 5.5×8.5, 6×9 (`PRINT_TRIMS` in `app/`, `KDP_TRIMS` in `main.js`). Paper thickness, page limits and the inside-margin bands (`kdpGutterMin`) come from KDP's help pages; NEO adds a quarter inch to the minimum. If the page count crosses a band, the book is laid out again with the wider margin.
 - Pages are set by Paged.js (`print/paged.polyfill.js`, vendored, MIT) in one offscreen window per export. A hidden window stalls its animation frames; a second offscreen window opened right after one closes fails. The window closes when the export ends. One patch in it is marked `NEO:` (a word hyphenated across a page turn broke a letter late).
 - Hyphenation is soft hyphens put in by `hyphenateHtml` in `main.js` with TeX patterns (`print/hyphen/`, ISC), because Chromium only hyphenates on macOS. Only `p.hy` prose is touched; names (capitalised words, except in German) and a paragraph's last word stay whole.
 - Chromium rounds page sizes to 0.01 in; `exactPageBox` rewrites the MediaBox to the exact size in the same number of bytes.
@@ -109,7 +123,7 @@ Export → Paperback for KDP… (also on the shelf's right-click Export) writes 
 
 ## Snapshots
 
-⌘S (Ctrl+S; File → Take Snapshot) snapshots the whole book (SNAPSHOTS in `app.js`). NEO also takes one before the first change of each writing day (`maybeDailySnapshot`, from `scheduleChapterSave` and `snapshotStructure`, built from `savedHTML` so it holds the day's start). No timer, and nothing is taken when nothing changed.
+⌘S (Ctrl+S; File → Take Snapshot) snapshots the whole book (SNAPSHOTS in `app/`). NEO also takes one before the first change of each writing day (`maybeDailySnapshot`, from `scheduleChapterSave` and `snapshotStructure`, built from `savedHTML` so it holds the day's start). No timer, and nothing is taken when nothing changed.
 
 - One folder per snapshot, `book-…/snapshots/<UTC stamp>Z-<kind>-<chapters changed>-<words>-<rand>/`, holding only the chapters that changed since the last snapshot and, written last, `snapshot.json` (order, titles, kinds, a `textHash` of every chapter). Files are written once (`snapshot:list/read/write/remove` in `main.js`, the same four in Pocket's bridge). A chapter's text at a snapshot is in the newest snapshot at or before it holding the file (`snapHolder`).
 - Kinds: `k` ⌘S, kept until deleted; `d` start of a day and `r` just before a restore, which go after 30 days (`snapsToThin`). A snapshot that goes first copies its chapter files into the next one that lacks them, so later snapshots still read whole.
@@ -119,15 +133,15 @@ Export → Paperback for KDP… (also on the shelf's right-click Export) writes 
 
 ## Shared book pages
 
-The pen-name menu on the shelf, behind Show More Features, opens Shared book pages. `author.sharedPages` in `library.json` holds plain-text `copyright` and `about` defaults; `sharedPagesHistory` keeps previous wording, restorable in the dialog. Removing a pen name archives its defaults and history with the remaining name. Save failures keep the fields open and roll back the in-memory library.
+The pen-name menu on the shelf, with the `penNames` feature on, opens Shared book pages. `author.sharedPages` in `library.json` holds plain-text `copyright` and `about` defaults; `sharedPagesHistory` keeps previous wording, restorable in the dialog. Removing a pen name archives its defaults and history with the remaining name. Save failures keep the fields open and roll back the in-memory library.
 
 `bookExportData` and `shelfBookData` pass their models through `withSharedBookPages`, using the shelf's author, not the selected name. Defaults fill only missing pages; an existing page, even blank, suppresses that default. Copyright goes first, biography last, and section and contents numbers are adjusted together. The text is escaped, with optional `{title}`, `{author}`, `{year}` placeholders. Chapters are never rewritten. Manuscript Format and chapter-only exports exclude these pages. `scripts/shared-pages.test.js` and `scripts/shared-pages.e2e.js` cover the model, recovery, dialog and actual export files.
 
 ## Per device
 
-How NEO looks belongs to each device: `DEVICE_LOOK` in `app.js` (page theme, brightness, zoom, type size, page width, typewriter, non-breaking marks, pages view, focus, counters, outline view, vim keys). Every library write also keeps them in this device's `localStorage`; every library read takes them back from there (`applyDeviceLook`). The library's copy is the last device's, which is what a device new to the library starts with. Zoom is per device and per view: the page per mode, the cards, and the shelf (`neo.shelfZoom`, ⌘+/− and pinch on the shelf), each in `localStorage`; the page moves in tenths. The desktop also keeps its page theme in `settings.json` for the window's color at launch, and `exportFolder` there, so save dialogs open where the last export went.
+How NEO looks belongs to each device: `DEVICE_LOOK` in `app/` (page theme, brightness, zoom, type size, page width, typewriter, non-breaking marks, pages view, focus, counters, outline view, vim keys). Every library write also keeps them in this device's `localStorage`; every library read takes them back from there (`applyDeviceLook`). The library's copy is the last device's, which is what a device new to the library starts with. Zoom is per device and per view: the page per mode, the cards, and the shelf (`neo.shelfZoom`, ⌘+/− and pinch on the shelf), each in `localStorage`; the page moves in tenths. The desktop also keeps its page theme in `settings.json` for the window's color at launch, and `exportFolder` there, so save dialogs open where the last export went.
 
-Format → Page Width (Regular, Wide, Wider; `PAGE_WIDTHS` in `app.js`) sets `--page-wf` and `--page-pad-x`, which `--page-w` and the sheet's side padding in `styles.css` follow. The page also grows a little by itself in a wide window (`--page-w` clamps 680 to 760 px by the window); Pocket's page fills the screen up to 680 px (`pocket.css`).
+Format → Page Width (Regular, Wide, Wider; `PAGE_WIDTHS` in `app/`) sets `--page-wf` and `--page-pad-x`, which `--page-w` and the sheet's side padding in `styles.css` follow. The page also grows a little by itself in a wide window (`--page-w` clamps 680 to 760 px by the window); Pocket's page fills the screen up to 680 px (`pocket.css`).
 
 A book's right-click on the shelf is a small menu (`popMenu`) on the desktop, with the cover's choices one level in; touch keeps the larger cards. Duplicate (`book:duplicate`, and `duplicateBook` in Pocket's bridge) copies the folder under a new id and title.
 
@@ -136,12 +150,12 @@ Pocket makes PDFs through `NeoPdf`, a native plugin in each project: Android ope
 ## Processes
 
 ```
-index.html + app.js  →  preload.js (window.neo)  →  main.js  →  NEO Library
+index.html + app/    →  preload.js (window.neo)  →  main.js  →  NEO Library
                                                       ↓
                                                spell-worker.js
 ```
 
-The window is created with `contextIsolation: true` and `nodeIntegration: false`. New renderer capabilities are added in three places: an `ipcMain.handle` in `main.js`, a method on `window.neo` in `preload.js`, and the call site in `app.js`.
+The window is created with `contextIsolation: true` and `nodeIntegration: false`. New renderer capabilities are added in three places: an `ipcMain.handle` in `main.js`, a method on `window.neo` in `preload.js`, and the call site in `app/`.
 
 ## Files on disk
 
@@ -158,7 +172,7 @@ NEO Library/
     book.json           metadata and chapterOrder
     chapters/<id>.html
     notes.html          the Notes tab's page for the whole book
-    notes-<chapter id>.html   a chapter's notes page (NOTES PAGES in app.js)
+    notes-<chapter id>.html   a chapter's notes page (NOTES PAGES in app/nav.js)
     outline.html
     darlings.json
     stickies.json
@@ -204,9 +218,9 @@ node scripts/i18n.js template
 node scripts/i18n.js check fr
 ```
 
-`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, `index.html`, and Pocket's own `pocket/www/index.html` and `pocket/www/pocket-bridge.js`. A new string in another file will not enter the template until that list includes it. Pocket's page marks its words with the same `data-i18n*` attributes as the desktop's, and its ⋯ sheet and bridge use `t()`.
+`scripts/i18n.js` only scans `app/`, `main.js`, `covers.js`, `index.html`, and Pocket's own `pocket/www/index.html` and `pocket/www/pocket-bridge.js`. A new string in another file will not enter the template until that list includes it. Pocket's page marks its words with the same `data-i18n*` attributes as the desktop's, and its ⋯ sheet and bridge use `t()`.
 
-Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
+Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app/`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 
 Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.0-only, and NEO is MIT. Do not add it.
 
@@ -214,7 +228,7 @@ Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.
 
 `pocket/` is a Capacitor app that runs the desktop editor. Its bridge (`pocket/www/pocket-bridge.js`) implements `window.neo` against the phone's library folder. Android shares `Documents/NEO Library` via sync. iOS uses the app folder, optionally iCloud, with `LibraryHome.swift` locating that folder.
 
-`scripts/pocket-www.js` (run by CI, and by hand before a local build) copies `app.js`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, `locales/`, Hunspell's browser build, and the `SPELL_LANGUAGES` dictionaries from `main.js` into `pocket/www/`. Pocket's checker is `pocket/www/pocket-spell.js`, a module worker with the same messages as `spell-worker.js`. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app.js`.
+`scripts/pocket-www.js` (run by CI, and by hand before a local build) copies `app/`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, `locales/`, Hunspell's browser build, and the `SPELL_LANGUAGES` dictionaries from `main.js` into `pocket/www/`. Pocket's checker is `pocket/www/pocket-spell.js`, a module worker with the same messages as `spell-worker.js`. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app/`.
 
 ## Commands
 
@@ -224,6 +238,7 @@ npm start
 npm test                   # node --test scripts/*.test.js
 npm run test:coverage      # node --test --experimental-test-coverage scripts/*.test.js
 npm run lint               # oxlint, Electron's standard-style JavaScript rules
+npm run test:e2e           # every end-to-end test, one after another (-- find litrpg for some)
 npm run test:spellcheck    # node --test scripts/spellcheck.test.js
 npm run test:dashes        # node --test scripts/dashes.test.js
 npm run bundle             # Hugh: brings in the newest .bundle from ~/Downloads and pushes main
@@ -233,9 +248,13 @@ npm run package:mac        # macOS build; npm run package calls this
 npm run package:linux      # AppImage via electron-builder; also package, package:mac, package:win, package:all
 ```
 
-Tests use `node:test` and load `app.js` or `spell-worker.js` inside `vm`. They are not run by CI. The only CI check is a Windows smoke test that the packaged exe boots and creates a library (`.github/workflows/build.yml`, on `v*` tags). Pocket builds from `.github/workflows/pocket.yml`.
+Tests use `node:test` and load the window's code (`appSource()`) or `spell-worker.js` inside `vm`. Every push to main and every pull request runs `npm test` and `npm run test:e2e` (every `scripts/*.e2e.js`, each a real NEO on a throwaway library) on a Mac (`.github/workflows/tests.yml`); a new e2e file joins by being named `*.e2e.js`. On `v*` tags a Windows smoke test checks the packaged exe boots and creates a library (`.github/workflows/build.yml`). Pocket builds from `.github/workflows/pocket.yml`.
 
 `node scripts/check-romanian-package.js <Resources dir>` compares a packaged app's dictionaries to the source tree. `node scripts/benchmark-spellcheck.js` times the checker. Neither is an npm script.
+
+## What's New
+
+`whats-new.json` (newest release first, English, `**bold**` and `` `code` `` allowed) is Help → What's New in NEO…, and, once at launch after an update, the notes for the releases since the one this device last saw (`neo.whatsNewSeen` in localStorage). A fresh install and Pocket skip it. Add the next release's notes before `npm run release`; `scripts/whats-new.test.js` checks the file.
 
 ## Handing changes to Hugh
 
@@ -246,5 +265,7 @@ Hugh pushes and releases himself and isn't a git user. Hand him work as a git bu
 - A new filesystem operation needs a handler, a `libName()` boundary, and a `preload.js` method. Match the existing IPC names (`library:`, `book:`, `chapter:`, `aux:`, `json:`, `cover:`).
 - A new writer-visible string needs `t()` and a template refresh.
 - A new way to remove text needs a recovery path and a sentence in the UI that says where the words went.
-- Export formats are assembled in `app.js` and written by `export:save` in `main.js`. EPUB is a zip built in memory. PDF is printed from temporary HTML.
+- An empty line in a story's text is a blank line in every export (`parasFromHtml(html, { blanks: true })`: a `blank` paragraph, one for a run, none at a chapter's top or end; pages and part titles read without them). What the page shows is what the book gets.
+- Export formats are assembled in `app/` and written by `export:save` in `main.js`. EPUB is a zip built in memory. PDF is printed from temporary HTML.
+- A keyboard shortcut's letter is matched with `keyLetter(e)` in `app/` (the character typed, falling back to the US place for non-Latin layouts), never `e.code` alone: Dvorak, BÉPO and AZERTY writers lose the key otherwise (#546, #536).
 - Errors in the main process are appended to `neo-errors.log` via `logError`. Renderer failures go through `window.neo.logError`. Do not swallow a save failure; `persistChapter` rolls `savedHTML` back so the next flush retries.

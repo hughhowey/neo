@@ -1,11 +1,9 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const source = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const source = require('./app-files').appSource();
 const plain = (value) => JSON.parse(JSON.stringify(value));
 function room() {
   const ctx = vm.createContext({

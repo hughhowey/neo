@@ -21,7 +21,7 @@ on:
     branches: [main]
     paths:
       - 'pocket/**'
-      - 'app.js'
+      - 'app/**'
       - 'covers.js'
       - 'styles.css'
       - 'fonts/**'

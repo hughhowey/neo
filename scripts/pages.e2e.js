@@ -67,6 +67,39 @@ test('the manuscript starts as one long sheet per chapter', async () => {
   assert.equal(menuItem('Two Pages Side by Side').enabled, false, 'greyed out until the pages are shown');
 });
 
+test('with typewriter scrolling on one long sheet, the last sheet runs past the bottom of the window', async () => {
+  const r = await js(`(async () => {
+    if (!typewriterEnabled) toggleTypewriter();
+    await new Promise((res) => setTimeout(res, 200));
+    const secs = [...document.querySelectorAll('#chapters section.chapter')];
+    const last = secs[secs.length - 1];
+    const body = last.querySelector('.chapter-body');
+    const p = body.lastElementChild;
+    body.focus();
+    const range = document.createRange(); range.selectNodeContents(p); range.collapse(false);
+    getSelection().removeAllRanges(); getSelection().addRange(range);
+    const sc = document.getElementById('paper-scroll');
+    // the last line held at the writing height
+    sc.scrollTop += p.getBoundingClientRect().bottom - window.innerHeight * 0.45;
+    await new Promise((res) => setTimeout(res, 100));
+    const lineBottom = p.getBoundingClientRect().bottom;
+    const out = {
+      lineBottom, writing: window.innerHeight * 0.45,
+      sheetBottom: last.getBoundingClientRect().bottom,
+      viewBottom: sc.getBoundingClientRect().bottom,
+      firstPad: parseFloat(getComputedStyle(secs[0]).paddingBottom)
+    };
+    toggleTypewriter();
+    await new Promise((res) => setTimeout(res, 100));
+    out.offPad = parseFloat(getComputedStyle(last).paddingBottom);
+    return out;
+  })()`);
+  assert.ok(Math.abs(r.lineBottom - r.writing) < 40, `the last line sits at the writing height (${r.lineBottom} vs ${r.writing})`);
+  assert.ok(r.sheetBottom > r.viewBottom, `the sheet runs past the window (${r.sheetBottom} > ${r.viewBottom})`);
+  assert.equal(r.firstPad, 90, 'a chapter before it ends where it always did');
+  assert.equal(r.offPad, 90, 'typewriter off, the last sheet is back to its own margin');
+});
+
 test('Show Pages cuts a chapter into pages of one height with a gap between', async () => {
   await js(`togglePaged()`);
   await tick(300);
@@ -237,7 +270,12 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     const top2 = () => [...body.getClientRects()][1].top;
     const foot1 = [...body.getClientRects()][0].bottom;
     const across = [...body.children].filter((p) => p.getClientRects()[0].top < foot1 - 350).pop();
-    across.textContent = 'She had done it since she was small, standing at the end of the pier with her coat buttoned to the chin. '.repeat(10);
+    // long enough to run onto the next page whatever the fonts measure (a
+    // fixed length crossed on a Mac and stopped short of the foot elsewhere)
+    const sentence = 'She had done it since she was small, standing at the end of the pier with her coat buttoned to the chin. ';
+    across.textContent = sentence.repeat(8);
+    for (let i = 0; i < 40 && across.getClientRects().length < 2; i++) across.textContent += sentence;
+    across.textContent += sentence.repeat(2); // a couple of lines onto the second page
     const line = top2();
     const w = document.createTreeWalker(across, NodeFilter.SHOW_TEXT);
     const text = w.nextNode();
@@ -257,10 +295,10 @@ test('with typewriter scrolling, letters typed at the top of a page leave the pa
     new ResizeObserver(() => window.__painted.push(Math.round(sc.scrollTop))).observe(probe);
     let k = 0;
     (function frame() { if (!probe.isConnected) return; probe.style.width = (1 + (k++ % 2)) + 'px'; requestAnimationFrame(frame); })();
-    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top };
+    return { split: across.getClientRects().length, paraTop: across.getBoundingClientRect().top, viewTop: sc.getBoundingClientRect().top, caretTop: r.getBoundingClientRect().top, innerHeight, scrollTop: sc.scrollTop, pages: [...body.getClientRects()].slice(0, 3).map((x) => [Math.round(x.top), Math.round(x.bottom)]), para: [...across.getClientRects()].map((x) => [Math.round(x.top), Math.round(x.bottom)]) };
   })()`);
-  assert.equal(setup.split, 2, 'the paragraph runs across the page break');
-  assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret');
+  assert.equal(setup.split, 2, 'the paragraph runs across the page break ' + JSON.stringify(setup));
+  assert.ok(setup.paraTop < setup.viewTop, 'and starts above the window, where Chromium looks for its caret ' + JSON.stringify(setup));
   await tick(600);
   const start = await js(`Math.round(document.getElementById('paper-scroll').scrollTop)`);
   await js(`window.__painted = []`);

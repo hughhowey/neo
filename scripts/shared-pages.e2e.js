@@ -16,7 +16,7 @@ app.setPath('userData', path.join(tmp, 'app'));
 app.setPath('documents', tmp);
 fs.writeFileSync(path.join(lib, 'library.json'), JSON.stringify({
   authorName: 'A Writer', authors: [{ id: 'a1', name: 'A Writer' }],
-  firstRunDone: true, moreFeatures: true, hintShown: true,
+  firstRunDone: true, features: { penNames: true }, hintShown: true,
   shelves: [{ id: 's1', name: 'Books', bookIds: [] }]
 }));
 const loadFile = BrowserWindow.prototype.loadFile;
@@ -53,9 +53,9 @@ function chapterFiles() {
     .map((n) => { const file = path.join(lib, id, 'chapters', n); return [file, fs.readFileSync(file, 'utf8'), fs.statSync(file).mtimeMs]; }));
 }
 
-test('the author menu offers shared pages only with Show More Features', async () => {
+test('the author menu offers shared pages only with Pen names turned on', async () => {
   for (const more of [false, true]) {
-    await js(`library.moreFeatures = ${more}; document.getElementById('author-chip').click()`);
+    await js(`library.features = { ...library.features, penNames: ${more} }; document.getElementById('author-chip').click()`);
     await until(() => js("!!document.querySelector('.modal-backdrop')"));
     assert.equal(await js("[...document.querySelectorAll('.fr-choice')].some((b) => b.textContent.includes('Shared book pages'))"), more);
     await js("document.querySelector('.modal-backdrop .m-cancel').click()");

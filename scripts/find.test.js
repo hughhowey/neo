@@ -1,14 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
 // Find's matching from app.js, on its own: a paragraph's text nodes in, the
 // places the query appears out, as [node, offset] pairs a Range can take
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const app = require('./app-files').appSource();
 const from = app.indexOf('// ---- find\'s matching:');
 const to = app.indexOf('// ---- end of find\'s matching ----');
 const context = vm.createContext({});
