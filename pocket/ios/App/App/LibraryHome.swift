@@ -136,6 +136,21 @@ class NeoBridgeViewController: CAPBridgeViewController {
         }
     }
 
+    // what the long-press bubble offers (iOS 16 to 26): refused there, so
+    // the bubble has nothing to show
+    static let bubbleActions: Set<String> = [
+        "cut:", "copy:", "paste:", "pasteAndMatchStyle:", "pasteAndGo:", "pasteAndSearch:",
+        "select:", "selectAll:", "delete:", "replace:",
+        "toggleBoldface:", "toggleItalics:", "toggleUnderline:",
+        "makeTextWritingDirectionLeftToRight:", "makeTextWritingDirectionRightToLeft:",
+        "captureTextFromCamera:", "showWritingTools:", "_startWritingTools:",
+        "_lookup:", "_define:", "_share:", "_translate:", "_promptForReplace:",
+        "_transliterateChinese:", "_showTextStyleOptions:", "_showTextFormattingOptions:",
+        "_findSelected:", "_addShortcut:", "_insertDrawing:", "_openInNewCanvas:",
+        "_accessibilitySpeak:", "_accessibilitySpeakLanguageSelection:", "_accessibilityPauseSpeaking:",
+        "_autofill:", "_autoFillFromMenu:", "_insertAutoFillContact:", "_insertAutoFillPassword:"
+    ]
+
     private static func quieten(_ view: UIView) {
         let name = "NEOQuiet_" + String(cString: class_getName(object_getClass(view)))
         var cls: AnyClass? = NSClassFromString(name)
@@ -158,10 +173,23 @@ class NeoBridgeViewController: CAPBridgeViewController {
             class_addMethod(made, NSSelectorFromString("keyboardAppearance"),
                             imp_implementationWithBlock(appearance), "q@:")
             // no Paste / AutoFill / Format bubble on a long press in the text:
-            // NEO's page has its own ways, and the bubble only ever got in the way
-            let noMenu: @convention(block) (AnyObject, Selector, AnyObject?) -> Bool = { _, _, _ in false }
-            class_addMethod(made, #selector(UIResponder.canPerformAction(_:withSender:)),
-                            imp_implementationWithBlock(noMenu), "B@::@")
+            // NEO's page has its own ways, and the bubble only ever got in the
+            // way. Only the bubble's own choices are refused. Every other action
+            // is WebKit's to answer as before: answering no to all of them also
+            // turned off a hardware keyboard's arrow keys (↑↓ scrolled the page,
+            // ←→ did nothing, #501), and a key command (⌘C, ⌘V, ⌘Z…) always
+            // gets WebKit's own answer.
+            let canPerform = #selector(UIResponder.canPerformAction(_:withSender:))
+            typealias CanPerform = @convention(c) (AnyObject, Selector, Selector, AnyObject?) -> Bool
+            guard let inherited = class_getMethodImplementation(object_getClass(view), canPerform) else { objc_disposeClassPair(made); return }
+            let original = unsafeBitCast(inherited, to: CanPerform.self)
+            let menuOnly: @convention(block) (AnyObject, Selector, AnyObject?) -> Bool = { me, action, sender in
+                if !(sender is UIKeyCommand) && NeoBridgeViewController.bubbleActions.contains(NSStringFromSelector(action)) {
+                    return false
+                }
+                return original(me, canPerform, action, sender)
+            }
+            class_addMethod(made, canPerform, imp_implementationWithBlock(menuOnly), "B@::@")
             objc_registerClassPair(made)
             cls = made
         }
