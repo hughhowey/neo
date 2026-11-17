@@ -1645,7 +1645,14 @@ ipcMain.handle('export:save', async (_e, { format, defaultName, content, zipEntr
 
 // KDP's trim sizes NEO offers (inches), its paper (spine thickness per page),
 // and its minimum inside margin by page count. kdp.amazon.com, Oct 2026.
-const KDP_TRIMS = { '5x8': [5, 8], '5.25x8': [5.25, 8], '5.5x8.5': [5.5, 8.5], '6x9': [6, 9] };
+// The metric ones (#404) are custom sizes on KDP, which takes any trim from
+// 4 × 6 to 8.5 × 11.69 in; all of them sit in the band of 6 × 9 and smaller,
+// so the paper's page limits below hold for them too.
+const KDP_TRIMS = {
+  '5x8': [5, 8], '5.25x8': [5.25, 8], '5.5x8.5': [5.5, 8.5], '6x9': [6, 9],
+  '110x178mm': [110 / 25.4, 178 / 25.4], '120x190mm': [120 / 25.4, 190 / 25.4], '5.06x7.81': [5.06, 7.81],
+  '135x216mm': [135 / 25.4, 216 / 25.4], '148x210mm': [148 / 25.4, 210 / 25.4]
+};
 const KDP_PAPER = { white: 0.002252, cream: 0.0025, groundwood: 0.00235 };
 const KDP_MAX_PAGES = { white: 828, cream: 776, groundwood: 812 };
 function kdpGutterMin(pages) {
@@ -1769,14 +1776,30 @@ async function renderPaged(html, { width, height, plain = false }) {
 // where each object starts stays true.
 function exactPageBox(pdf, widthIn, heightIn) {
   const s = pdf.toString('latin1');
-  const fit = (value, old) => {
-    let out = value.toFixed(5).replace(/0+$/, '').replace(/\.$/, '');
-    if (out.length > old.length) out = value.toFixed(Math.max(0, old.length - String(Math.floor(value)).length - 1));
-    if (out.length > old.length) return old;
-    if (out.length < old.length) out = out.includes('.') ? out.padEnd(old.length, '0') : (out + '.').padEnd(old.length, '0');
-    return out;
+  // The width and height share the characters the two numbers had: Chromium
+  // can write a rounded side as a whole number ("312" for 110 mm, #404),
+  // with no room of its own for 311.81, while the other side has digits to
+  // spare. Both get as many decimals as fit, and the spare is padded with
+  // zeros (the width first), so the box keeps its length.
+  const short = (value, places) => value.toFixed(places).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  const pad = (n, len) => (n.length >= len ? n : (n.includes('.') ? n : n + '.').padEnd(len, '0'));
+  const fitBox = (w, h, oldW, oldH) => {
+    const room = oldW.length + oldH.length;
+    for (let places = 5; places >= 0; places--) {
+      let a = short(w, places);
+      let b = short(h, places);
+      if (a.length + b.length > room) continue;
+      // a lone "." costs a character too, so pad toward whole lengths only
+      a = pad(a, Math.min(oldW.length, room - b.length));
+      if (a.length + b.length < room) b = pad(b, room - a.length);
+      if (a.length + b.length === room) return [a, b];
+    }
+    return [oldW, oldH];
   };
-  const fixed = s.replace(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/g, (m, w, h) => `/MediaBox [0 0 ${fit(widthIn * 72, w)} ${fit(heightIn * 72, h)}]`);
+  const fixed = s.replace(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/g, (m, w, h) => {
+    const [a, b] = fitBox(widthIn * 72, heightIn * 72, w, h);
+    return `/MediaBox [0 0 ${a} ${b}]`;
+  });
   return Buffer.from(fixed, 'latin1');
 }
 

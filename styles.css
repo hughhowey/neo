@@ -619,6 +619,11 @@ body.light .options-modal select, body.light .options-modal .opt-steps button:no
 .print-modal .pm-row { display: flex; gap: 14px; }
 .print-modal .pm-row > label { flex: 1; min-width: 0; }
 .print-modal .pm-trims { gap: 8px; margin-bottom: 16px; }
+.print-modal .pm-trims:has(+ .pm-trims) { margin-bottom: 8px; }
+/* the UK and European row has five sizes: each on one line */
+.print-modal .pm-trims + .pm-trims .fr-choice { padding: 10px 2px; }
+.print-modal .pm-trims + .pm-trims .fr-choice strong { font-size: 12px; white-space: nowrap; }
+.print-modal .pm-hint.pm-custom { margin: -6px 0 16px; }
 .print-modal .pm-trims .fr-choice { flex: 1; padding: 10px 6px; text-align: center; }
 .print-modal .pm-trims .fr-choice strong { margin-bottom: 3px; font-size: 13px; }
 .print-modal .pm-trims .fr-choice span { font-size: 11px; }

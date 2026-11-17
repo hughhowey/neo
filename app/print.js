@@ -3,7 +3,8 @@
 /* ================================================================== */
 /*  PRINT BOOK — a paperback for KDP                                   */
 /*  File → Export → Paperback for KDP… lays the open book out as a     */
-/*  print-ready interior PDF at one of KDP's four common trim sizes,   */
+/*  print-ready interior PDF at KDP's common trim sizes or the UK and  */
+/*  European ones (#404),                                              */
 /*  and a cover template sized to its page count. This builds the      */
 /*  book's HTML; main.js (print:paperback) lays it out in pages with   */
 /*  Paged.js, hyphenates it, sets the inside margin KDP asks for at    */
@@ -14,9 +15,22 @@ const PRINT_TRIMS = [
   { id: '5x8', label: '5 × 8 in', mm: '127 × 203 mm', size: 10.5, outside: 0.6, perPage: 250 },
   { id: '5.25x8', label: '5.25 × 8 in', mm: '133 × 203 mm', size: 10.75, outside: 0.6, perPage: 265 },
   { id: '5.5x8.5', label: '5.5 × 8.5 in', mm: '140 × 216 mm', size: 11, outside: 0.65, perPage: 290 },
-  { id: '6x9', label: '6 × 9 in', mm: '152 × 229 mm', size: 11.5, outside: 0.75, perPage: 330 }
+  { id: '6x9', label: '6 × 9 in', mm: '152 × 229 mm', size: 11.5, outside: 0.75, perPage: 330 },
+  // The sizes British and German readers know (#404), on a row of their own.
+  // B format is KDP's own 5.06 × 7.81, the same book to the millimetre; the
+  // others are custom sizes on KDP (`custom`), which the dialog explains.
+  { id: '110x178mm', label: '110 × 178 mm', name: tk('UK A format'), size: 10, outside: 0.55, perPage: 200, row: 2, custom: true },
+  { id: '120x190mm', label: '120 × 190 mm', name: tk('Germany'), size: 10.25, outside: 0.6, perPage: 225, row: 2, custom: true },
+  { id: '5.06x7.81', label: '5.06 × 7.81 in', mm: '129 × 198 mm', name: tk('UK B format'), size: 10.5, outside: 0.6, perPage: 245, row: 2 },
+  { id: '135x216mm', label: '135 × 216 mm', name: tk('Demy'), size: 10.75, outside: 0.6, perPage: 280, row: 2, custom: true },
+  { id: '148x210mm', label: '148 × 210 mm', name: tk('A5'), size: 11, outside: 0.65, perPage: 300, row: 2, custom: true }
 ];
-const PRINT_DIMS = { '5x8': [5, 8], '5.25x8': [5.25, 8], '5.5x8.5': [5.5, 8.5], '6x9': [6, 9] };
+// inches; main.js's KDP_TRIMS holds the same
+const PRINT_DIMS = {
+  '5x8': [5, 8], '5.25x8': [5.25, 8], '5.5x8.5': [5.5, 8.5], '6x9': [6, 9],
+  '110x178mm': [110 / 25.4, 178 / 25.4], '120x190mm': [120 / 25.4, 190 / 25.4], '5.06x7.81': [5.06, 7.81],
+  '135x216mm': [135 / 25.4, 216 / 25.4], '148x210mm': [148 / 25.4, 210 / 25.4]
+};
 // a CSS string, for the running heads
 // (a "<" as an escape too, so a name can't close the style block it sits in)
 const cssString = (s) => '"' + String(s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/</g, '\\3c ').replace(/[\n\r]+/g, ' ') + '"';
@@ -292,15 +306,18 @@ async function printPaperback() {
   const reviewDefault = t('If you enjoyed {title}, please consider leaving a review on Amazon or Goodreads. Even a line or two helps other readers find the book, and it means a great deal to me.', { title: book.title });
   const reviewText = ap.reviewText ? ap.reviewText.split('{title}').join(book.title) : reviewDefault;
   const field = (id, label, value, ph = '') => `<label>${label}<input id="${id}" type="text" spellcheck="false" value="${escHtml(value || '').replace(/"/g, '&quot;')}" placeholder="${escHtml(ph).replace(/"/g, '&quot;')}"/></label>`;
+  // the size kept from last time, if NEO still offers it
+  const startTrim = PRINT_TRIMS.some((x) => x.id === bp.trim) ? bp.trim : '5.5x8.5';
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   bd.innerHTML = `
     <div class="modal print-modal" style="width:560px">
       <h2 style="font-size:17px">${t('Paperback for KDP')}</h2>
       <p class="pm-hint">${t('A print-ready interior PDF and a cover template sized to its page count, for Amazon KDP.')}</p>
-      <div class="pm-row pm-trims">${PRINT_TRIMS.map((x) => `
-        <button type="button" class="fr-choice${(bp.trim || '5.5x8.5') === x.id ? ' sel' : ''}" data-trim="${x.id}"><strong>${x.label}</strong><span>${x.mm}</span></button>`).join('')}
-      </div>
+      ${[1, 2].map((row) => `<div class="pm-row pm-trims">${PRINT_TRIMS.filter((x) => (x.row || 1) === row).map((x) => `
+        <button type="button" class="fr-choice${startTrim === x.id ? ' sel' : ''}" data-trim="${x.id}"${x.name && x.mm ? ` title="${x.mm}"` : ''}><strong>${x.label}</strong><span>${x.name ? escHtml(t(x.name)) : x.mm}</span></button>`).join('')}
+      </div>`).join('')}
+      <p class="pm-hint pm-custom" hidden></p>
       <div class="pm-row">
         <label>${t('Paper')}
           <select id="pm-paper">
@@ -335,11 +352,19 @@ async function printPaperback() {
     e.currentTarget.hidden = true;
     ta.focus();
   };
-  let trim = bp.trim || '5.5x8.5';
+  let trim = startTrim;
+  // a size that isn't on KDP's own list is entered there as a custom size
+  const customNote = () => {
+    const x = PRINT_TRIMS.find((s) => s.id === trim);
+    const note = bd.querySelector('.pm-custom');
+    note.hidden = !(x && x.custom);
+    if (x && x.custom) note.textContent = t('Not one of KDP’s standard sizes: on KDP, choose “Select a different size” and enter {size}. KDP doesn’t offer Expanded Distribution for a custom size.', { size: x.label });
+  };
+  customNote();
   const selTrim = bd.querySelector('.fr-choice.sel');
   if (selTrim) selTrim.focus({ preventScroll: true });
   for (const b of bd.querySelectorAll('[data-trim]')) {
-    b.onclick = () => { trim = b.dataset.trim; b.focus({ preventScroll: true }); bd.querySelectorAll('[data-trim]').forEach((x) => x.classList.toggle('sel', x === b)); };
+    b.onclick = () => { trim = b.dataset.trim; b.focus({ preventScroll: true }); bd.querySelectorAll('[data-trim]').forEach((x) => x.classList.toggle('sel', x === b)); customNote(); };
   }
   const go = await new Promise((resolve) => {
     bd.querySelector('.m-ok').onclick = () => resolve(true);
