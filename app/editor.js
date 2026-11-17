@@ -301,8 +301,16 @@ async function chapterMenu(chId, x = 0, y = 0, from = null) {
     items.push('-', { label: t('Restart Chapter Numbers at Each Part'), value: 'restart', checked: !!book.restartNumbering });
   }
   items.push('-', { label: t('Delete'), value: 'delete', danger: true });
+  // on the Outline (a chapter's card or its line in the List), its colour (#533)
+  const outlined = !!(from && from.closest && from.closest('#outline-board, #outline-list')) && STORY_KINDS.includes(kind);
+  if (outlined) items.push(...colorMenuItems((book.chapterColors || {})[chId] || ''));
   const choice = await popMenu(x, y, items, { title: chapterName(chId), from: from || document.querySelector(`.nav-item[data-id="${chId}"] .n-row`) });
   if (!choice || choice === kind) return null;
+  if (outlined && colorChoice(choice) !== null) {
+    if (from.classList.contains('ob-cell')) setCardColor(from, colorChoice(choice));
+    else setLineColor(from, colorChoice(choice));
+    return null;
+  }
   if (choice === 'export') {
     const formats = [
       ...(featureOn('exports') ? [{ label: t('Text (.txt)'), value: 'txt' }, { label: t('Markdown (.md)'), value: 'md' }, { label: t('HTML (.html)'), value: 'html' }] : []),

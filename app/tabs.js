@@ -628,6 +628,7 @@ function outlineLine(kind, chId, secId, index, label, text) {
       const at = book.chapterOrder.indexOf(chId) + 1;
       const newId = createChapterAt(at);
       book.chapterNotes[newId] = sec.text;
+      if (isCardColor(sec.color)) putColor('chapterColors', newId, sec.color);
       if (carry) book.sectionNotes[newId] = after;
       scheduleMetaSave();
       syncGhosts(chId);
@@ -653,12 +654,17 @@ function outlineLine(kind, chId, secId, index, label, text) {
     e.stopPropagation();
   });
 
-  // right-click any outline line to delete it
+  // right-click any outline line to delete it (or, with outline cards on, colour it)
   line.addEventListener('contextmenu', async (e) => {
     e.preventDefault();
     if (kind === 'chapter') {
       await chapterMenu(chId, e.clientX, e.clientY, line);
     } else {
+      if (cardColorsOn()) {
+        const v = await popMenu(e.clientX, e.clientY, [{ label: t('Delete section…'), value: 'delete', danger: true }, ...colorMenuItems(lineColorOf(line))], { from: line });
+        if (colorChoice(v) !== null) { setLineColor(line, colorChoice(v)); return; }
+        if (v !== 'delete') return;
+      }
       const choice = await optionModal(t('Delete this section?'), null,
         [{ label: t('Delete section'), desc: t('Removes the outline line and its gray ghost from the manuscript. Written prose is never touched.'), danger: true, value: 'delete' }]);
       if (choice === 'delete') {
@@ -675,6 +681,7 @@ function outlineLine(kind, chId, secId, index, label, text) {
 
   line.appendChild(num);
   line.appendChild(txt);
+  paintCardColor(line, lineColorOf(line));
   return line;
 }
 

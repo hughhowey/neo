@@ -155,6 +155,8 @@ function captureStructure(label, opts) {
     sectionNotes: JSON.parse(JSON.stringify(book.sectionNotes || {})),
     looseCards: JSON.parse(JSON.stringify(book.looseCards || [])),
     sceneNotes: { ...(book.sceneNotes || {}) },
+    chapterColors: { ...(book.chapterColors || {}) },
+    sceneColors: { ...(book.sceneColors || {}) },
     darlings: JSON.parse(JSON.stringify(darlings)),
     stickies: JSON.parse(JSON.stringify(stickies))
   };
@@ -222,6 +224,11 @@ async function structuralUndo(fromRedo) {
   book.sectionNotes = snap.sectionNotes;
   book.looseCards = snap.looseCards || [];
   book.sceneNotes = snap.sceneNotes || {};
+  // (colours a book had none of stay out of book.json)
+  for (const key of ['chapterColors', 'sceneColors']) {
+    if (snap[key] && Object.keys(snap[key]).length) book[key] = snap[key];
+    else delete book[key];
+  }
   // lists likewise: what the action changed goes back, anything added or
   // removed since stays that way (the displaced text above included)
   darlings = mergeSidecar(after.darlings, snap.darlings, darlings, true);

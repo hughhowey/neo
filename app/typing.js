@@ -657,6 +657,7 @@ function chapterStartBackspace(e, body, chId) {
   }
   if (book.chapterTitles) delete book.chapterTitles[chId];
   if (book.chapterNotes) delete book.chapterNotes[chId];
+  if (book.chapterColors) delete book.chapterColors[chId];
   if (book.chapterKinds) delete book.chapterKinds[chId];
   book.chapterOrder = book.chapterOrder.filter((c) => c !== chId);
   delete chapterHTML[chId];

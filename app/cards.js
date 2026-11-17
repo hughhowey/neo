@@ -513,6 +513,7 @@ function chapterCard(chId, opening, solo) {
   card.append(head, text);
   cell.dataset.excerpt = opening && opening.first ? quoted(opening.first) : '';
   fillCardText(cell, (book.chapterNotes || {})[chId] || '');
+  paintCardColor(cell, cardColorOf(cell));
   cell.setAttribute('aria-label', (solo ? t('The story') : chapterName(chId)) + '. ' + text.textContent);
   return cell;
 }
@@ -540,6 +541,7 @@ function sectionCard(chId, seg, segIdx, letterIdx) {
   cell.dataset.written = seg.words ? '1' : '';
   cell.dataset.excerpt = seg.first ? quoted(seg.first) : '';
   fillCardText(cell, note ? note.text : '');
+  paintCardColor(cell, cardColorOf(cell));
   cell.setAttribute('aria-label', t('Section {letter}', { letter: letter.textContent }) + '. ' + text.textContent + '. ' + foot.textContent);
   return cell;
 }
@@ -565,6 +567,136 @@ function cardFlag() {
 function chapterHasFlag(chId) {
   const body = chapterBodyEl(chId);
   return !!(body && body.querySelector('.ph-mark'));
+}
+
+// ---- card colours (#533, #512) ----
+// A card can wear one of six colours, for a plot line, a point of view or a
+// storyline: a band across its top, on the board, in the List and beside the
+// page. It's kept beside the card's note, so it goes wherever the card goes
+// (another chapter, the loose cards and back) and ⌘Z takes it back: a
+// chapter's in book.chapterColors, a section's on its note in
+// book.sectionNotes, a script scene's in book.sceneColors (by its heading's
+// id), a loose card's on the card. A section or scene with no note yet gets
+// an empty one, the way its first note would make it.
+const CARD_COLORS = [
+  { key: 'red', label: tk('Red') }, { key: 'orange', label: tk('Orange') }, { key: 'yellow', label: tk('Yellow') },
+  { key: 'green', label: tk('Green') }, { key: 'blue', label: tk('Blue') }, { key: 'purple', label: tk('Purple') }
+];
+const isCardColor = (c) => CARD_COLORS.some((x) => x.key === c);
+// colours are set where cards are (shown everywhere: nothing a book holds is hidden)
+const cardColorsOn = () => !!book && (featureOn('cards') || isScript());
+
+function cardColorOf(cell) {
+  if (!book || cell.dataset.new) return '';
+  const kind = cell.dataset.kind;
+  let c = '';
+  if (kind === 'chapter') c = (book.chapterColors || {})[cell.dataset.ch];
+  else if (kind === 'loose') c = ((book.looseCards || []).find((x) => x.id === cell.dataset.loose) || {}).color;
+  else if (kind === 'scene') c = cell.dataset.sid ? (book.sceneColors || {})[cell.dataset.sid] : '';
+  else {
+    const note = cell.dataset.sec ? sectionNote(cell.dataset.ch, cell.dataset.sec) : null;
+    c = note && note.color;
+  }
+  return isCardColor(c) ? c : '';
+}
+function paintCardColor(el, color) {
+  if (isCardColor(color)) el.dataset.color = color;
+  else delete el.dataset.color;
+}
+
+// the colour row for a card's right-click menu, and what a pick there does
+function colorMenuItems(current) {
+  if (!cardColorsOn()) return [];
+  return ['-', {
+    swatches: [{ value: 'color:', label: t('No colour'), selected: !current },
+      ...CARD_COLORS.map((x) => ({ value: 'color:' + x.key, label: t(x.label), color: x.key, selected: current === x.key }))]
+  }];
+}
+const colorChoice = (v) => (typeof v === 'string' && v.startsWith('color:') ? v.slice(6) : null);
+
+// a card's colour carried onto what it becomes (a loose card, a note)
+const withColor = (obj, color) => (isCardColor(color) ? { ...obj, color } : obj);
+
+// a keyed map in book.json, left out when it's empty
+function putColor(map, key, color) {
+  if (color) (book[map] = book[map] || {})[key] = color;
+  else if (book[map]) {
+    delete book[map][key];
+    if (!Object.keys(book[map]).length) delete book[map];
+  }
+}
+
+function setCardColor(cell, color) {
+  if (!book || cell.dataset.new) return;
+  color = isCardColor(color) ? color : '';
+  if (cardColorOf(cell) === color) return;
+  const kind = cell.dataset.kind;
+  const chId = cell.dataset.ch;
+  snapshotStructure('card colour');
+  if (kind === 'chapter') putColor('chapterColors', chId, color);
+  else if (kind === 'loose') {
+    const card = (book.looseCards || []).find((x) => x.id === cell.dataset.loose);
+    if (!card) return;
+    if (color) card.color = color; else delete card.color;
+  } else if (kind === 'scene') {
+    let sid = cell.dataset.sid;
+    if (!sid) {
+      const sc = sceneOfCell(cell);
+      if (!sc) return;
+      sid = newSceneId();
+      (book.sceneNotes = book.sceneNotes || {})[sid] = '';
+      sc.s.p.dataset.sceneId = sid;
+      cell.dataset.sid = sid;
+      syncChapter(spBodyOf(sc.s.p), spChapterOf(sc.s.p));
+    }
+    putColor('sceneColors', sid, color);
+  } else {
+    let note = cell.dataset.sec ? sectionNote(chId, cell.dataset.sec) : null;
+    if (!note) {
+      // the section's first line of prose carries the new note's id
+      const seg = chapterSegments(chId)[Number(cell.dataset.seg)];
+      const anchor = seg && seg.ps.find((p) => !p.classList.contains('ghost'));
+      if (!anchor) return;
+      note = { id: newSectionId(), text: '' };
+      anchor.dataset.secId = note.id;
+      book.sectionNotes = book.sectionNotes || {};
+      (book.sectionNotes[chId] = book.sectionNotes[chId] || []).push(note);
+      orderSectionNotes(chId);
+      syncChapter(chapterBodyEl(chId), chId);
+      cell.dataset.sec = note.id;
+    }
+    if (color) note.color = color; else delete note.color;
+  }
+  scheduleMetaSave();
+  repaintCardColors();
+}
+
+// a line of the List: its chapter's colour, or its section's
+function lineColorOf(line) {
+  const chId = line.dataset.chId;
+  const note = line.dataset.secId ? sectionNote(chId, line.dataset.secId) : null;
+  const c = line.dataset.secId ? note && note.color : (book.chapterColors || {})[chId];
+  return isCardColor(c) ? c : '';
+}
+function setLineColor(line, color) {
+  color = isCardColor(color) ? color : '';
+  if (!book || lineColorOf(line) === color) return;
+  const chId = line.dataset.chId;
+  const secId = line.dataset.secId;
+  const note = secId ? sectionNote(chId, secId) : null;
+  if (secId && !note) return;
+  snapshotStructure('card colour', { outlineFocus: secId ? { secId } : { chId } });
+  if (note) { if (color) note.color = color; else delete note.color; }
+  else putColor('chapterColors', chId, color);
+  scheduleMetaSave();
+  repaintCardColors();
+}
+
+// every card and line showing, painted again from the book
+function repaintCardColors() {
+  for (const cell of $$('#outline-board .ob-cell, #loose-list .ob-cell')) paintCardColor(cell, cardColorOf(cell));
+  for (const line of $$('#outline-list .ol-line.ol-chapter, #outline-list .ol-line.ol-section')) paintCardColor(line, lineColorOf(line));
+  sideCardsUpdate(true);
 }
 
 // ---- writing on a card ----
@@ -1031,7 +1163,10 @@ function makeNewCardAfter(cell, chId) {
 
 function deleteSectionNote(chId, secId) {
   snapshotStructure('card removed');
-  book.sectionNotes[chId] = (book.sectionNotes[chId] || []).filter((s) => s.id !== secId);
+  // a written section keeps its colour: only the words of the note go
+  const note = sectionNote(chId, secId);
+  if (note && note.color && chapterSegments(chId).some((sg) => sg.id === secId && sg.words)) note.text = '';
+  else book.sectionNotes[chId] = (book.sectionNotes[chId] || []).filter((s) => s.id !== secId);
   scheduleMetaSave();
   syncGhosts(chId);
   renderBoard();
@@ -1075,9 +1210,11 @@ async function cardMenu(cell, x, y) {
   }
   const chId = cell.dataset.ch;
   if (cell.dataset.kind === 'chapter') { await chapterMenu(chId, x, y, cell); return; }
+  const color = cardColorOf(cell);
   if (cell.dataset.kind === 'loose') {
-    const v = await popMenu(x, y, [{ label: t('Delete card'), value: 'delete', danger: true }], { from: cell });
+    const v = await popMenu(x, y, [{ label: t('Delete card'), value: 'delete', danger: true }, ...colorMenuItems(color)], { from: cell });
     if (v === 'delete') removeLooseCard(cell.dataset.loose);
+    else if (colorChoice(v) !== null) setCardColor(cell, colorChoice(v));
     return;
   }
   if (cell.dataset.new) return;
@@ -1085,14 +1222,18 @@ async function cardMenu(cell, x, y) {
     const v = await popMenu(x, y, [
       { label: t('Go to the page'), value: 'go' },
       '-',
-      { label: t('Delete the note'), value: 'delete', disabled: !cell.dataset.sid },
-      { label: t('Delete scene'), value: 'deleteScene', danger: true }
+      { label: t('Delete the note'), value: 'delete', disabled: !cell.dataset.sid || !cardNoteOf(cell) },
+      { label: t('Delete scene'), value: 'deleteScene', danger: true },
+      ...colorMenuItems(color)
     ], { from: cell });
+    if (colorChoice(v) !== null) { setCardColor(cell, colorChoice(v)); return; }
     if (v === 'go') goToScene(cell);
     else if (v === 'deleteScene') await deleteSceneToDarlings(cell);
     else if (v === 'delete') {
       snapshotStructure('scene note removed');
-      delete book.sceneNotes[cell.dataset.sid];
+      // a coloured scene keeps its colour (and the id it's kept by)
+      if ((book.sceneColors || {})[cell.dataset.sid]) book.sceneNotes[cell.dataset.sid] = '';
+      else delete book.sceneNotes[cell.dataset.sid];
       scheduleMetaSave();
       renderBoard();
     }
@@ -1100,15 +1241,19 @@ async function cardMenu(cell, x, y) {
   }
   const linked = !!cell.dataset.sec;
   const written = !!cell.dataset.written;
+  // (a note with nothing on it, there only for a colour, has no words to delete)
+  const noted = linked && (!!cardNoteOf(cell) || !!cell.dataset.virtual);
   const choice = await popMenu(x, y, [
     { label: t('Go to the page'), value: 'go', disabled: !!cell.dataset.virtual },
     { label: t('Make it a chapter'), value: 'chapter', disabled: !!cell.dataset.virtual },
     { label: t('Move to loose cards'), value: 'loose', disabled: !written && !linked },
     '-',
-    { label: t('Delete the note'), value: 'delete', disabled: !linked },
-    { label: t('Delete section'), value: 'deleteSection', danger: true, disabled: !!cell.dataset.virtual || (!written && !linked) }
+    { label: t('Delete the note'), value: 'delete', disabled: !noted },
+    { label: t('Delete section'), value: 'deleteSection', danger: true, disabled: !!cell.dataset.virtual || (!written && !linked) },
+    ...colorMenuItems(color)
   ], { from: cell });
-  if (choice === 'go') goToCard(cell);
+  if (colorChoice(choice) !== null) setCardColor(cell, colorChoice(choice));
+  else if (choice === 'go') goToCard(cell);
   else if (choice === 'chapter') sectionToChapter(chId, Number(cell.dataset.seg));
   else if (choice === 'loose') sectionToLoose(chId, Number(cell.dataset.seg), cell.dataset.virtual ? cell.dataset.sec : null);
   else if (choice === 'delete') {
@@ -1280,6 +1425,7 @@ function sectionToChapter(chId, segIdx) {
   chapterHTML[newId] = html;
   book.chapterNotes = book.chapterNotes || {};
   if (note && note.text) book.chapterNotes[newId] = note.text;
+  if (note && isCardColor(note.color)) putColor('chapterColors', newId, note.color);
   for (const s of stickies) if (prose.some((p) => p.querySelector(`.ph-mark[data-sid="${s.id}"]`))) s.chapterId = newId;
   writeSidecar(book.id, 'stickies', stickies);
   // the new chapter's file, then book.json naming it, and only then the
@@ -1303,7 +1449,7 @@ function sectionToLoose(chId, segIdx, virtualSec) {
     if (!note) return;
     snapshotStructure('card to loose');
     book.sectionNotes[chId] = book.sectionNotes[chId].filter((s) => s.id !== virtualSec);
-    (book.looseCards = book.looseCards || []).push({ id: 'lc-' + Date.now().toString(36), text: note.text });
+    (book.looseCards = book.looseCards || []).push(withColor({ id: 'lc-' + Date.now().toString(36), text: note.text }, note.color));
     scheduleMetaSave();
     renderLooseCards();
     renderBoard();
@@ -1316,7 +1462,7 @@ function sectionToLoose(chId, segIdx, virtualSec) {
   if (!note) return;
   snapshotStructure('card to loose');
   book.sectionNotes[chId] = book.sectionNotes[chId].filter((s) => s.id !== seg.id);
-  (book.looseCards = book.looseCards || []).push({ id: 'lc-' + Date.now().toString(36), text: note.text });
+  (book.looseCards = book.looseCards || []).push(withColor({ id: 'lc-' + Date.now().toString(36), text: note.text }, note.color));
   scheduleMetaSave();
   syncGhosts(chId);
   renderLooseCards();
@@ -1332,7 +1478,7 @@ async function writtenSectionToLoose(chId, seg) {
   const holder = document.createElement('div');
   for (const p of seg.ps) if (!p.classList.contains('ghost')) holder.appendChild(p.cloneNode(true));
   for (const p of holder.querySelectorAll('[data-sec-id]')) p.removeAttribute('data-sec-id');
-  const card = { id: 'lc-' + Date.now().toString(36), text: note ? note.text : '', html: captureBody(holder), words: seg.words };
+  const card = withColor({ id: 'lc-' + Date.now().toString(36), text: note ? note.text : '', html: captureBody(holder), words: seg.words }, note && note.color);
   (book.looseCards = book.looseCards || []).push(card);
   // the card that holds the words is on disk before the chapter loses them
   let stamp = null;
@@ -1362,7 +1508,7 @@ function looseToSection(looseId, to) {
   if (!card || !body) return;
   snapshotStructure('loose card placed');
   book.looseCards = book.looseCards.filter((c) => c.id !== looseId);
-  const sec = { id: newSectionId(), text: card.text };
+  const sec = withColor({ id: newSectionId(), text: card.text }, card.color);
   const target = to.before == null ? null : chapterSegments(to.ch)[to.before];
   if (card.html) {
     // a card that holds writing: its words go back in as a section
@@ -1370,7 +1516,7 @@ function looseToSection(looseId, to) {
     holder.innerHTML = card.html;
     const ps = [...holder.children];
     if (ps.length) {
-      if (sec.text) {
+      if (sec.text || sec.color) {
         ps[0].dataset.secId = sec.id;
         (book.sectionNotes[to.ch] = book.sectionNotes[to.ch] || []).push(sec);
       }
@@ -1410,7 +1556,7 @@ async function joinChapter(chId, intoCh) {
   snapshotStructure('chapter joined', { outlineFocus: { chId } });
   book.sectionNotes = book.sectionNotes || {};
   const notes = book.sectionNotes[intoCh] = book.sectionNotes[intoCh] || [];
-  const sec = { id: newSectionId(), text: ((book.chapterNotes || {})[chId] || '').trim() || ((book.chapterTitles || {})[chId] || '').trim() };
+  const sec = withColor({ id: newSectionId(), text: ((book.chapterNotes || {})[chId] || '').trim() || ((book.chapterTitles || {})[chId] || '').trim() }, (book.chapterColors || {})[chId]);
   // what the chapter holds (a chapter of one empty line holds nothing)
   const kids = [...from.children];
   const hasLines = kids.some((el) => el.textContent.trim() || el.querySelector('.ph-mark'));
@@ -1926,8 +2072,9 @@ function rescueSceneNotes() {
   let moved = false;
   for (const id of ids) {
     if (onPage.has(id)) continue;
-    if (String(notes[id] || '').trim()) (book.looseCards = book.looseCards || []).push({ id: 'lc-' + id, text: notes[id] });
+    if (String(notes[id] || '').trim()) (book.looseCards = book.looseCards || []).push(withColor({ id: 'lc-' + id, text: notes[id] }, (book.sceneColors || {})[id]));
     delete notes[id];
+    putColor('sceneColors', id, '');
     moved = true;
   }
   if (moved) { scheduleMetaSave(); renderLooseCards(); }
@@ -1958,6 +2105,7 @@ function sceneCard(sc) {
   card.append(head, slug, text, foot);
   cell.dataset.excerpt = sc.first ? quoted(sc.first) : '';
   fillCardText(cell, sc.id ? book.sceneNotes[sc.id] : '');
+  paintCardColor(cell, cardColorOf(cell));
   cell.setAttribute('aria-label', t('Scene {n}', { n: sc.k + 1 }) + '. ' + (sc.slug || '') + '. ' + text.textContent);
   return cell;
 }
@@ -2056,9 +2204,10 @@ function looseToScene(looseId, before) {
   snapshotStructure('loose card placed');
   book.looseCards = book.looseCards.filter((c) => c.id !== looseId);
   const h = insertScene(before - 1, '');
-  if (h && card.text) {
+  if (h && (card.text || isCardColor(card.color))) {
     const id = newSceneId();
-    (book.sceneNotes = book.sceneNotes || {})[id] = card.text;
+    (book.sceneNotes = book.sceneNotes || {})[id] = card.text || '';
+    if (isCardColor(card.color)) putColor('sceneColors', id, card.color);
     h.dataset.sceneId = id;
     syncChapter(spBodyOf(h), spChapterOf(h));
   }
@@ -2123,6 +2272,7 @@ function renderLooseCards() {
   for (const c of book.looseCards || []) {
     const { cell, card } = cardCell('loose', '');
     cell.dataset.loose = c.id;
+    paintCardColor(cell, c.color);
     const text = document.createElement('div');
     text.className = 'ob-text';
     text.textContent = c.text;
@@ -2246,6 +2396,7 @@ async function chapterToLoose(chId) {
     notes: JSON.parse(JSON.stringify((book.sectionNotes || {})[chId] || [])),
     words: chapterWords(chId)
   };
+  if (isCardColor((book.chapterColors || {})[chId])) card.color = book.chapterColors[chId];
   if (kind !== 'chapter') card.kind = kind;
   (book.looseCards = book.looseCards || []).push(card);
   if (!(await saveHeldCard(card))) return;
@@ -2267,6 +2418,7 @@ function looseToChapter(looseId, index) {
   chapterHTML[chId] = card.html || '<p><br></p>';
   if (card.title) (book.chapterTitles = book.chapterTitles || {})[chId] = card.title;
   if (card.text) (book.chapterNotes = book.chapterNotes || {})[chId] = card.text;
+  if (isCardColor(card.color)) putColor('chapterColors', chId, card.color);
   if (card.notes && card.notes.length) (book.sectionNotes = book.sectionNotes || {})[chId] = card.notes;
   if (card.kind) setChapterKind(chId, card.kind);
   book.looseCards = book.looseCards.filter((c) => c.id !== looseId);
@@ -2296,11 +2448,13 @@ async function sceneToLoose(cell) {
     html: captureBody(holder),
     words: countWords(nodes.map((n) => n.textContent).join('\n'))
   };
+  if (cardColorOf(cell)) card.color = cardColorOf(cell);
   (book.looseCards = book.looseCards || []).push(card);
   if (!(await saveHeldCard(card))) return;
   for (const n of nodes) n.remove();
   if (!body.querySelector('p')) body.innerHTML = '<p><br></p>';
   if (cell.dataset.sid && book.sceneNotes) delete book.sceneNotes[cell.dataset.sid];
+  if (cell.dataset.sid) putColor('sceneColors', cell.dataset.sid, '');
   syncChapter(body, chId);
   clearTimeout(saveTimers[chId]);
   persistChapter(chId).then(() => saveMeta())
@@ -2327,9 +2481,10 @@ function heldSceneBack(card, before) {
   if (!nodes.length) return;
   // an empty script's one blank line gives way
   if (!dest.textContent.trim() && dest.children.length === 1) dest.innerHTML = '';
-  if (card.text) {
+  if (card.text || isCardColor(card.color)) {
     const id = newSceneId();
-    (book.sceneNotes = book.sceneNotes || {})[id] = card.text;
+    (book.sceneNotes = book.sceneNotes || {})[id] = card.text || '';
+    if (isCardColor(card.color)) putColor('sceneColors', id, card.color);
     nodes[0].dataset.sceneId = id;
   }
   for (const n of nodes) { if (target) target.before(n); else dest.appendChild(n); }
@@ -2466,15 +2621,17 @@ function sideCardsUpdate(force) {
       // (a scene gets its id with its first note, here as on the Outline)
       const sid = h.dataset.sceneId || '';
       key = 'scene:' + (sid || [...body.querySelectorAll('p.sp-heading')].indexOf(h)) + ':' + h.textContent;
-      cards = [{ kind: 'scene', id: sid, head: h, label: h.textContent.trim() || t('Scene'), text: (book.sceneNotes || {})[sid] || '', current: false }];
+      cards = [{ kind: 'scene', id: sid, head: h, label: h.textContent.trim() || t('Scene'), text: (book.sceneNotes || {})[sid] || '', current: false, color: sid ? (book.sceneColors || {})[sid] : '' }];
     }
   } else if (chId && book.chapterOrder.includes(chId) && isStory(chId)) {
     const secId = body ? sectionOf(body, p) : null;
     const secs = (book.sectionNotes || {})[chId] || [];
     key = 'ch:' + chId + ':' + (secId || '') + ':' + secs.length;
-    cards = [{ kind: 'chapter', id: chId, label: (book.chapterTitles || {})[chId] || chapterName(chId), text: (book.chapterNotes || {})[chId] || '', current: false },
-      ...secs.map((s, i) => ({ kind: 'section', id: s.id, chId, label: t('Section {letter}', { letter: secLetter(i) }), text: s.text || '', current: s.id === secId }))];
+    cards = [{ kind: 'chapter', id: chId, label: (book.chapterTitles || {})[chId] || chapterName(chId), text: (book.chapterNotes || {})[chId] || '', current: false, color: (book.chapterColors || {})[chId] },
+      ...secs.map((s, i) => ({ kind: 'section', id: s.id, chId, label: t('Section {letter}', { letter: secLetter(i) }), text: s.text || '', current: s.id === secId, color: s.color }))];
   }
+  // (a colour changed on the Outline draws them again)
+  if (cards.length) key += ':' + cards.map((c) => (isCardColor(c.color) ? c.color : '')).join(',');
   if (key === sideCardsKey && !force) return;
   sideCardsKey = key;
   box.innerHTML = '';
@@ -2487,6 +2644,7 @@ function sideCardsUpdate(force) {
   for (const c of cards) {
     const card = document.createElement('div');
     card.className = 'side-card side-card-' + c.kind + (c.current ? ' current' : '');
+    paintCardColor(card, c.color);
     const head = document.createElement('div');
     head.className = 'side-card-head';
     head.textContent = c.label;

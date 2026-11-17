@@ -402,6 +402,7 @@ async function deleteChapterQuiet(chId) {
   delete wordCache[chId];
   if (book.sectionNotes) delete book.sectionNotes[chId];
   if (book.chapterNotes) delete book.chapterNotes[chId];
+  if (book.chapterColors) delete book.chapterColors[chId];
   if (book.chapterKinds) delete book.chapterKinds[chId];
   stickies = stickies.filter((s) => s.chapterId !== chId);
   writeSidecar(book.id, 'stickies', stickies);

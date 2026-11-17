@@ -500,6 +500,28 @@ function popMenu(x, y, items, { title = '', from = null } = {}) {
         menu.appendChild(sep);
         continue;
       }
+      // a row of colours to pick from ({ swatches: [{ value, label, color, selected }] }),
+      // each named for a screen reader and on hover; one with no color is "none"
+      if (it.swatches) {
+        const row = document.createElement('div');
+        row.className = 'pm-swatches';
+        row.setAttribute('role', 'group');
+        for (const sw of it.swatches) {
+          const b = document.createElement('button');
+          b.setAttribute('role', 'menuitemradio');
+          b.setAttribute('aria-checked', sw.selected ? 'true' : 'false');
+          b.setAttribute('aria-label', sw.label);
+          b.title = sw.label;
+          b.className = 'pm-swatch' + (sw.color ? '' : ' pm-swatch-none') + (sw.selected ? ' sel' : '');
+          if (sw.color) b.dataset.color = sw.color;
+          b.tabIndex = -1;
+          b.onclick = () => done(sw.value);
+          b.onmouseenter = () => b.focus({ preventScroll: true });
+          row.appendChild(b);
+        }
+        menu.appendChild(row);
+        continue;
+      }
       const b = document.createElement('button');
       b.setAttribute('role', it.checked !== undefined ? 'menuitemradio' : 'menuitem');
       if (it.checked !== undefined) b.setAttribute('aria-checked', it.checked ? 'true' : 'false');
@@ -547,9 +569,9 @@ function popMenu(x, y, items, { title = '', from = null } = {}) {
     menu.addEventListener('keydown', (e) => {
       const at = buttons.indexOf(document.activeElement);
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
-      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && document.activeElement.classList.contains('pm-swatch'))) {
         e.preventDefault();
-        const next = buttons[(at + (e.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length];
+        const next = buttons[(at + (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length];
         if (next) next.focus();
       } else if (e.key === 'Tab') e.preventDefault();
       e.stopPropagation();

@@ -1258,7 +1258,7 @@ async function refreshFromDisk() {
           book = { ...meta, chapterOrder: order, lastPosition: book.lastPosition, dailyCounts: book.dailyCounts };
           // a chapter kept keeps its name, its kind and its notes
           for (const chId of kept) {
-            for (const key of ['chapterTitles', 'chapterKinds', 'chapterNotes', 'sectionNotes', 'sceneNotes']) {
+            for (const key of ['chapterTitles', 'chapterKinds', 'chapterNotes', 'chapterColors', 'sectionNotes', 'sceneNotes']) {
               if (!was[key] || was[key][chId] === undefined) continue;
               book[key] = { ...(book[key] || {}), [chId]: was[key][chId] };
             }

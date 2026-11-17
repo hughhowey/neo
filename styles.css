@@ -1288,6 +1288,39 @@ body.light #editor-view.board-on #outline-board-hint { color: #6a665e; }
 }
 .loose-add:hover { color: var(--accent); border-color: var(--accent); }
 .loose-tip { font-size: 12px; line-height: 1.5; color: var(--muted); font-style: italic; padding: 0 2px; }
+
+/* card colours (#533, #512): a band across a card's top and a wash of its
+   colour; a dot by a List line's number; a stripe down a card beside the
+   page. The cards are paper in every theme, so one set of colours serves. */
+[data-color="red"] { --cc: #cf5a4e; }
+[data-color="orange"] { --cc: #e08a3a; }
+[data-color="yellow"] { --cc: #d6b22c; }
+[data-color="green"] { --cc: #5a9e66; }
+[data-color="blue"] { --cc: #4d84c4; }
+[data-color="purple"] { --cc: #8e69bd; }
+.ob-cell[data-color] .ob-card, #loose-list .ob-cell[data-color] .ob-card {
+  background-color: color-mix(in srgb, var(--cc) 14%, var(--card, #f4f1e8));
+  background-image: linear-gradient(var(--cc), var(--cc));
+  background-size: 100% max(4px, calc(6px * var(--cz, 1))); background-repeat: no-repeat;
+}
+.ob-cell[data-color] .ob-card.ob-chapter { background-color: color-mix(in srgb, var(--cc) 12%, var(--card-head)); }
+.ol-line[data-color] .ol-num::before {
+  content: ''; display: inline-block; width: 0.5em; height: 0.5em; border-radius: 50%;
+  background: var(--cc); margin-right: 0.4em; vertical-align: 0.1em;
+}
+.side-card[data-color] { border-left: 4px solid var(--cc); }
+.pop-menu .pm-swatches { display: flex; gap: 7px; padding: 6px 10px 5px 26px; }
+.pop-menu button.pm-swatch {
+  width: 18px; height: 18px; padding: 0; border-radius: 50%; flex: none;
+  background: var(--cc); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
+}
+.pop-menu button.pm-swatch:focus { background: var(--cc); outline: 2px solid var(--accent); outline-offset: 2px; }
+.pop-menu button.pm-swatch-none, .pop-menu button.pm-swatch-none:focus {
+  background: linear-gradient(135deg, transparent 44%, #8a8a8a 44% 56%, transparent 56%);
+  box-shadow: inset 0 0 0 1.5px #8a8a8a;
+}
+.pop-menu button.pm-swatch.sel { box-shadow: 0 0 0 2px #262626, 0 0 0 4px #ddd; }
+body.light .pop-menu button.pm-swatch.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2b2926; }
 #side-pane.drop-over { box-shadow: inset 0 0 0 2px var(--accent); }
 
 /* the outline note walking a line ahead of the writer (app.js, the note
