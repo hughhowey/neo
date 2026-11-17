@@ -170,8 +170,12 @@
           }
           if (x.sceneBreak) out.push(p(plainRun('#'), { style: 'SceneBreak', pageBreak }));
           else if (x.poetry) out.push(p(x.runs, { style: 'Poetry', pageBreak, align: x.align === 'center' || x.align === 'right' ? x.align : '' }));
+          // a subheading inside a chapter: bold, flush, kept with what follows;
+          // a block quote: set in from both margins, upright (#484, #206)
+          else if (x.subhead) out.push(p(x.runs, { style: 'Subheading', pageBreak }));
+          else if (x.quote) out.push(p(x.runs, { style: 'Quote', pageBreak }));
           else if (x.align === 'center' || x.align === 'right') out.push(p(x.runs, { style: 'Centered', pageBreak, align: x.align === 'right' ? 'right' : '' }));
-          else out.push(p(x.runs, { style: x.flush ? 'ManuscriptNoIndent' : 'Manuscript', pageBreak }));
+          else out.push(p(x.runs, { style: x.flush || (paras[i - 1] && paras[i - 1].subhead) ? 'ManuscriptNoIndent' : 'Manuscript', pageBreak }));
         });
         if (lead) out.push(p([], { pageBreak: true }));
       }
@@ -206,6 +210,8 @@
 ${para('Manuscript', 'Manuscript Text', `<w:ind w:firstLine="${TWIP / 2}"/>`)}
 ${para('ManuscriptNoIndent', 'Manuscript Text No Indent', '')}
 ${para('Poetry', 'Poetry', `<w:ind w:left="${TWIP / 2}" w:right="${TWIP / 2}"/>`)}
+${para('Subheading', 'Subheading', '<w:keepNext/><w:outlineLvl w:val="1"/>', '<w:b/>', 'ManuscriptNoIndent')}
+${para('Quote', 'Quote', `<w:ind w:left="${TWIP / 2}" w:right="${TWIP / 2}"/>`)}
 ${para('LitRPG', 'LitRPG', ['top', 'left', 'bottom', 'right'].map((side) => `<w:${side} w:val="single" w:sz="4" w:space="${side === 'top' || side === 'bottom' ? 4 : 6}" w:color="999999"/>`).join('').replace(/^/, '<w:pBdr>') + '</w:pBdr><w:shd w:val="clear" w:color="auto" w:fill="EDEDED"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>' + `<w:ind w:left="${TWIP / 2}" w:right="${TWIP / 2}"/>`, '<w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:eastAsia="Courier New" w:cs="Courier New"/>')}
 ${para('Centered', 'Centered', '<w:jc w:val="center"/>')}
 ${para('SceneBreak', 'Scene Break', '<w:jc w:val="center"/>')}
@@ -341,7 +347,7 @@ ${headers.map((h) => `<Relationship Id="${h.id}" Type="http://schemas.openxmlfor
             const edge = [list[i - 1] && list[i - 1].litrpg ? '' : 'lt-top', list[i + 1] && list[i + 1].litrpg ? '' : 'lt-end'].filter(Boolean).join(' ');
             return `<p class="litrpg${edge ? ' ' + edge : ''}">${runsHtml(boxSpaces(x.runs)) || '&#8203;'}</p>`;
           }
-          const c = x.poetry ? 'poetry' : x.align === 'center' ? 'c' : x.align === 'right' ? 'r' : x.flush ? 'flush' : '';
+          const c = x.poetry ? 'poetry' : x.subhead ? 'subhead' : x.quote ? 'quote' : x.align === 'center' ? 'c' : x.align === 'right' ? 'r' : x.flush || (list[i - 1] && list[i - 1].subhead) ? 'flush' : '';
           return `<p${c ? ` class="${c}"` : ''}>${runsHtml(x.runs)}</p>`;
         }).join('\n');
         story.push(`<section class="chapter ${cls}${sec.heading ? '' : ' plain'}">${sec.heading ? `<h2>${escHtml(sec.heading)}</h2>` : ''}${paras}</section>`);
@@ -366,7 +372,9 @@ body { font-family: ${font}; font-size: 12pt; line-height: 2; }
 .byline { margin: 0; text-align: center; }
 ${m.short ? '.titlepage + .chapter, .titlepage + section { margin-top: 2em; }' : ''}
 p { margin: 0; text-indent: 0.5in; orphans: 1; widows: 1; }
-p.flush, p.c, p.r, p.brk, p.end, p.poetry { text-indent: 0; }
+p.flush, p.c, p.r, p.brk, p.end, p.poetry, p.subhead, p.quote { text-indent: 0; }
+p.subhead { font-weight: bold; break-after: avoid; }
+p.quote { margin: 0 0.5in; }
 p.c, p.brk, p.end { text-align: center; }
 p.r { text-align: right; }
 p.poetry { margin: 0 0.5in; }

@@ -920,6 +920,19 @@ body.paged #paper:not(.script) #tp-author { font-size: calc(14px * var(--page-zo
 .chapter-body i i i { font-style: italic; }
 .chapter-body p:not(.poetry) + p.poetry { margin-top: 0.9em; }
 .chapter-body p.poetry + p:not(.poetry) { margin-top: 0.9em; }
+/* Subheadings (Format → Subheading, #484, #206): a heading inside a
+   chapter, a date or a place, with room above it; the prose under it
+   starts flush, as it does after *** */
+.chapter-body p.subhead { text-indent: 0; font-weight: 600; letter-spacing: 0.01em; margin: 1.5em 0 0.4em; }
+.chapter-body p.subhead:first-child { margin-top: 0; }
+.chapter-body p.subhead + p:not(.subhead):not(.quote) { text-indent: 0; }
+/* Block quotes (Format → Block Quote): a passage set in from both margins,
+   upright. Its paragraphs make one block, the later ones indented as in a
+   book; the block has room above and below it */
+.chapter-body p.quote { margin: 0 2.5em; text-indent: 0; }
+.chapter-body p.quote + p.quote { text-indent: 1.5em; }
+.chapter-body p:not(.quote) + p.quote { margin-top: 0.9em; }
+.chapter-body p.quote + p:not(.quote) { margin-top: 0.9em; }
 /* LitRPG boxes ([[ at the start of a line): the game talking — a roll, a
    level-up, a character sheet. IBM Plex Mono (bundled in fonts/, OFL) so columns line
    up, every space kept (pre-wrap, as all prose here), on a light wash of the

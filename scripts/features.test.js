@@ -72,6 +72,7 @@ const BEHIND = {
   formatting: ['Other Font…', 'Align Paragraph', 'Align Book Prose'],
   pages: ['Show Pages', 'Two Pages Side by Side', 'Page Width'],
   poetry: ['Poetry Paragraph'],
+  subheads: ['Subheading', 'Block Quote'],
   focus: ['Focus Mode']
 };
 // settings that moved into Options: never in the menus again

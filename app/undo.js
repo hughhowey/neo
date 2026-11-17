@@ -278,6 +278,8 @@ function rejoinAtCaret() {
   if (prev.classList.contains('poetry') !== blk.classList.contains('poetry')) return;
   if (prev.classList.contains('flush') !== blk.classList.contains('flush')) return;
   if (prev.classList.contains('litrpg') !== blk.classList.contains('litrpg')) return;
+  if (prev.classList.contains('subhead') || blk.classList.contains('subhead')) return;
+  if (prev.classList.contains('quote') !== blk.classList.contains('quote')) return;
   const chId = body.closest('.chapter').dataset.id;
   const at = prev.textContent.length;
   if (blk.textContent.trim() === '') {

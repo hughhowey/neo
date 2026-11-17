@@ -18,7 +18,7 @@ function litrpgKey(e, body) {
   if (!block) return false;
   if (block.classList.contains('litrpg')) return true;
   if (e.key !== '[' || e.metaKey || e.ctrlKey || e.altKey || e.isComposing || e.keyCode === 229) return false;
-  if (block.matches('.scene-break, .ghost, .poetry')) return false;
+  if (block.matches('.scene-break, .ghost, .poetry, .subhead, .quote')) return false;
   const sel = window.getSelection();
   if (!sel.rangeCount || !sel.isCollapsed) return false;
   const r = sel.getRangeAt(0);
@@ -76,7 +76,7 @@ function litrpgEnter(e, body, chId) {
   document.execCommand('insertParagraph');
   const cur = caretBlock(body);
   if (cur) {
-    cur.classList.remove('poetry', 'flush');
+    cur.classList.remove('poetry', 'flush', 'subhead', 'quote');
     cur.classList.add('litrpg');
   }
   syncChapter(body, chId);
@@ -173,7 +173,7 @@ function pasteIntoBox(body, chId, html, text) {
     if (i > 0) {
       document.execCommand('insertParagraph');
       const cur = caretBlock(body);
-      if (cur) { cur.classList.remove('poetry', 'flush'); cur.classList.add('litrpg'); }
+      if (cur) { cur.classList.remove('poetry', 'flush', 'subhead', 'quote'); cur.classList.add('litrpg'); }
     }
     if (line) document.execCommand('insertText', false, line);
   });

@@ -2746,6 +2746,8 @@ function sendToWindow(msg) {
 // whether typewriter scrolling is on
 let poetryState = false;
 let flushState = false;
+// and whether it's in a subheading or a block quote
+let paraKindState = '';
 // A script open in the window: the Format menu offers its elements (the
 // keys are the editor's own, ⌘1–⌘7), and Export its two ways out
 let scriptState = { on: false, element: null, underline: false, contd: true };
@@ -2773,6 +2775,12 @@ ipcMain.on('poetry:state', (_e, on) => {
   on = !!on;
   if (on === poetryState) return;
   poetryState = on;
+  try { buildMenu(); } catch (err) { logError('menu', err); }
+});
+ipcMain.on('parakind:state', (_e, kind) => {
+  kind = kind === 'subhead' || kind === 'quote' ? kind : '';
+  if (kind === paraKindState) return;
+  paraKindState = kind;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
 ipcMain.on('flush:state', (_e, on) => {
@@ -3180,6 +3188,24 @@ function buildMenu() {
           ...pageKey('CmdOrCtrl+Shift+Enter', () => sendToWindow({ type: 'poetry' })),
           type: 'checkbox',
           checked: poetryState
+        },
+        // a heading inside a chapter, and a passage set apart (#484, #206)
+        { feature: 'subheads', visible: !scriptState.on, type: 'separator' },
+        {
+          feature: 'subheads',
+          visible: !scriptState.on,
+          label: t('Subheading'),
+          type: 'checkbox',
+          checked: paraKindState === 'subhead',
+          click: () => sendToWindow({ type: 'subhead' })
+        },
+        {
+          feature: 'subheads',
+          visible: !scriptState.on,
+          label: t('Block Quote'),
+          type: 'checkbox',
+          checked: paraKindState === 'quote',
+          click: () => sendToWindow({ type: 'quote' })
         }
       ]
     },

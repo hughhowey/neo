@@ -34,7 +34,11 @@ function parasFromHtml(html, { blanks = false } = {}) {
     // a LitRPG box line: its spaces are the writer's (columns), so they stay
     const litrpg = !sceneBreak && p.classList.contains('litrpg');
     const poetry = !litrpg && p.classList.contains('poetry');
-    const flush = !poetry && !litrpg && p.classList.contains('flush');
+    // a heading inside a chapter, and a passage set apart (#484, #206)
+    const subhead = !litrpg && !poetry && p.classList.contains('subhead');
+    const quote = !litrpg && !poetry && !subhead && p.classList.contains('quote');
+    const flush = !poetry && !litrpg && !subhead && !quote && p.classList.contains('flush');
+    const kind = litrpg ? 'litrpg' : poetry ? 'poetry' : subhead ? 'subhead' : quote ? 'quote' : flush ? 'flush' : '';
     const align = litrpg ? '' : (p.style && p.style.textAlign) || '';
     const runs = paraRuns(p.innerHTML, !litrpg).filter((r) => r.text || r.fn !== undefined);
     const inner = runs.map((r) => runHtml(litrpg && r.text ? { ...r, text: litrpgSpaces(r.text) } : r)).join('');
@@ -43,12 +47,14 @@ function parasFromHtml(html, { blanks = false } = {}) {
     return {
       sceneBreak,
       poetry,
+      subhead,
+      quote,
       flush,
       litrpg,
       text: litrpg ? p.textContent.replace(/\s+$/, '') : p.innerText.trim(),
       runs,
       align,
-      html: `<p${litrpg ? ' class="litrpg"' : poetry ? ' class="poetry"' : flush ? ' class="flush"' : ''}${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
+      html: `<p${kind ? ` class="${kind}"` : ''}${align ? ` style="text-align:${align}"` : ''}>${inner}</p>`
     };
   });
   // an empty line inside a box is a blank line in it; at a box's edge, or
@@ -59,7 +65,7 @@ function parasFromHtml(html, { blanks = false } = {}) {
     if (!p.litrpg) {
       if (!blanks || p.runs.some((r) => r.fn !== undefined)) return false;
       p.blank = true;
-      p.poetry = p.flush = false;
+      p.poetry = p.flush = p.subhead = p.quote = false;
       p.align = '';
       p.html = '<p class="blank">&#160;</p>';
       return true;
@@ -170,7 +176,7 @@ function manuscriptSections() {
   const { sections } = exportChapters();
   return sections.filter((s) => s.kind === 'chapter' || s.kind === 'part' || s.kind === 'epigraph').map((s) => ({
     kind: s.kind, heading: s.heading || '', partTitle: s.partTitle || '',
-    paras: s.paras.map((p) => ({ sceneBreak: p.sceneBreak, blank: !!p.blank, poetry: p.poetry, flush: p.flush, litrpg: !!p.litrpg, align: p.align, runs: p.runs || [] })),
+    paras: s.paras.map((p) => ({ sceneBreak: p.sceneBreak, blank: !!p.blank, poetry: p.poetry, subhead: !!p.subhead, quote: !!p.quote, flush: p.flush, litrpg: !!p.litrpg, align: p.align, runs: p.runs || [] })),
     words: s.paras.reduce((n, p) => n + (p.sceneBreak ? 0 : countWords(p.text || '')), 0)
   }));
 }

@@ -21,6 +21,26 @@ const PRINT_DIMS = { '5x8': [5, 8], '5.25x8': [5.25, 8], '5.5x8.5': [5.5, 8.5], 
 // (a "<" as an escape too, so a name can't close the style block it sits in)
 const cssString = (s) => '"' + String(s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/</g, '\\3c ').replace(/[\n\r]+/g, ' ') + '"';
 
+// A block quote's paragraphs as the exports set them (#484, #206): a run's
+// first and last are marked, so the room above and below the block doesn't
+// hang on a sibling selector (Paged.js breaks pages between paragraphs),
+// and the later ones carry the indent a book gives them. A blank line
+// between two quotes keeps them two.
+function quoteClass(paras, i) {
+  const is = (p) => !!(p && p.quote);
+  return ['quote', is(paras[i - 1]) ? 'q-cont' : 'q-top', is(paras[i + 1]) ? '' : 'q-end'].filter(Boolean).join(' ');
+}
+function quoteCss(sel, { side, gap, indent }) {
+  return `${sel} { margin: 0 ${side}; text-indent: 0; }
+${sel}.q-cont { text-indent: ${indent}; }
+${sel}.q-top { margin-top: ${gap}; }
+${sel}.q-end { margin-bottom: ${gap}; }`;
+}
+// a subheading: semibold, flush, room above it, kept with the lines it heads
+function subheadCss(sel, { size, gap }) {
+  return `${sel} { font-size: ${size}; font-weight: 600; font-style: normal; letter-spacing: 0.01em; line-height: 1.3; text-align: left; text-indent: 0; text-transform: none; margin: ${gap} 0 0.45em; break-after: avoid; page-break-after: avoid; -webkit-hyphens: none; hyphens: none; }`;
+}
+
 // The book's pages for print: the title page, the copyright page on its
 // back, the dedication and epigraph, the contents where the writer put
 // one, the story (each chapter on a right-hand page), the pages at the back,
@@ -71,6 +91,9 @@ function buildPrintHtml(d, o) {
       const inner = atFoot(p.html.replace(/^<p[^>]*>|<\/p>$/g, ''), p);
       if (p.litrpg) { afterBreak = false; return `<p class="${litrpgClass(paras, i)}">${inner || '&#8203;'}</p>`; }
       if (p.poetry) { afterBreak = false; return `<p class="poetry"${p.align ? ` style="text-align:${p.align}"` : ''}>${inner}</p>`; }
+      // a subheading, and the prose under it flush; a block quote, hyphenated as prose
+      if (p.subhead) { afterBreak = true; return `<h3 class="subhead"${p.align ? ` style="text-align:${p.align}"` : ''}>${inner}</h3>`; }
+      if (p.quote) { afterBreak = false; return `<p class="hy ${quoteClass(paras, i)}"${p.align ? ` style="text-align:${p.align}"` : ''}>${inner}</p>`; }
       const cls = ['hy'];
       if (first) cls.push('first');
       if (first && OPENING_DASH.test(p.text)) cls.push('dialogue');
@@ -243,6 +266,9 @@ ${cap ? `p.first:not(.dialogue)::first-letter { initial-letter: ${DROP_CAP_SIZE}
 p.brk { text-align: center; margin: 0.7em 0; break-after: avoid; letter-spacing: 0.1em; }
 p.poetry { margin: 0.5em 1.5em; text-align: left; }
 p.poetry + p.poetry { margin-top: 0; }
+${subheadCss('h3.subhead', { size: sz + 'pt', gap: '1.2em' })}
+.ch-head + h3.subhead { margin-top: 0; }
+${quoteCss('p.hy.quote', { side: '1.5em', gap: '0.7em', indent: '1.5em' })}
 ${litrpgCss('p.litrpg', { size: '0.78em', side: '0.15in', pad: '0.12in', fill: '#ebebeb', line: '#9a9a9a', gap: '1.3em' })}
 .backpage p.hy { text-indent: 0; margin-bottom: 0.7em; }
 .also p { text-align: center; font-style: italic; margin: 0 0 0.45em; }
@@ -453,7 +479,7 @@ function buildTxt(data) {
       }
       const noted = (p.runs || []).some((r) => r.fn !== undefined);
       const text = noted ? p.runs.map((r) => (r.fn !== undefined ? (notes.push(r.fn), `[${++fnN}]`) : r.text)).join('').trim() : p.text;
-      out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '    ' : '') + text + '\n\n';
+      out += p.sceneBreak ? '\n***\n\n' : (p.poetry || p.quote ? '    ' : '') + text + '\n\n';
     });
     if (notes.length) out += '----------\n' + notes.map((n, i) => `[${fnN - notes.length + i + 1}] ${n}`).join('\n') + '\n\n';
     out += '\n';
@@ -487,7 +513,7 @@ function buildMd(data) {
         return;
       }
       const runs = (p.runs || []).map((r) => (r.fn !== undefined ? (notes.push(r.fn), { text: '\uE001' + (++fnN) + '\uE002' }) : r));
-      out += p.sceneBreak ? '\n***\n\n' : (p.poetry ? '> ' : '') + mdRuns(runs).replace(/\uE001(\d+)\uE002/g, '[^$1]') + '\n\n';
+      out += p.sceneBreak ? '\n***\n\n' : (p.poetry || p.quote ? '> ' : p.subhead ? '### ' : '') + mdRuns(runs).replace(/\uE001(\d+)\uE002/g, '[^$1]') + '\n\n';
     });
     notes.forEach((n, i) => { out += `[^${fnN - notes.length + i + 1}]: ${mdMeta(n)}\n`; });
     if (notes.length) out += '\n';
@@ -582,6 +608,8 @@ function buildHtml(data, opts = {}) {
       if (p.blank) return '<p class="blank">&#160;</p>';
       if (p.litrpg) { afterBreak = false; return `<p class="${litrpgClass(paras, paras.indexOf(p))}">${p.html.replace(/^<p[^>]*>|<\/p>$/g, '') || '&#8203;'}</p>`; }
       if (p.poetry) { afterBreak = false; return p.html; }
+      if (p.subhead) { afterBreak = initial; return `<h3 class="subhead"${p.align ? ` style="text-align:${p.align}"` : ''}>${p.html.replace(/^<p[^>]*>|<\/p>$/g, '')}</h3>`; }
+      if (p.quote) { afterBreak = false; return `<p class="${quoteClass(paras, paras.indexOf(p))}"${p.align ? ` style="text-align:${p.align}"` : ''}>${p.html.replace(/^<p[^>]*>|<\/p>$/g, '')}</p>`; }
       let html = p.html;
       if (first || afterBreak) {
         const h = document.createElement('div');
@@ -703,6 +731,10 @@ function buildHtml(data, opts = {}) {
   .chapter .brk, .brk { text-align: center; text-indent: 0 !important; letter-spacing: 8px; color: #888; margin: 2.5em 0; }
   .chapter p.poetry { text-indent: 0; margin: 0 2.5em; }
   .chapter p.flush { text-indent: 0 !important; }
+  ${subheadCss('.chapter h3.subhead', { size: '1em', gap: '1.6em' })}
+  .chapter .hd + h3.subhead, .chapter .byline + h3.subhead { margin-top: 0; }
+  .chapter h3.subhead + p { text-indent: 0; }
+  ${quoteCss('.chapter p.quote', { side: '2.5em', gap: '0.9em', indent: '2em' })}
   ${litrpgCss('.chapter p.litrpg', { size: '0.8em', side: '1.5em', pad: '1em', fill: '#ececec', line: '#a0a0a0', gap: '1.1em' })}
   .chapter p:not(.poetry) + p.poetry, .chapter .hd + p.poetry { margin-top: 0.9em; }
   .chapter p.poetry + p:not(.poetry) { margin-top: 0.9em; }
@@ -1161,8 +1193,12 @@ function docxEntriesOf(data) {
       if (p.blank) body.push(docxP([], { style: 'BodyText' }));
       else if (p.sceneBreak) body.push(docxP([{ text: '***' }], { style: 'SceneBreak' }));
       else if (p.poetry) body.push(docxP(paraRuns(p.html), { style: 'Poetry', align: p.align === 'center' || p.align === 'right' ? p.align : '' }));
+      // Subheading is NEO's own style, not a "Heading": Word's outline shows
+      // it under the chapter, and NEO's import doesn't start a chapter at it
+      else if (p.subhead) body.push(docxP(paraRuns(p.html), { style: 'Subheading', align: p.align === 'center' || p.align === 'right' ? p.align : '' }));
+      else if (p.quote) body.push(docxP(paraRuns(p.html), { style: 'Quote', align: p.align === 'center' || p.align === 'right' ? p.align : '' }));
       else if (p.align === 'center' || p.align === 'right') body.push(docxP(paraRuns(p.html), { style: 'BodyTextNoIndent', align: p.align }));
-      else body.push(docxP(paraRuns(p.html), { style: p.flush ? 'BodyTextNoIndent' : 'BodyText' }));
+      else body.push(docxP(paraRuns(p.html), { style: p.flush || (ch.paras[i - 1] && ch.paras[i - 1].subhead) ? 'BodyTextNoIndent' : 'BodyText' }));
     });
   });
   if (!placed) contents();
@@ -1184,6 +1220,8 @@ function docxEntriesOf(data) {
 ${para('BodyText', 'Body Text', '<w:ind w:firstLine="480"/>')}
 ${para('BodyTextNoIndent', 'Body Text No Indent', '', 'BodyText')}
 ${para('Poetry', 'Poetry', '<w:ind w:left="720" w:right="720"/>')}
+${para('Subheading', 'Subheading', '<w:keepNext/><w:spacing w:before="360" w:after="120"/><w:outlineLvl w:val="3"/>', 'BodyTextNoIndent', '<w:b/>')}
+${para('Quote', 'Quote', '<w:spacing w:before="200" w:after="200"/><w:ind w:left="720" w:right="720"/><w:contextualSpacing/>')}
 ${para('LitRPG', 'LitRPG', LITRPG_DOCX_PPR, 'BodyText', LITRPG_DOCX_RPR)}
 ${para('SceneBreak', 'Scene Break', '<w:spacing w:before="240"/><w:jc w:val="center"/>', 'BodyText')}
 ${para('Title', 'Title', '<w:spacing w:before="3000"/><w:jc w:val="center"/>', 'Normal', '<w:b/><w:sz w:val="56"/>')}
@@ -1288,8 +1326,12 @@ ${ch.subtitle ? `<p class="sub">${escXml(ch.subtitle)}</p>` : ''}${ch.byline ? `
       if (p.sceneBreak) { first = true; return '<p class="brk">* * *</p>'; }
       if (p.blank) return '<p class="blank">&#160;</p>';
       if (p.litrpg) return `<p class="${litrpgClass(ch.paras, i)}">${xhtmlRuns(p) || '&#8203;'}</p>`;
+      // a subheading is the chapter's own heading one level down; the prose
+      // under it starts flush, as after ***
+      if (p.subhead) { first = true; return `<h2 class="subhead${p.align === 'center' || p.align === 'right' ? ' ' + p.align : ''}">${xhtmlRuns(p)}</h2>`; }
       const classes = [];
-      if (p.poetry) classes.push('poetry');
+      if (p.quote) classes.push(quoteClass(ch.paras, i));
+      else if (p.poetry) classes.push('poetry');
       else if (p.flush) classes.push('flush');
       else if (first) {
         classes.push('first');
@@ -1298,7 +1340,7 @@ ${ch.subtitle ? `<p class="sub">${escXml(ch.subtitle)}</p>` : ''}${ch.byline ? `
       }
       if (p.align === 'center' || p.align === 'right') classes.push(p.align);
       const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
-      if (!p.poetry) first = false;
+      if (!p.poetry && !p.quote) first = false;
       return `<p${cls}>${xhtmlRuns(p)}</p>`;
     }).join('\n');
     inner = `<section epub:type="${EPUB_TYPES[kind] || ch.role || 'chapter'}">${ch.heading ? `<h1>${headingOwnCase(ch, escXml)}</h1>` : ''}${ch.byline ? `<p class="byline">${escXml(ch.byline)}</p>` : ''}
@@ -1432,6 +1474,12 @@ p.right { text-align: right; text-indent: 0; }
 p.brk { text-align: center; text-indent: 0; margin: 2.5em 0; letter-spacing: 0.5em; }
 p.poetry { text-indent: 0; margin: 0 2em; }
 p.flush { text-indent: 0 !important; }
+${subheadCss('h2.subhead', { size: '1em', gap: '1.6em' })}
+h2.subhead.center { text-align: center; }
+h2.subhead.right { text-align: right; }
+h1 + h2.subhead, p.byline + h2.subhead { margin-top: 0; }
+h2.subhead + p { text-indent: 0; }
+${quoteCss('p.quote', { side: '2em', gap: '0.9em', indent: '1.2em' })}
 p:not(.poetry) + p.poetry, h1 + p.poetry { margin-top: 0.9em; }
 p.poetry + p:not(.poetry) { margin-top: 0.9em; }
 p.byline { text-align: center; text-indent: 0; letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8em; margin: -1em 0 2em; }
@@ -2164,6 +2212,8 @@ window.neo.onMenu(async (msg) => {
   if (msg.type === 'alignBook') alignBookProse(msg.value);
   if (msg.type === 'poetry' && !(book && isScript())) togglePoetry();
   if (msg.type === 'flush' && !(book && isScript())) toggleFlush();
+  if (msg.type === 'subhead' && !(book && isScript())) toggleSubhead();
+  if (msg.type === 'quote' && !(book && isScript())) toggleQuote();
   if (msg.type === 'uiLanguage') {
     // save every open page, then reload the window in the new language
     flushAllSaves();
