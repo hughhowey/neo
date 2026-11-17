@@ -19,6 +19,7 @@
     "test:twodevices": "electron scripts/twodevices.e2e.js",
     "test:emphasis": "electron scripts/emphasis.e2e.js",
     "test:manuscript": "electron scripts/manuscript.e2e.js",
+    "test:trims": "electron scripts/trims.e2e.js",
     "test:pages": "electron scripts/pages.e2e.js",
     "test:options": "electron scripts/options.e2e.js",
     "test:find": "electron scripts/find.e2e.js",
