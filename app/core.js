@@ -297,6 +297,7 @@ const FEATURES = [
   { key: 'cards', label: tk('Outline cards'), desc: tk('The outline as index cards, loose cards, and the cards beside the page.'), pocket: true },
   { key: 'notesPages', label: tk('Chapter notes pages'), desc: tk('A notes page for each chapter, beside the book’s own.'), pocket: true },
   { key: 'poetry', label: tk('Poetry paragraphs'), desc: tk('Lines set in from the margins, in italic.'), pocket: true },
+  { key: 'subheads', label: tk('Subheadings and block quotes'), desc: tk('A heading inside a chapter, for a date or a place, and passages set apart as a quotation.'), pocket: false },
   { key: 'footnotes', label: tk('Footnotes'), desc: tk('Numbered notes at the foot of the page.'), pocket: true },
   { key: 'formatting', label: tk('Alignment and other fonts'), desc: tk('Center, right-align or justify paragraphs or the whole book, and use any font on your computer.'), pocket: false },
   { key: 'penNames', label: tk('Pen names and bound shelves'), desc: tk('Shelves under other names, a shelf bound into one book, anthologies, Duplicate and Reshelve.'), pocket: true },

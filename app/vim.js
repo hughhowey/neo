@@ -353,7 +353,7 @@ function chapterAlign(html) {
   let best = null;
   for (const m of String(html || '').matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/g)) {
     const cls = (/\bclass="([^"]*)"/.exec(m[1]) || [])[1] || '';
-    if (/(^|\s)(scene-break|ghost|poetry|flush|litrpg|sp-[\w-]+)(\s|$)/.test(cls)) continue;
+    if (/(^|\s)(scene-break|ghost|poetry|flush|litrpg|subhead|quote|sp-[\w-]+)(\s|$)/.test(cls)) continue;
     if (!m[2].replace(/<[^>]*>|&nbsp;|\s/g, '')) continue;
     let a = (/text-align:\s*([a-z]+)/.exec(m[1]) || [])[1] || '';
     if (!['center', 'right', 'justify'].includes(a)) a = '';

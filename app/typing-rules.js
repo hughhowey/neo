@@ -90,11 +90,11 @@ function dropJunkSpans(html) {
 const OPENING_DASH = /^\s*[-‐‑‒–—―]/;
 // A chapter's opening paragraph — the one with the drop cap and no indent —
 // is its first paragraph with words in it, past a blank line or a *** at the
-// top (the exports skip those too). Poetry and LitRPG boxes stand apart. In an empty
+// top (the exports skip those too). Poetry, LitRPG boxes, subheadings and block quotes stand apart. In an empty
 // chapter it's the paragraph waiting for the first word. Marked data-first,
 // for the screen only.
 function openingPara(body) {
-  const ps = [...body.children].filter((p) => p.tagName === 'P' && !p.classList.contains('poetry') && !p.classList.contains('litrpg') && !p.classList.contains('scene-break') && !p.classList.contains('ghost'));
+  const ps = [...body.children].filter((p) => p.tagName === 'P' && !p.matches('.poetry, .litrpg, .scene-break, .ghost, .subhead, .quote'));
   return ps.find((p) => p.textContent.trim() !== '') || ps[0] || null;
 }
 function markDialogueOpening(body) {
@@ -319,6 +319,7 @@ function syncChapter(body, chId) {
 // such issue.
 let menuPoetryState = false;
 let menuFlushState = false;
+let menuParaKind = '';
 document.addEventListener('selectionchange', () => {
   if (!book || currentTab !== 'manuscript') return;
   const sel = window.getSelection();
@@ -345,6 +346,11 @@ document.addEventListener('selectionchange', () => {
   if (inPoetry !== menuPoetryState && window.neo.poetryState) {
     menuPoetryState = inPoetry;
     window.neo.poetryState(inPoetry);
+  }
+  const paraKind = caretP ? (caretP.classList.contains('subhead') ? 'subhead' : caretP.classList.contains('quote') ? 'quote' : '') : '';
+  if (paraKind !== menuParaKind && window.neo.paraKindState) {
+    menuParaKind = paraKind;
+    window.neo.paraKindState(paraKind);
   }
   const inFlush = !!(caretP && caretP.classList.contains('flush'));
   if (inFlush !== menuFlushState && window.neo.flushState) {

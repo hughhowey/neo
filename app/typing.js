@@ -968,6 +968,47 @@ function handleEnter(e, body, chId) {
     return true;
   }
   if (block.classList.contains('scene-break')) { e.preventDefault(); return true; } // Enter on a *** line: nothing
+  // Enter in a block quote is the quote's next paragraph; on an empty one it
+  // steps back out into prose. After a subheading, the story goes on in
+  // prose (#484, #206)
+  if (block.classList.contains('quote') || block.classList.contains('subhead')) {
+    e.preventDefault();
+    enterRun = 0;
+    const quote = block.classList.contains('quote');
+    if (block.textContent.trim() === '') {
+      snapshotStructure(quote ? 'block quote to prose' : 'subheading to prose');
+      block.classList.remove('quote', 'subhead');
+      placeCaret(block, 0);
+      syncChapter(body, chId);
+      resetNativeUndo();
+      breakRun++;
+      return true;
+    }
+    // at the very start of one with words: an empty line of prose above it
+    const head = document.createRange();
+    head.selectNodeContents(block);
+    try { head.setEnd(sel.anchorNode, sel.anchorOffset); } catch { return true; }
+    if (head.toString().length === 0) {
+      snapshotStructure('line above');
+      const line = document.createElement('p');
+      line.appendChild(document.createElement('br'));
+      block.before(line);
+      syncChapter(body, chId);
+      resetNativeUndo();
+      breakRun++;
+      return true;
+    }
+    document.execCommand('insertParagraph');
+    const cur = caretBlock(body);
+    if (cur && cur !== block) {
+      cur.classList.remove('subhead');
+      if (quote) cur.classList.add('quote');
+      else cur.classList.remove('quote');
+      placeCaret(cur, 0);
+    }
+    syncChapter(body, chId);
+    return true;
+  }
   // Enter in a poetry paragraph steps back into prose: an empty line becomes
   // an ordinary paragraph in place; otherwise the line splits and the new
   // paragraph is plain (⇧Enter is how the poem continues)

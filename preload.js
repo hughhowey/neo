@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('neo', {
   openRelease: () => ipcRenderer.invoke('update:openRelease'),
 
   poetryState: (on) => ipcRenderer.send('poetry:state', on),
+  paraKindState: (kind) => ipcRenderer.send('parakind:state', kind),
   flushState: (on) => ipcRenderer.send('flush:state', on),
   scriptState: (st) => ipcRenderer.send('script:state', st),
   printPaperback: (job) => ipcRenderer.invoke('print:paperback', job),

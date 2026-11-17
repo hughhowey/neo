@@ -75,6 +75,13 @@ The Outline tab shows the book as index cards (OUTLINE CARDS in `app/`) unless `
 Brighter Interface is two settings: `library.uiBright` while writing (and on the shelf), `library.uiBrightAside` on the other tabs, bright unless turned off. `applyBright` picks one on every tab switch.
 - The walking note (`walkNoteUpdate`) is an overlay inside `.chapter`, plus a `data-walk` mark on the caret's paragraph that `captureBody` strips. `note.dismissed` hides it for good.
 
+## Subheadings and block quotes
+
+Format → Subheading and Format → Block Quote (#484, #206; the `subheads` feature in FEATURES, off for a new library, desktop only) toggle the paragraphs the selection touches, like Poetry Paragraph (`toggleParaKind` in `app/paragraphs.js`), in the story's chapters only. A subheading is `<p class="subhead">`: a heading inside a chapter (a date, a place), semibold with room above it; the prose under it starts flush, and the drop cap passes it by (`openingPara`). A block quote is `<p class="quote">`: set in from both margins, upright; its paragraphs in a row are one block, the later ones indented. Enter at a subheading's end goes on in prose, at its start opens a line above; Enter in a quote is its next paragraph, and on an empty one steps out; Backspace at the start of either makes it prose. The Format menu ticks the one the caret is in (`parakind:state`).
+
+- `parasFromHtml` gives each paragraph `subhead` / `quote`. The PDF and web page set a subheading as `h3.subhead`, the paperback too (kept with its lines, the next paragraph `flush`), EPUB as `h2.subhead` under the chapter's `h1`. Quotes carry `quoteClass` (`q-top`, `q-cont`, `q-end`) rather than leaning on sibling selectors, since Paged.js breaks pages between paragraphs; in the paperback they're `hy` prose, hyphenated. Word gets NEO's own `Subheading` style (an outline level, but not a "heading N", so NEO's import doesn't start a chapter at one) and `Quote`; Markdown `###` and `>`; plain text the subheading as a line and the quote indented; Manuscript Format a bold flush line and a quote set in half an inch.
+- `npm run test:subheads` (`scripts/subheads.e2e.js`; `NEO_OUT=<folder>` keeps the PDFs and pictures of their pages).
+
 ## Screenplays
 
 A book whose `book.json` says `"format": "screenplay"` is a script. Right-click (long-press) a shelf's + for New Script. `app/screenplay.js` holds the feature; `scripts/screenplay.test.js` tests its rules.

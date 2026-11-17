@@ -518,7 +518,7 @@ function spType(p) {
   return 'action';
 }
 function spSetClass(p, type) {
-  p.classList.remove(...SP_CLASSES, 'poetry', 'flush', 'litrpg', 'scene-break', 'ghost');
+  p.classList.remove(...SP_CLASSES, 'poetry', 'flush', 'litrpg', 'subhead', 'quote', 'scene-break', 'ghost');
   if (type !== 'action') p.classList.add('sp-' + type);
   if (!p.className) p.removeAttribute('class');
   spGuessed.delete(p);

@@ -161,7 +161,7 @@ function poetryBackspace(e, body, chId) {
   const sel = window.getSelection();
   if (!sel.rangeCount || !sel.isCollapsed) return false;
   const block = caretBlock(body);
-  if (!block || !(block.classList.contains('poetry') || block.classList.contains('flush'))) return false;
+  if (!block || !['poetry', 'flush', 'subhead', 'quote'].some((k) => block.classList.contains(k))) return false;
   const r = sel.getRangeAt(0);
   const head = document.createRange();
   head.selectNodeContents(block);
@@ -170,7 +170,7 @@ function poetryBackspace(e, body, chId) {
   e.preventDefault();
   snapshotStructure('poetry paragraph to prose');
   if (block.classList.contains('poetry')) romanize(block);
-  block.classList.remove('poetry', 'flush');
+  block.classList.remove('poetry', 'flush', 'subhead', 'quote');
   placeCaret(block, 0);
   syncChapter(body, chId);
   resetNativeUndo();
@@ -182,6 +182,13 @@ function poetryBackspace(e, body, chId) {
 // selection touches (a paragraph is one or the other, or plain prose)
 function togglePoetry() { toggleParaKind('poetry'); }
 function toggleFlush() { toggleParaKind('flush'); }
+// Format → Subheading / Block Quote (#484, #206): a heading inside a chapter
+// (a date, a place), set apart with room above it, and the prose after it
+// flush; a passage set in from both margins, a quotation or a letter, its
+// paragraphs running on as one block. Stories only: a page has its own look.
+function toggleSubhead() { toggleParaKind('subhead'); }
+function toggleQuote() { toggleParaKind('quote'); }
+const PARA_KINDS = ['poetry', 'flush', 'litrpg', 'subhead', 'quote'];
 function toggleParaKind(kind) {
   const sel = window.getSelection();
   if (!sel.rangeCount) { toast(t('Click into a paragraph first')); return; }
@@ -195,11 +202,12 @@ function toggleParaKind(kind) {
     (p) => r.intersectsNode(p) && !p.classList.contains('scene-break')
   );
   if (!ps.length) return;
+  if ((kind === 'subhead' || kind === 'quote') && !isStory(chId)) { toast(t('Subheadings and block quotes are for the story’s chapters')); return; }
   snapshotStructure(kind + ' paragraph');
   const on = !ps.every((p) => p.classList.contains(kind));
   for (const p of ps) {
     const wasPoetry = p.classList.contains('poetry');
-    p.classList.remove('poetry', 'flush', 'litrpg');
+    p.classList.remove(...PARA_KINDS);
     if (on) p.classList.add(kind);
     if (kind === 'poetry' && on) italicize(p);
     else if (wasPoetry) romanize(p);
