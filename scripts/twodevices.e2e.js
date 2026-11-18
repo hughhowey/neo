@@ -228,6 +228,41 @@ test('a copy with words the page lacks is still kept as the chapter after it', a
   assert.ok(/herewords/.test(fs.readFileSync(file, 'utf8')));
 });
 
+test('a failed recovery metadata save leaves the original intact and can be retried', async () => {
+  await saved();
+  const chId = (await order())[0];
+  const id = JSON.stringify(chId);
+  const file = path.join(dir, 'chapters', chId + '.html');
+  const remote = '<p>From the other device during a failed save.</p>';
+  const local = '<p>Written while the other device was away.</p>';
+  const count = (await order()).length;
+  fs.writeFileSync(file, remote);
+  await js(`(async () => {
+    const putMeta = writeBookMeta;
+    writeBookMeta = async () => { throw new Error('test: recovery metadata is unavailable'); };
+    try {
+      chapterHTML[${id}] = ${JSON.stringify(local)};
+      await refreshFromDisk();
+      await chapterChain[book.id + '/' + ${id}]?.catch(() => {});
+    } finally {
+      writeBookMeta = putMeta;
+    }
+  })()`);
+  assert.equal(fs.readFileSync(file, 'utf8'), remote);
+  assert.equal(readMeta().chapterOrder.length, count);
+
+  await js(`(async () => {
+    await persistChapter(${id});
+    await openBook(book.id);
+  })()`);
+  const ids = readMeta().chapterOrder;
+  assert.equal(ids.length, count + 1);
+  assert.equal(ids[0], chId);
+  assert.equal(fs.readFileSync(file, 'utf8'), local);
+  assert.equal(fs.readFileSync(path.join(dir, 'chapters', ids[1] + '.html'), 'utf8'), remote);
+  assert.match(await page(), /From the other device during a failed save/);
+});
+
 async function main() {
   await app.whenReady();
   let failed = 0;
