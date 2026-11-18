@@ -227,6 +227,28 @@ test('one feature off at a time: Outline cards off makes the Outline the list ag
   await closeOpts();
 });
 
+test('Options keeps keyboard focus inside and returns it on Escape', async () => {
+  await clickTab('manuscript');
+  await caretInFirst();
+  const anchor = await js('getSelection().anchorOffset');
+  const tab = async (modifiers = []) => {
+    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Tab', modifiers });
+    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Tab', modifiers });
+    await tick();
+    return js('document.activeElement.className');
+  };
+  await openOpts();
+  assert.match(await js('document.activeElement.className'), /m-ok/);
+  assert.match(await tab(), /opt-all/);
+  assert.match(await tab(['shift']), /m-ok/);
+  wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await tick();
+  assert.equal(await js('!!document.querySelector(".options-modal")'), false);
+  assert.match(await js('document.activeElement.className'), /chapter-body/);
+  assert.equal(await js('getSelection().anchorOffset'), anchor);
+});
+
 test('Options settings: Markdown emphasis and the interface size', async () => {
   await openOpts();
   assert.equal(await opt('markdown'), true);

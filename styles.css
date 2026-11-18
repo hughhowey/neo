@@ -562,6 +562,11 @@ body.night .ps-paper .ps-body.empty::before, body.night .ps-paper .tp-field:empt
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: center; justify-content: center; z-index: 900;
 }
+dialog.modal-backdrop {
+  width: 100%; height: 100%; max-width: none; max-height: none; border: 0; color: inherit;
+}
+dialog.modal-backdrop:not([open]) { display: none; }
+dialog.modal-backdrop::backdrop { background: none; }
 .modal-backdrop:focus { outline: none; } /* it holds the keys, it isn't one */
 .modal {
   background: var(--bg-soft); border: 1px solid #333; border-radius: 12px;
