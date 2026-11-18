@@ -2470,8 +2470,13 @@ let backupRunning = false;
 // ---------------------------------------------------------------------------
 // Window
 // The window's own color, seen for a moment before the page draws and at the
-// edges while it resizes: the room's color, dark or (View → Page → Light) light
-function roomColor(theme) { return theme === 'light' ? '#efede8' : '#191919'; }
+// edges while it resizes: the room's color, dark, (View → Page → Light) light
+// or (E-Ink) white
+function roomColor(theme) {
+  if (theme === 'light') return '#efede8';
+  if (theme === 'eink') return '#ffffff';
+  return '#191919';
+}
 // (this computer's own page, kept in settings.json as the window reports
 // it; the library's, the last device's, until it has one)
 function libraryPageTheme() {
@@ -3216,10 +3221,13 @@ function buildMenu() {
         {
           label: t('Page'),
           submenu: [
-            { label: t('Night'), type: 'radio', checked: viewState.pageTheme !== 'paper' && viewState.pageTheme !== 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
+            // Night is the default: ticked unless another page is chosen
+            { label: t('Night'), type: 'radio', checked: !['paper', 'light', 'eink'].includes(viewState.pageTheme), click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
             { label: t('Paper'), type: 'radio', checked: viewState.pageTheme === 'paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) },
             // white paper in a light room: the whole app, shelf included
-            { label: t('Light'), type: 'radio', checked: viewState.pageTheme === 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'light' }) }
+            { label: t('Light'), type: 'radio', checked: viewState.pageTheme === 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'light' }) },
+            // black on white with no gray, shadow or fade, for e-ink screens
+            { label: t('E-Ink'), type: 'radio', checked: viewState.pageTheme === 'eink', click: () => sendToWindow({ type: 'pageTheme', value: 'eink' }) }
           ]
         },
         {

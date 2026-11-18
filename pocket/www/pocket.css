@@ -135,3 +135,13 @@ body.light .book { box-shadow: 2px 3px 6px rgba(0,0,0,0.2); }
 body.light #pocket-undo { background: #f1eee8; border-color: #dcd7ce; }
 body.light #pocket-undo button { color: #2b2926; }
 body.light #pocket-undo button:disabled { color: #b0aa9f; }
+
+/* E-Ink (styles.css holds the rest): the ⋯ sheet and the undo buttons in
+   black on white, the page's choice in white on black, nothing faint */
+body.eink #pocket-menu { background: transparent; }
+body.eink #pocket-menu-sheet, body.eink #pocket-undo { background: #fff; border: 1px solid #000; border-bottom: none; }
+body.eink #pocket-undo { border-bottom: 1px solid #000; }
+body.eink .pm-seg button, body.eink .pm-actions button { background: #fff !important; }
+body.eink .pm-seg button.on { background: #000 !important; color: #fff !important; }
+body.eink #pocket-undo button:disabled { visibility: hidden; }
+body.eink .nav-gap .ng-plus { opacity: 1; }

@@ -72,7 +72,8 @@ installLinuxBodyFonts();
 const SYSTEM_CONTRAST = window.matchMedia('(prefers-contrast: more)');
 const SYSTEM_STILL = window.matchMedia('(prefers-reduced-motion: reduce)');
 SYSTEM_CONTRAST.addEventListener('change', () => applyFonts());
-function scrollBehavior() { return SYSTEM_STILL.matches ? 'auto' : 'smooth'; }
+// (E-Ink jumps too: a slide redraws an e-ink screen many times)
+function scrollBehavior() { return SYSTEM_STILL.matches || document.body.classList.contains('eink') ? 'auto' : 'smooth'; }
 
 // Something clickable that isn't a <button>: Tab reaches it, Enter or Space
 // presses it, and a screen reader hears its name.
