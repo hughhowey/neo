@@ -2569,3 +2569,12 @@ body.eink :is(button, [role="menuitem"], [role="menuitemradio"], .tab, .nav-item
   background: #000 !important; color: #fff !important;
 }
 body.eink :is(button, [role="menuitem"], [role="menuitemradio"], .tab, .nav-item):is(:hover, :focus-visible):not(:disabled) * { color: #fff !important; }
+
+/* focus mode: no gray to dim with, so the page's side edges break off
+   beside the words in focus (focusGaps in app/spellcheck.js) */
+#focus-gaps { display: none; }
+body.eink.focus-mode #editor-view:not(.notes-tab):not(.outline-tab):not(.darlings-tab) #focus-gaps {
+  display: block; position: absolute; top: 0; left: 0; width: 0; height: 0;
+  z-index: 1; pointer-events: none;
+}
+body.eink #focus-gaps span { position: absolute; width: 3px; background: #fff !important; }

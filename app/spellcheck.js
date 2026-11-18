@@ -693,6 +693,7 @@ function updateFocus() {
   else if (focusLevel === 'paragraph') { r = document.createRange(); r.selectNodeContents(p); }
   if (r) CSS.highlights.set('neo-focus', new Highlight(r));
   else CSS.highlights.delete('neo-focus');
+  focusGaps(p, r);
   // highlights can't reach the drop cap (it isn't text), so it gets a class
   // on its chapter body (a class on the body itself is never saved)
   document.querySelectorAll('.chapter-body.focus-cap').forEach((b) => b.classList.remove('focus-cap'));
@@ -702,6 +703,49 @@ function updateFocus() {
   if (r && firstText && r.comparePoint(firstText, 0) === 0) body.classList.add('focus-cap');
 }
 function isBreakPara(p) { return p.classList.contains('scene-break'); }
+
+// E-Ink has no gray to dim the other paragraphs with, so the page's edge
+// breaks off beside the words in focus instead: a short white bar over each
+// side of the sheet's black border, from the first focused line to the last,
+// on every page they reach. The bars live in a layer of the page's scroller,
+// never in the text, and only E-Ink in focus mode shows the layer.
+function focusGaps(p, r) {
+  let layer = document.getElementById('focus-gaps');
+  if (!r || !document.body.classList.contains('eink')) { if (layer) layer.replaceChildren(); return; }
+  const scroller = $('#paper-scroll');
+  const sheet = p.closest('.sheet');
+  if (!scroller || !sheet) return;
+  if (!layer || layer.parentElement !== scroller) {
+    layer?.remove();
+    layer = document.createElement('div');
+    layer.id = 'focus-gaps';
+    layer.setAttribute('aria-hidden', 'true');
+    scroller.appendChild(layer);
+  }
+  const at = scroller.getBoundingClientRect();
+  const lines = [...r.getClientRects()].filter((l) => l.width && l.height);
+  const bars = [];
+  // one rectangle per page the sheet runs to (one on a long sheet)
+  for (const page of sheet.getClientRects()) {
+    const on = lines.filter((l) => l.left >= page.left - 1 && l.right <= page.right + 1 && l.top >= page.top - 1 && l.bottom <= page.bottom + 1);
+    if (!on.length) continue;
+    const top = Math.min(...on.map((l) => l.top));
+    const bottom = Math.max(...on.map((l) => l.bottom));
+    for (const edge of [page.left, page.right - 1]) {
+      const bar = document.createElement('span');
+      bar.style.left = (edge - 1 - at.left + scroller.scrollLeft) + 'px';
+      bar.style.top = (top - at.top + scroller.scrollTop) + 'px';
+      bar.style.height = (bottom - top) + 'px';
+      bars.push(bar);
+    }
+  }
+  layer.replaceChildren(...bars);
+}
+// the lines move when the window changes width
+window.addEventListener('resize', () => {
+  if (focusLevel === 'off' || !document.body.classList.contains('eink')) return;
+  requestAnimationFrame(() => { try { updateFocus(); } catch { /* mid-layout */ } });
+});
 
 document.addEventListener('selectionchange', () => {
   if (focusLevel === 'off') return;

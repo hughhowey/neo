@@ -46,6 +46,8 @@ function applyFonts() {
   // room and panes), then takes out every gray, shadow and fade
   document.body.classList.toggle('light', library.pageTheme === 'light' || library.pageTheme === 'eink');
   document.body.classList.toggle('eink', library.pageTheme === 'eink');
+  // (focus mode's mark differs in E-Ink: the page's edge breaks off)
+  if (focusLevel !== 'off') updateFocus();
   // the system's "Increase contrast" turns it on too, until the writer
   // chooses in the View menu
   applyBright();
