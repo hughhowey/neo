@@ -1071,6 +1071,7 @@ function readBookMeta(bookId) {
 // chapter from the book, its words left in a file no list named.)
 ipcMain.handle('book:writeMeta', (_e, bookId, meta, known) => {
   const file = path.join(bookDir(bookId), 'book.json');
+  if (isCloudOnly(file)) { requestDownload([file]); throw cloudError(file); }
   if (Array.isArray(known)) {
     const unseen = unseenChapters(file, known);
     if (unseen.length) return { unseen };
