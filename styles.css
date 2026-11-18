@@ -1371,6 +1371,17 @@ body.focus-mode .walk-note { opacity: 0.6; }
 .nav-item .n-label {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 155px;
 }
+#nav-list .n-controls { display: flex; align-items: center; gap: 8px; }
+#nav-list .n-controls .n-row { flex: 1; min-width: 0; }
+#nav-list .n-move {
+  min-height: 24px; padding: 0 4px; background: none; border: 0;
+  color: var(--muted); font-size: 12px; opacity: 0;
+}
+#nav-list .nav-item:hover .n-move, #nav-list .nav-item:focus-within .n-move { opacity: 1; }
+#nav-list .n-move:hover, #nav-list .n-move:focus-visible { color: var(--accent); }
+@media (hover: none) {
+  #nav-list .n-move { opacity: 1; }
+}
 .nav-item .n-row { cursor: grab; }
 .nav-item.dragging { opacity: 0.4; }
 .nav-drop-ind {
