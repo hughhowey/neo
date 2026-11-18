@@ -2464,3 +2464,227 @@ html:lang(ko) :is(#aux-paper h2, .pen-slot, .shelf-label, .shelf-bound-mark, .pt
   .side-cards-title, .side-card-head, .notes-part, .ns-label, #notes-up, #notes-outline b) {
   letter-spacing: 0.04em;
 }
+
+/* ================================================================== */
+/* PARCHMENT (View → Page → Parchment): a warm cream page with brown  */
+/* ink, and the whole app warm with it, for writing in low light.     */
+/* Paper is a very white page with as much blue as red in it; only    */
+/* the dark room around it softens it. Parchment takes the blue out:  */
+/* in every color here, blue stays below red. The colors are those    */
+/* of the Low light theme of Parchment (github.com/jom4337/parchment). */
+/* body.parchment comes with body.light (app/menu.js), so it starts   */
+/* from the Light rules and warms their colors. Text reads at 4.5:1   */
+/* or better; the hints stay as quiet as they are in Light, and       */
+/* Brighter Interface turns them up the same way.                     */
+/* ================================================================== */
+html:has(> body.parchment) { background: #e6d5b3; }
+body.parchment {
+  --bg: #e6d5b3;        /* the room */
+  --pane: #eadbbb;      /* the panes, a little lighter than the room */
+  --bg-soft: #efe1c5;   /* dialogs and cards: the page's own cream */
+  --paper: #efe1c4;
+  --ink: #3a2c1b;
+  --accent: #575613;    /* olive: Parchment's #5c5a14 a shade darker, as clear as Light's gold */
+  --muted: #68543b;     /* Light's gray, warmed (scripts/parchment.js) */
+  --red: #962a24;
+  --nb-mark-tint: color-mix(in srgb, var(--ink) 15%, transparent);
+  color: #3a2c1b;
+}
+/* PARCHMENT COLORS: written by scripts/parchment.js from the body.light rules; run it again after changing one */
+body.parchment .options-modal select, body.parchment .options-modal .opt-steps button:not(.btn-link) { border-color: #c8b188; }
+body.parchment .print-modal select, body.parchment .print-modal textarea { background: #f2e6cd; border-color: #c9b289; color: #1e150a; }
+body.parchment ::highlight(neo-search) { background: rgba(180, 150, 75, 0.35); }
+body.parchment ::highlight(neo-search-current) { background: #b4964b; color: #1e150a; }
+body.parchment ::highlight(neo-speak) { background: rgba(180, 150, 75, 0.28); }
+body.parchment ::highlight(neo-focus) { color: #1e150a; }
+body.parchment.focus-mode .sheet ::selection { color: #1e150a; }
+body.parchment #tp-subtitle { color: #55432e; }
+body.parchment #tp-author { color: #413220; }
+body.parchment [contenteditable][data-ph]:empty::before { color: #b49d78; }
+body.parchment .chapter-head { color: #55432e; }
+body.parchment ::highlight(neo-spell) { text-decoration: underline wavy #b5523c; background-color: rgba(181, 82, 60, 0.12); }
+body.parchment .chapter-body p.scene-break { color: #8a7454; }
+body.parchment .ph-mark { background: #dfcd84; }
+body.parchment #aux-paper h2 { color: #796448; }
+body.parchment .ol-text:focus { border-bottom-color: #cfb992; }
+body.parchment #editor-view.board-on #outline-views button.on { color: #1e150a; }
+body.parchment #outline-board { --card: #e9d9b8; --card-head: #efe1c5; --card-ink: #1e150a; --card-soft: #6c583e; --card-mark: #695626; }
+body.parchment .ob-card { box-shadow: 0 0 0 1px #d0ba93, 0 3px 8px rgba(44, 32, 18, 0.12); }
+body.parchment .ob-cell:focus-visible .ob-card { box-shadow: 0 0 0 3px var(--red), 0 5px 12px rgba(30, 21, 10, 0.3); }
+body.parchment .ob-text.excerpt { color: #8b7555; }
+body.parchment .ob-cell.open .ob-card { box-shadow: 0 2px 0 rgba(30, 21, 10, 0.4), 0 24px 48px rgba(30, 21, 10, 0.55); }
+body.parchment .ob-float { box-shadow: 0 2px 0 rgba(30, 21, 10, 0.4), 0 22px 40px rgba(30, 21, 10, 0.55) !important; }
+body.parchment #editor-view.board-on #outline-board-hint { color: #68543b; }
+body.parchment #loose-list .ob-card { background: #e9d9b8; color: #1e150a; }
+body.parchment .loose-add { border: 1px dashed #483925; }
+body.parchment .darling { border: 1px solid #d8c49f; }
+body.parchment .darling .d-meta { color: #9a8462; }
+body.parchment .darling button { border: 1px solid #cab38b; color: #796448; }
+body.parchment .darlings-empty { color: #b49d78; }
+body.parchment:where(.bright) .btn-quiet { color: #8c7656; }
+body.parchment:where(.bright) #aux-paper h2 { color: #745f44; }
+body.parchment:where(.bright) .ol-num { color: #735e43; }
+body.parchment:where(.bright) .ol-hint { color: #735e44; }
+body.parchment:where(.bright) .darling .d-meta { color: #735e43; }
+body.parchment:where(.bright) .darling button { color: #745f44; }
+body.parchment:where(.bright) .darlings-empty { color: #735e44; }
+body.parchment:where(.bright) #nav-add { color: #8b7555; }
+body.parchment:where(.bright) #side-pin { color: #8c7656; }
+body.parchment:where(.bright) .sticky .s-ch { color: #937d5c; }
+body.parchment:where(.bright) .sticky .s-actions button { color: #937d5c; }
+body.parchment:where(.bright) .stickies-empty { color: #8c7656; }
+body.parchment:where(.bright) .sticky textarea::placeholder { color: #937d5c; }
+body.parchment:where(.bright) .stats-legend { color: #8d7756; }
+body.parchment:where(.bright) .stats-legend .sl-daily { color: #4d8840; }
+body.parchment { color: #1e150a; }
+body.parchment .btn-gold, body.parchment .stats-row button { background: #b4964b; color: #1e150a; }
+body.parchment #author-chip:hover, body.parchment .shelf-label:focus { color: #1e150a; }
+body.parchment #pen-rack { border-color: #d1bb94; box-shadow: 0 8px 30px rgba(30, 21, 10, 0.14); }
+body.parchment .pen-slot { border-bottom-color: #cab38a; }
+body.parchment .pen-slot.over { color: #1e150a; background: rgba(30, 21, 10, 0.04); }
+body.parchment #add-shelf-btn, body.parchment #import-btn { border-color: #c9b289; }
+body.parchment .shelf-grip { color: #ae9772; }
+body.parchment .shelf-books { border-bottom-color: #cab38a; box-shadow: 0 10px 14px -12px rgba(30, 21, 10, 0.3); }
+body.parchment .shelf-books.drag-over { background: rgba(106, 79, 26, 0.06); }
+body.parchment .book { box-shadow: inset 3px 0 6px -3px rgba(30, 21, 10, 0.35), 2px 3px 8px rgba(30, 21, 10, 0.22); }
+body.parchment .book.bound-cover { box-shadow: inset 4px 0 8px -3px rgba(30, 21, 10, 0.4), 3px 6px 16px rgba(30, 21, 10, 0.28); }
+body.parchment .new-book { border-color: #b7a07a; color: #a08a67; background: rgba(30, 21, 10, 0.015); }
+body.parchment .book.page-tile { background: #f0e2c6; color: #6a553d; box-shadow: 0 0 0 1px rgba(30, 21, 10, 0.07), 1px 2px 6px rgba(30, 21, 10, 0.16); }
+body.parchment .book.page-tile.kind-part { background: #e8d8b7; }
+body.parchment .ghost-page { border-color: rgba(30, 21, 10, 0.24); color: rgba(30, 21, 10, 0.45); }
+body.parchment .part-seam { color: rgba(30, 21, 10, 0.5); }
+body.parchment .part-seam .ps-line { border-left-color: rgba(30, 21, 10, 0.25); }
+body.parchment .part-seam .ps-plus { border-color: rgba(30, 21, 10, 0.3); }
+body.parchment .page-sheet-backdrop { background: rgba(61, 47, 29, 0.3); }
+body.parchment .page-sheet .ps-name { color: #372919; }
+body.parchment .page-sheet .ps-done { border-color: #9f8865; color: #1e150a; background: rgba(242, 230, 205, 0.55); }
+body.parchment .ps-paper { box-shadow: 0 20px 60px rgba(30, 21, 10, 0.22); }
+body.parchment .modal-backdrop { background: rgba(50, 37, 22, 0.28); }
+body.parchment .modal { border-color: #d3be98; box-shadow: 0 18px 60px rgba(30, 21, 10, 0.18); }
+body.parchment .font-picker .modal { box-shadow: 0 8px 30px rgba(30, 21, 10, 0.16); }
+body.parchment .modal input { background: #f2e6cd; border-color: #c9b289; color: #1e150a; }
+body.parchment .btn-quiet { color: #5c4933; }
+body.parchment .btn-quiet:hover { color: #1e150a; }
+body.parchment .ms-modal textarea { background: #f2e6cd; border-color: #c9b289; color: #1e150a; }
+body.parchment .fr-font, body.parchment .fr-choice { background: #f2e6cd; border-color: #cfb991; color: #1e150a; }
+body.parchment .fr-font:hover { border-color: #9c8563; }
+body.parchment .fr-choice.danger { border-color: #cca77e; }
+body.parchment .fr-choice.danger strong { color: #8e3920; }
+body.parchment #fr-error { color: #8e3920; }
+body.parchment #fr-sample { box-shadow: 0 0 0 1px #dbc8a4; }
+body.parchment .about-version { color: #68543b; }
+body.parchment .modal p.about-line { color: #746044; }
+body.parchment .up-bar { background: #dac7a2; }
+body.parchment .sheet, body.parchment #aux-paper { box-shadow: 0 1px 3px rgba(30, 21, 10, 0.06), 0 6px 28px rgba(30, 21, 10, 0.1); }
+body.parchment .spell-menu { background: #f2e6cd; border-color: #d1bb94; box-shadow: 0 6px 24px rgba(30, 21, 10, 0.14); }
+body.parchment .spell-menu button { color: #1e150a; }
+body.parchment .spell-menu button:hover:not(:disabled), body.parchment .spell-menu button:focus-visible { background: #e6d5b3; }
+body.parchment .spell-menu button:disabled { color: #826c4e; }
+body.parchment .spell-menu .sm-sep { background: #dcc9a5; }
+body.parchment #nav-pane { border-right-color: #d5c19b; }
+body.parchment #side-pane { border-left-color: #d5c19b; }
+body.parchment #nav-pin, body.parchment #side-pin { color: #9f8865; }
+body.parchment .nav-item:hover { background: #e0ceab; }
+body.parchment .nav-item .n-row { color: #443522; }
+body.parchment .nav-item:hover .n-row, body.parchment .nav-item.current .n-row { color: #1e150a; }
+body.parchment .nav-item .n-words { color: #8c7656; }
+body.parchment .nav-note { color: #6d593f; }
+body.parchment .nav-note:empty::before { color: #ab9470; }
+body.parchment .nav-note:focus { color: #1e150a; }
+body.parchment #nav-add { border-color: #c9b289; color: #8c7656; }
+body.parchment .sticky { background: #ecddbe; color: #302415; box-shadow: 0 1px 2px rgba(30, 21, 10, 0.06); }
+body.parchment .sticky .s-ch { color: #816c4e; }
+body.parchment .sticky textarea { color: #1e150a; }
+body.parchment .sticky .s-actions button { color: #816c4e; }
+body.parchment .sticky .s-actions .s-sep { color: #bca57e; }
+body.parchment .stickies-empty { color: #8c7656; }
+body.parchment #bottombar { border-top-color: #d4bf99; }
+body.parchment .tab:not(.active):hover, body.parchment #counters span:hover, body.parchment #zoom-control:hover, body.parchment #zoom-control button:hover { color: #1e150a; }
+body.parchment .tab.active { background: #dac7a2; }
+body.parchment #searchbar { background: #f2e6cd; border-color: #d1bb94; box-shadow: 0 6px 24px rgba(30, 21, 10, 0.12); }
+body.parchment #searchbar input { background: #efe0c3; border-color: #c9b289; color: #1e150a; }
+body.parchment #searchbar button { border-color: #cfb991; color: #56452f; }
+body.parchment #hint { background: #1e150a; color: #e6d5b3; box-shadow: 0 3px 14px rgba(30, 21, 10, 0.2); }
+body.parchment .stats-row input, body.parchment .stats-row select { background: #f2e6cd; border-color: #c9b289; color: #1e150a; }
+body.parchment #stats-chart { background: #eadaba; }
+body.parchment #stats-chart path, body.parchment #stats-chart line { stroke: #876522; }
+body.parchment .stats-legend { color: #746044; }
+body.parchment .stats-legend .sl-daily { color: #38602a; }
+body.parchment .shortcuts-modal { box-shadow: 0 24px 80px rgba(30, 21, 10, 0.2); }
+body.parchment .shortcuts-header, body.parchment .shortcuts-footer { border-color: #d7c39e; }
+body.parchment .shortcut-row { border-bottom-color: #e0cdaa; }
+body.parchment .shortcut-row small, body.parchment .shortcut-or { color: #6c583e; }
+body.parchment .shortcut-row kbd { color: #1e150a; background: #eadaba; border-color: #c9b289; }
+body.parchment .shortcuts-footer span { color: #56452f; }
+body.parchment .shortcuts-content::-webkit-scrollbar-thumb { background: #bfa880; }
+body.parchment .show-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(30, 21, 10, 0.18); }
+body.parchment .show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(30, 21, 10, 0.3); }
+body.parchment .nav-gap::before { border-top-color: #ccb68d; }
+body.parchment .nav-gap .ng-plus { border-color: #c9b289; color: #8c7656; }
+body.parchment .nav-item.kind-part .n-row { color: #302415; }
+body.parchment .pop-menu { background: #f2e6cd; border-color: #d1bb94; box-shadow: 0 8px 28px rgba(30, 21, 10, 0.16); }
+body.parchment .pop-menu button { color: #1e150a; }
+body.parchment .pop-menu button:focus { background: #e6d5b3; }
+body.parchment .pop-menu button:disabled { color: #a58f6b; }
+body.parchment .pop-menu button.danger { color: #8e3920; }
+body.parchment .pop-menu .pm-sep { background: #dcc9a5; }
+body.parchment.bright { --muted: #51402b; }
+body.parchment.bright .tab { color: #4a3a26; }
+body.parchment.bright .nav-item .n-row { color: #21180c; }
+body.parchment.bright .nav-item .n-words { color: #5c4933; }
+body.parchment.bright .nav-note { color: #4a3a26; }
+body.parchment.bright .nav-note:empty::before { color: #6c583f; }
+body.parchment.bright .shelf-grip { color: #746044; }
+body.parchment.bright .new-book { border-color: #8b7555; color: #746044; }
+body.parchment.bright #add-shelf-btn, body.parchment.bright #import-btn { border-color: #9f8865; }
+body.parchment.bright #nav-add { color: #5c4933; }
+body.parchment.bright #nav-pin:not(.pinned), body.parchment.bright #side-pin:not(.pinned) { color: #746044; }
+body.parchment.bright .sticky .s-ch, body.parchment.bright .sticky .s-actions button, body.parchment.bright .stickies-empty { color: #634f38; }
+body.parchment.bright .sticky textarea::placeholder { color: #746044; }
+body.parchment.bright .stats-legend { color: #5c4933; }
+body.parchment.bright .ghost-page { border-color: rgba(30, 21, 10, 0.4); color: rgba(30, 21, 10, 0.62); }
+body.parchment.bright .nav-gap .ng-plus { color: #5c4933; border-color: #8b7555; }
+body.parchment.bright .pop-menu button:disabled { color: #746044; }
+body.parchment.bright .show-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(30, 21, 10, 0.3); }
+body.parchment.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(30, 21, 10, 0.45); }
+body.parchment .script-tile .st-brad { background: radial-gradient(circle at 35% 30%, #e9de8f 0, #ceb050 28%, #9b7929 62%, #5c4616 100%); box-shadow: 0 1px 1.5px rgba(30, 21, 10, 0.55); }
+body.parchment .script-tile .st-hole { box-shadow: inset 0 1px 1px rgba(30, 21, 10, 0.6); }
+body.parchment .book.script-tile { background: #f2e5cb; box-shadow: 0 0 0 1px rgba(30, 21, 10, 0.08), 1px 2px 6px rgba(30, 21, 10, 0.18); }
+body.parchment #paper.script #chapters { box-shadow: 0 4px 30px rgba(30, 21, 10, 0.5); }
+body.parchment .sp-geom > p[data-pg][data-fill]::before { background: linear-gradient(to bottom, rgba(30, 21, 10, 0.22), transparent 10px, transparent calc(var(--sp-gap) - 10px), rgba(30, 21, 10, 0.22) var(--sp-gap), transparent var(--sp-gap)) 40px 0 / calc(100% - 80px) 100% no-repeat,
+    linear-gradient(to bottom, var(--bg) var(--sp-gap), transparent var(--sp-gap)) 0 0 / 100% 100% no-repeat; }
+body.parchment #nav-pane.script .nav-item.sp-scene .n-num { color: #8c7656; }
+body.parchment .ob-cell.ob-sel .ob-card { box-shadow: 0 0 0 3px var(--red), 0 2px 10px rgba(30, 21, 10, 0.25); }
+body.parchment.mac-bar #dragstrip { color: #6c573e; }
+body.parchment.mac-bar #dragstrip { color: #877252; }
+body.parchment .snap-item:focus-visible { outline: 1px solid #68543b; }
+body.parchment .snap-item { color: #302415; }
+body.parchment .snap-item:hover { background: rgba(30, 21, 10, 0.04); }
+body.parchment .snap-item.on { background: rgba(30, 21, 10, 0.06); }
+body.parchment .snap-t { color: #1e150a; }
+body.parchment .snap-group, body.parchment .snap-empty { color: #816c4e; }
+body.parchment .snap-ch { color: #55442e; }
+body.parchment .snap-ch:hover { color: #1e150a; }
+body.parchment .snap-band .snap-all { color: #f2e6cd; }
+body.parchment ::highlight(neo-snap-gone) { background-color: rgba(164, 51, 30, 0.24); text-decoration: underline 2px #a4331e; }
+body.parchment .side-card { background: #ecddbe; border-color: #d9c6a1; }
+body.parchment .side-card-head { color: #5b4932; }
+body.parchment .side-card-head:hover, body.parchment .side-card-head:focus-visible { color: #1e150a; }
+body.parchment .side-card textarea { color: #1e150a; }
+body.parchment .side-card textarea::placeholder { color: #9e8865; }
+body.parchment .ns-card.ns-darling { border-left-color: #6c573e; }
+body.parchment .notes-sep { background: #d5c19b; }
+body.parchment .notes-part, body.parchment .ns-label { color: #8c7656; }
+body.parchment .ns-empty, body.parchment .ns-outline:empty::before { color: #9f8865; }
+body.parchment #notes-outline { color: #6d593f; }
+/* END OF PARCHMENT COLORS */
+/* the selection: Parchment's own amber mark */
+body.parchment .sheet ::selection, body.parchment #aux-paper ::selection { background: rgba(196, 136, 24, 0.3); }
+/* placeholders the system draws in a neutral gray */
+body.parchment ::placeholder { color: #776246; }
+/* focus mode: the other paragraphs as faint as they are on Light's page
+   (Parchment's ink is lighter, so a little more of it) */
+body.parchment.focus-mode .chapter-body,
+body.parchment.focus-mode .chapter-head { color: color-mix(in srgb, var(--ink) 32%, var(--paper)); }
+/* checkboxes, radio buttons and sliders: the olive, not the system's blue */
+body.parchment input, body.parchment progress { accent-color: var(--accent); }
