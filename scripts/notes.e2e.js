@@ -64,6 +64,35 @@ test('Notes opens on the chapter being written', async () => {
   assert.equal(await js(`document.getElementById('notes-up').hidden`), false);
 });
 
+test('F6 reaches the active Notes row and Escape returns to the writing caret', async () => {
+  await js(`(() => {
+    const editor = document.getElementById('aux-editor');
+    editor.focus();
+    getSelection().selectAllChildren(editor);
+    getSelection().collapseToEnd();
+  })()`);
+  const focus = () => js(`(() => {
+    const el = document.activeElement;
+    return el.dataset.page || el.id;
+  })()`);
+  const offset = await js('getSelection().anchorOffset');
+  const press = async (keyCode, modifiers = []) => {
+    wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+    wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+    await tick(220);
+  };
+  const page = await ch(1);
+  await press('F6');
+  assert.equal(await focus(), page);
+  await press('F6');
+  assert.equal(await focus(), 'side-pin');
+  await press('F6', ['shift']);
+  assert.equal(await focus(), page);
+  await press('Escape');
+  assert.equal(await focus(), 'aux-editor');
+  assert.equal(await js('getSelection().anchorOffset'), offset);
+});
+
 test('a chapter\'s notes are its own file; the book\'s notes.html is left alone', async () => {
   await js(`(() => { const ed = document.getElementById('aux-editor'); ed.focus(); getSelection().selectAllChildren(ed); getSelection().collapseToEnd(); })()`);
   await type('Check the distance to Varga.');
