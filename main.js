@@ -3216,7 +3216,8 @@ function buildMenu() {
         {
           label: t('Page'),
           submenu: [
-            { label: t('Night'), type: 'radio', checked: viewState.pageTheme !== 'paper' && viewState.pageTheme !== 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
+            // Night is the default: ticked unless another page is chosen
+            { label: t('Night'), type: 'radio', checked: !['paper', 'light'].includes(viewState.pageTheme), click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
             { label: t('Paper'), type: 'radio', checked: viewState.pageTheme === 'paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) },
             // white paper in a light room: the whole app, shelf included
             { label: t('Light'), type: 'radio', checked: viewState.pageTheme === 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'light' }) }
