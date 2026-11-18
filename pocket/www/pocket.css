@@ -135,3 +135,18 @@ body.light .book { box-shadow: 2px 3px 6px rgba(0,0,0,0.2); }
 body.light #pocket-undo { background: #f1eee8; border-color: #dcd7ce; }
 body.light #pocket-undo button { color: #2b2926; }
 body.light #pocket-undo button:disabled { color: #b0aa9f; }
+
+/* Parchment: Light's colors here, warmed (styles.css holds the rest) */
+/* PARCHMENT COLORS: written by scripts/parchment.js from the body.light rules; run it again after changing one */
+body.parchment #pocket-chapters, body.parchment #pocket-more { color: #68543b; }
+body.parchment #pocket-menu { background: rgba(50, 37, 22, 0.28); }
+body.parchment #pocket-menu-sheet { background: #efe1c5; border-color: #d3be98; color: #1e150a; }
+body.parchment .pm-row { border-bottom-color: #e0cdaa; }
+body.parchment .pm-label { color: #68543b; }
+body.parchment .pm-seg button, body.parchment .pm-actions button { background: #f2e6cd; border-color: #cfb991; color: #1e150a; }
+body.parchment .pm-seg button.on { background: #e2d1ae; border-color: #a48941; color: #493610; }
+body.parchment .book { box-shadow: 2px 3px 6px rgba(30, 21, 10, 0.2); }
+body.parchment #pocket-undo { background: #e7d6b5; border-color: #d3be98; }
+body.parchment #pocket-undo button { color: #1e150a; }
+body.parchment #pocket-undo button:disabled { color: #ab9470; }
+/* END OF PARCHMENT COLORS */

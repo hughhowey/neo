@@ -42,7 +42,11 @@ function applyFonts() {
   refreshDropCaps(true);
   document.body.classList.toggle('night', library.pageTheme === 'night');
   // Light: the paper page in a light room, the whole app with it
-  document.body.classList.toggle('light', library.pageTheme === 'light');
+  // Parchment: a warm cream page and the whole app warm with it, for
+  // writing in low light. It builds on Light (the light room and panes),
+  // then warms every color: blue always stays below red
+  document.body.classList.toggle('light', library.pageTheme === 'light' || library.pageTheme === 'parchment');
+  document.body.classList.toggle('parchment', library.pageTheme === 'parchment');
   // the system's "Increase contrast" turns it on too, until the writer
   // chooses in the View menu
   applyBright();
