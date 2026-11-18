@@ -194,9 +194,10 @@ const REGIONS = [
   {
     box: () => $('#nav-pane'),
     enter: () => {
-      const rows = $$('#nav-list .n-row');
-      const cur = $('#nav-list .nav-item.current .n-row');
-      openPaneFromKeyboard($('#nav-pane'), cur || rows[0] || $('#nav-add'));
+      const target = currentTab === 'notes'
+        ? $('#notes-nav .notes-item.current') || $('#notes-nav .notes-item') || $('#nav-pin')
+        : $('#nav-list .nav-item.current .n-row') || $('#nav-list .n-row') || $('#nav-add');
+      openPaneFromKeyboard($('#nav-pane'), target);
     }
   },
   {
