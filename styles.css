@@ -600,12 +600,11 @@ body.night .ps-paper .ps-body.empty::before, body.night .ps-paper .tp-field:empt
 .options-modal .opt-select { align-items: center; justify-content: space-between; cursor: default; }
 .options-modal select { background: var(--bg); color: inherit; border: 1px solid #3a3a3a; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; max-width: 60%; }
 .options-modal select:focus { outline: none; border-color: var(--accent); }
-.options-modal .opt-steps { display: flex; align-items: center; gap: 6px; }
-.options-modal .opt-steps button:not(.btn-link) { width: 28px; height: 26px; border-radius: 6px; border: 1px solid #3a3a3a; background: var(--bg); color: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
-.options-modal .opt-zoom { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+.options-modal .opt-appearance .opt-select { flex-wrap: wrap; gap: 6px 12px; }
+.options-modal .opt-appearance select { max-width: 100%; min-width: 0; }
 .options-modal .btn-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 4px; }
 .options-modal .opt-foot { text-align: right; padding-top: 12px; }
-body.light .options-modal select, body.light .options-modal .opt-steps button:not(.btn-link) { border-color: #cfc9bd; }
+body.light .options-modal select { border-color: #cfc9bd; }
 
 /* File → Export → Paperback for KDP… */
 .print-modal { max-height: calc(100vh - 48px); overflow-y: auto; }
@@ -1367,7 +1366,7 @@ body.focus-mode .walk-note { opacity: 0.6; }
   font-size: 13px; color: #aaa;
 }
 .nav-item:hover .n-row, .nav-item.current .n-row { color: #eee; }
-.nav-item .n-words { font-size: 11px; color: #5d5d5d; }
+.nav-item .n-words { font-size: 11px; color: #999; }
 .nav-item .n-label {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 155px;
 }
@@ -1382,10 +1381,10 @@ body.focus-mode .walk-note { opacity: 0.6; }
   flex-shrink: 0; margin-left: 8px; display: inline-block;
 }
 .nav-note {
-  margin-top: 4px; font-size: 12px; line-height: 1.45; color: #777;
+  margin-top: 4px; font-size: 12px; line-height: 1.45; color: #999;
   outline: none; min-height: 15px; cursor: text;
 }
-.nav-note:empty::before { content: var(--ph-nav-note, 'What happens here…'); color: #4a4a4a; font-style: italic; }
+.nav-note:empty::before { content: var(--ph-nav-note, 'What happens here…'); color: #999; font-style: italic; }
 /* a long outline note shows its first two lines until you click into it */
 .nav-note:not(:focus) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .nav-note:focus { color: #ccc; }
@@ -1475,19 +1474,19 @@ body.focus-mode .walk-note { opacity: 0.6; }
   border-left: 3px solid var(--accent); cursor: pointer;
 }
 .sticky.unresolved { border-left-color: var(--red); }
-.sticky .s-ch { font-size: 10px; color: #777; text-transform: uppercase; letter-spacing: 1px; }
+.sticky .s-ch { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
 .sticky textarea {
   width: 100%; background: none; border: none; color: #ddd; font: inherit;
   resize: vertical; min-height: 34px; outline: none;
 }
 .sticky .s-actions { text-align: right; }
 .sticky .s-actions button {
-  background: none; border: none; color: #666; font-size: 11px;
+  background: none; border: none; color: #999; font-size: 11px;
 }
 .sticky .s-actions button:hover { color: var(--accent); }
 /* keeps the two actions from reading as one phrase */
 .sticky .s-actions .s-sep { color: #555; margin: 0 2px; }
-.stickies-empty { text-align: center; color: #555; font-size: 12px; padding: 30px 14px; line-height: 1.6; }
+.stickies-empty { text-align: center; color: #999; font-size: 12px; padding: 30px 14px; line-height: 1.6; }
 
 /* --- Bottom bar --- */
 #bottombar {
@@ -1495,12 +1494,12 @@ body.focus-mode .walk-note { opacity: 0.6; }
   background: var(--bg); border-top: 1px solid #262626;
   display: flex; align-items: center; padding: 0 14px; gap: 18px;
   z-index: 80;
-  opacity: 0.35; transition: opacity 0.15s ease;
+  opacity: 1; transition: opacity 0.15s ease;
 }
 #bottombar:hover, #bottombar.attn { opacity: 1; }
 /* full screen plus focus mode: nothing on screen but the page; the bar
    comes back when the pointer reaches the bottom edge */
-body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
+body.full-screen.focus-mode #bottombar:not(:hover, .attn, :has(:focus-visible)) { opacity: 0; }
 #back-to-shelf {
   background: none; border: none; color: var(--muted); font-size: 12px;
 }
@@ -1636,7 +1635,7 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
 .book.has-cover .b-text { display: none; }
 .book.has-cover::before, .book.has-cover::after { display: none; }
 
-/* --- Brighter interface (View menu) — the quiet default, turned up --- */
+/* --- Brighter Interface adds contrast to the quiet chrome --- */
 body.bright { --muted: #b4b4b4; }
 body.bright #bottombar { opacity: 1; }
 body.bright .tab { color: #b4b4b4; }
@@ -1696,7 +1695,7 @@ body.bright .show-scrollbar::-webkit-scrollbar-thumb:hover { background-color: r
 
 /* Brighter Interface (View menu, or the system's "Increase contrast"):
    every text, hint and placeholder reads at 4.5:1, on paper and at night,
-   and no interface text is under 12px. The quiet default is untouched;
+   and no interface text is under 12px.
    :where() keeps each rule exactly as strong as the one it brightens. */
 :where(body.bright) .btn-quiet { color: #8a8a8a; }
 :where(body.bright) #aux-paper h2 { color: #727272; }
@@ -1908,19 +1907,19 @@ body.light #nav-pin.pinned, body.light #side-pin.pinned { color: var(--accent); 
 body.light .nav-item:hover { background: #ebe8e2; }
 body.light .nav-item .n-row { color: #4a463f; }
 body.light .nav-item:hover .n-row, body.light .nav-item.current .n-row { color: #1c1a17; }
-body.light .nav-item .n-words { color: #8f8a80; }
+body.light .nav-item .n-words { color: #6b675f; }
 body.light .nav-note { color: #6f6b63; }
-body.light .nav-note:empty::before { color: #b0aa9f; }
+body.light .nav-note:empty::before { color: #6b675f; }
 body.light .nav-note:focus { color: #2b2926; }
 body.light #nav-add { border-color: #cfcac0; color: #8f8a80; }
 body.light #nav-add:hover { color: var(--accent); border-color: var(--accent); }
 body.light .sticky { background: #fbf5e3; color: #3a362f; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
-body.light .sticky .s-ch { color: #857f73; }
+body.light .sticky .s-ch { color: #6b675f; }
 body.light .sticky textarea { color: #2b2926; }
-body.light .sticky .s-actions button { color: #857f73; }
+body.light .sticky .s-actions button { color: #6b675f; }
 body.light .sticky .s-actions button:hover { color: var(--accent); }
 body.light .sticky .s-actions .s-sep { color: #c2bcb0; }
-body.light .stickies-empty { color: #8f8a80; }
+body.light .stickies-empty { color: #6b675f; }
 
 /* the bottom bar and the find bar */
 body.light #bottombar { border-top-color: #dcd8d0; }
@@ -2372,20 +2371,20 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 .notes-item .n-row > .n-label + .notes-here + span { margin-left: 8px; }
 .notes-sep { height: 1px; background: #2c2c2c; margin: 6px 18px; }
 .notes-part {
-  padding: 14px 18px 4px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #5d5d5d;
+  padding: 14px 18px 4px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #999;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ns-label {
   display: flex; justify-content: space-between; padding: 10px 18px 6px;
-  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #6a6a6a;
+  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #999;
 }
-.ns-empty { padding: 0 18px 6px; font-size: 12px; color: #555; font-style: italic; }
+.ns-empty { padding: 0 18px 6px; font-size: 12px; color: #999; font-style: italic; }
 .ns-card { cursor: default; }
 .ns-card.ns-darling { font-family: var(--body-font); font-size: 14px; border-left-color: #6a6a6a; }
 .ns-card .ns-text { white-space: pre-wrap; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
 .ns-card .s-actions { margin-top: 4px; }
 .ns-outline { outline: none; min-height: 18px; cursor: text; }
-.ns-outline:empty::before { content: attr(data-ph); color: #666; font-style: italic; }
+.ns-outline:empty::before { content: attr(data-ph); color: #999; font-style: italic; }
 /* the page: a chapter's names the chapter, with the way back up to the book's */
 #notes-up {
   display: block; margin: -40px auto 22px; background: none; border: none; padding: 2px 6px;
@@ -2404,8 +2403,8 @@ body.light .side-card textarea::placeholder { color: #a39d90; }
 #notes-outline b { font-weight: 500; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; margin-right: 8px; }
 #aux-editor[data-ph]:not([data-ph=""]):empty::before { content: attr(data-ph); }
 body.light .notes-sep { background: #dedad2; }
-body.light .notes-part, body.light .ns-label { color: #8f8a80; }
-body.light .ns-empty, body.light .ns-outline:empty::before { color: #a39d92; }
+body.light .notes-part, body.light .ns-label { color: #6b675f; }
+body.light .ns-empty, body.light .ns-outline:empty::before { color: #6b675f; }
 body.light #notes-outline { color: #6f6b63; }
 
 /* ---------- footnotes (FOOTNOTES in app.js) ---------- */

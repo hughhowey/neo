@@ -91,11 +91,45 @@ async function openOptions() {
       <input type="checkbox" data-opt="${id}"${on ? ' checked' : ''}>
       <span><span class="opt-label">${label}</span>${desc ? `<span class="opt-desc">${desc}</span>` : ''}</span>
     </label>`;
+  const select = (id, label, choices, selected) => `
+    <label class="opt-row opt-select"><span class="opt-label">${label}</span>
+      <select data-opt="${id}">${choices.map(([value, name]) =>
+        `<option value="${value}"${value === selected ? ' selected' : ''}>${name}</option>`).join('')}</select>
+    </label>`;
+  const zoomFormat = new Intl.NumberFormat(NeoI18n.getLocale(), { style: 'percent' });
+  const sizeFormat = new Intl.NumberFormat(NeoI18n.getLocale());
+  const withDefault = (label) => t('{size} (default)', { size: label });
+  const zoomChoices = [];
+  for (let step = UI_ZOOM_RANGE.min * 10; step <= UI_ZOOM_RANGE.max * 10; step++) {
+    const label = zoomFormat.format(step / 10);
+    zoomChoices.push([step / 10, step === 10 ? withDefault(label) : label]);
+  }
+  const sizeChoices = [];
+  for (let size = EDITOR_SIZE_MIN; size <= EDITOR_SIZE_MAX; size++) {
+    const label = t('{size} px', { size: sizeFormat.format(size) });
+    sizeChoices.push([size, size === 17 ? withDefault(label) : label]);
+  }
+  const brighter = library.uiBright;
+  const contrast = brighter !== library.uiBrightAside ? 'mixed'
+    : brighter === undefined ? 'auto' : brighter ? 'high' : 'standard';
+  const contrasts = [['auto', t('Default')], ['standard', t('Standard')], ['high', t('Higher contrast')]];
+  if (contrast === 'mixed') contrasts.unshift(['mixed', t('Varies by tab')]);
   const spellCodes = Object.keys(SPELL_LANGUAGE_NAMES);
   bd.innerHTML = `
     <div class="modal options-modal" role="dialog" aria-modal="true" aria-labelledby="opt-title">
       <h2 id="opt-title">${t('Options')}</h2>
       <div class="opt-panel" tabindex="-1">
+        <section class="opt-appearance">
+          <h3>${t('Appearance')}</h3>
+          ${select('pageTheme', t('Color theme'), [
+            ['night', t('Night')],
+            ['paper', t('Paper (light page, dark interface)')],
+            ['light', t('Light (page and interface)')]
+          ], library.pageTheme || 'night')}
+          ${select('interfaceContrast', t('Interface contrast'), contrasts, contrast)}
+          ${IS_POCKET ? '' : select('uiZoom', t('Interface size'), zoomChoices, snapZoom(library.uiZoom))}
+          ${select('editorFontSize', t('Writing text size'), sizeChoices, library.editorFontSize || 17)}
+        </section>
         <section>
           <div class="opt-head"><h3>${t('Features')}</h3><button class="opt-all btn-link" type="button"></button></div>
           <p class="opt-note">${t('Turn on what you use. Anything a book already holds always shows.')}</p>
@@ -114,13 +148,11 @@ async function openOptions() {
           ${featureOn('exports') ? check('chapterTitles', !!library.exportCustomChapterTitles, t('Chapter titles only'), t('Exports show a chapter’s own title without “Chapter 7” before it.')) : ''}
         </section>
         <section>
-          <h3>${t('Language and size')}</h3>
+          <h3>${t('Language')}</h3>
           ${langs && langs.list && langs.list.length > 1 ? `<label class="opt-row opt-select"><span class="opt-label">${t('Interface language')}</span>
             <select data-opt="uiLanguage">${langs.list.map((l) => `<option value="${escHtml(l.code)}"${l.code === langs.current ? ' selected' : ''}>${escHtml(l.name)}</option>`).join('')}</select></label>` : ''}
           <label class="opt-row opt-select"><span class="opt-label">${t('Spellcheck language')}</span>
             <select data-opt="spellLanguage">${spellCodes.map((c) => `<option value="${c}"${c === library.spellLanguage ? ' selected' : ''}>${escHtml(SPELL_LANGUAGE_NAMES[c])}</option>`).join('')}</select></label>
-          ${IS_POCKET ? '' : `<div class="opt-row opt-select"><span class="opt-label">${t('Interface size')}</span>
-            <span class="opt-steps"><button type="button" data-zoom="-1" aria-label="${t('Smaller')}">−</button><span class="opt-zoom"></span><button type="button" data-zoom="1" aria-label="${t('Larger')}">+</button><button type="button" class="btn-link" data-zoom="0">${t('Reset')}</button></span></div>`}
         </section>
       </div>
       <div class="opt-foot"><button class="m-ok btn-gold">${t('Done')}</button></div>
@@ -132,9 +164,7 @@ async function openOptions() {
     allBtn.textContent = all ? t('Turn all off') : t('Turn all on');
     for (const f of features) { const box = bd.querySelector(`[data-opt="feature:${f.key}"]`); if (box) box.checked = featureOn(f.key); }
   };
-  const paintZoom = () => { const z = bd.querySelector('.opt-zoom'); if (z) z.textContent = new Intl.NumberFormat(NeoI18n.getLocale(), { style: 'percent' }).format(snapZoom(library.uiZoom)); };
   paintAll();
-  paintZoom();
   allBtn.onclick = async () => {
     const on = !features.every((f) => featureOn(f.key));
     for (const f of features) library.features = { ...(library.features || {}), [f.key]: on };
@@ -161,17 +191,22 @@ async function openOptions() {
     }
     if (opt === 'chapterTitles') { library.exportCustomChapterTitles = !!on; await writeLibrary(library); return; }
     if (opt === 'spellLanguage') { await changeSpellLanguage(on); return; }
-    if (opt === 'uiLanguage') { close(); window.neo.setUiLanguage(on); }
-  });
-  bd.addEventListener('click', async (e) => {
-    const z = e.target.closest && e.target.closest('[data-zoom]');
-    if (!z) return;
-    const next = nextZoomStep(library.uiZoom, Number(z.dataset.zoom));
-    if (next === snapZoom(library.uiZoom)) return;
-    library.uiZoom = next;
+    if (opt === 'uiLanguage') { close(); window.neo.setUiLanguage(on); return; }
+    if (opt === 'pageTheme') library.pageTheme = on;
+    if (opt === 'uiZoom') library.uiZoom = snapZoom(on);
+    if (opt === 'editorFontSize') library.editorFontSize = Number(on);
+    if (opt === 'interfaceContrast') {
+      if (on === 'mixed') return;
+      if (on === 'auto') {
+        delete library.uiBright;
+        delete library.uiBrightAside;
+      } else {
+        library.uiBright = library.uiBrightAside = on === 'high';
+      }
+      e.target.querySelector('[value="mixed"]')?.remove();
+    }
+    keepReadingPlace(applyFonts);
     await writeLibrary(library);
-    applyFonts();
-    paintZoom();
   });
   const close = () => { bd.remove(); optionsOpen = null; };
   bd.querySelector('.m-ok').onclick = close;

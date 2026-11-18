@@ -227,24 +227,87 @@ test('one feature off at a time: Outline cards off makes the Outline the list ag
   await closeOpts();
 });
 
-test('Options settings: Markdown emphasis and the interface size', async () => {
+test('Appearance offers direct settings and persists the device look from the shelf', async () => {
+  const id = await js('book.id');
+  await js('popMenu.close?.(); backToShelf()');
+  await openOpts();
+  assert.equal(await js('document.querySelector(".opt-panel h3").textContent'), 'Appearance');
+  const select = async (opt, value) => {
+    await js(`(() => {
+      const field = document.querySelector('.options-modal [data-opt="${opt}"]');
+      field.value = ${JSON.stringify(value)};
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await tick(250);
+  };
+  await select('pageTheme', 'light');
+  await select('interfaceContrast', 'high');
+  await select('uiZoom', '1.5');
+  await select('editorFontSize', '22');
+  assert.equal(onDisk().pageTheme, 'light');
+  assert.equal(onDisk().uiBright, true);
+  assert.equal(onDisk().uiBrightAside, true);
+  assert.equal(onDisk().uiZoom, 1.5);
+  assert.equal(onDisk().editorFontSize, 22);
+  assert.deepEqual(await js(`(() => {
+    const look = JSON.parse(localStorage.getItem(DEVICE_LOOK_KEY));
+    return [look.pageTheme, look.uiBright, look.uiZoom, look.editorFontSize];
+  })()`), ['light', true, 1.5, 22]);
+  await closeOpts();
+  await js(`openBook(${JSON.stringify(id)})`);
+  await clickTab('manuscript');
+  assert.equal(await js('document.body.matches(".light.bright")'), true);
+  assert.equal(await js('getComputedStyle(document.querySelector(".chapter-body")).fontSize'), '22px');
+  const before = await js('buildHtml(bookExportData(), {})');
+
+  await openOpts();
+  assert.equal(await js('document.querySelector("[data-opt=uiZoom]").value'), '1.5');
+  await select('interfaceContrast', 'auto');
+  await select('editorFontSize', '17');
+  await select('uiZoom', '1');
+  assert.equal(onDisk().uiBright, undefined);
+  assert.equal(onDisk().uiBrightAside, undefined);
+  assert.equal(onDisk().uiZoom, 1);
+  assert.equal(onDisk().editorFontSize, 17);
+  assert.equal(await js('buildHtml(bookExportData(), {})'), before);
+  await shot('options');
+  await closeOpts();
+});
+
+test('the resting word count and chapter counts meet 4.5:1 in each theme', async () => {
+  const samples = await js(`(() => {
+    const color = (el, part) => getComputedStyle(el)[part].match(/[0-9.]+/g).slice(0, 3).map(Number);
+    const lightness = (rgb) => rgb.map((v) => v / 255)
+      .map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const contrast = (label, background) => {
+      const [lo, hi] = [lightness(color(label, 'color')), lightness(color(background, 'backgroundColor'))]
+        .sort((a, b) => a - b);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    library.uiBright = false;
+    return ['night', 'paper', 'light'].map((theme) => {
+      library.pageTheme = theme;
+      applyFonts();
+      const bar = document.querySelector('#bottombar');
+      const opacity = getComputedStyle(bar).opacity;
+      return { theme, opacity, word: contrast(document.querySelector('#word-counter'), bar),
+        chapter: contrast(document.querySelector('.n-words'), document.querySelector('#nav-pane')) };
+    });
+  })()`);
+  for (const { theme, opacity, word, chapter } of samples) {
+    assert.equal(opacity, '1', theme);
+    assert.ok(word >= 4.5, `${theme} word count contrast ${word}`);
+    assert.ok(chapter >= 4.5, `${theme} chapter word count contrast ${chapter}`);
+  }
+});
+
+test('Options still changes Markdown emphasis and closes with Escape', async () => {
   await openOpts();
   assert.equal(await opt('markdown'), true);
   await tick(200);
   assert.equal(await js('markdownOff()'), false);
   assert.equal(onDisk().markdownOff, undefined);
-  await js(`document.querySelector('.options-modal [data-zoom="1"]').click()`);
-  await tick(300);
-  assert.equal(onDisk().uiZoom, 1.1);
-  assert.equal(await js(`document.querySelector('.options-modal .opt-zoom').textContent`), '110%');
-  await js(`document.querySelector('.options-modal [data-zoom="0"]').click()`);
-  await tick(300);
-  assert.equal(onDisk().uiZoom, 1);
-  await shot('options-end');
-  await js(`document.querySelectorAll('.pop-menu, .popmenu').forEach((m) => m.remove()); document.querySelector('.options-modal .opt-panel').scrollTop = 0`);
-  await tick(100);
-  await shot('options');
-  // Esc closes it
   await js(`document.querySelector('.options-modal').closest('.modal-backdrop').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
   assert.equal(await js(`!!document.querySelector('.options-modal')`), false);
 });
