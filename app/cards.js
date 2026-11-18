@@ -1597,12 +1597,15 @@ async function deleteSelectedCards() {
   }
   const scenes = cells.filter((c) => c.dataset.kind === 'scene').sort((a, b) => Number(b.dataset.scene) - Number(a.dataset.scene));
   for (const c of scenes) await deleteSceneToDarlings(c, true);
-  for (const chId of chapters) await deleteChapterToDarlings(chId, true);
+  let kept = false;
+  for (const chId of chapters) {
+    if (await deleteChapterToDarlings(chId, true)) kept = true;
+  }
   for (const c of cells.filter((x) => x.dataset.kind === 'loose')) await removeLooseCard(c.dataset.loose, true);
   renderLooseCards();
   if (currentTab === 'outline') renderOutline();
   updateCounters();
-  toast(t('{n} cards removed — their writing is in Darlings, or {key} to undo', { n: cells.length, key: KZ }), 6000);
+  if (!kept) toast(t('{n} cards removed — their writing is in Darlings, or {key} to undo', { n: cells.length, key: KZ }), 6000);
 }
 
 function beginCardDrag(st) {
@@ -2251,11 +2254,11 @@ async function chapterToLoose(chId) {
   if (!(await saveHeldCard(card))) return;
   if (book.chapterTitles) delete book.chapterTitles[chId];
   if (currentChapterId === chId) currentChapterId = null;
-  await deleteChapterQuiet(chId);
+  const kept = await deleteChapterQuiet(chId);
   renderLooseCards();
   if (currentTab === 'outline') renderBoard();
   updateCounters();
-  toast(t('The chapter is on a loose card, its words with it. Drag it back between two chapters to put it in again.'), 6000);
+  if (!kept) toast(t('The chapter is on a loose card, its words with it. Drag it back between two chapters to put it in again.'), 6000);
 }
 
 function looseToChapter(looseId, index) {

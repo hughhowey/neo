@@ -347,6 +347,21 @@ async function keepOtherDeviceVersion(bookId, chId, disk) {
   await writeBookMeta(bookId, meta);
 }
 
+// Only remove a chapter file once book.json has let it go and the last
+// queued local write has settled. The bridge can keep a newer disk revision.
+async function removeChapterFile(bookId, chId) {
+  const key = bookId + '/' + chId;
+  if (chapterChain[key]) await chapterChain[key];
+  if (!book || book.id !== bookId || book.chapterOrder.includes(chId)) return;
+  if (savedOrder.includes(chId)) throw new Error('chapter removal was not saved in book.json');
+  const result = await window.neo.deleteChapter(bookId, chId, diskKnown[key]);
+  if (result && result.kept) {
+    toast(t('A different version of this chapter was kept in the book’s chapters folder as {file}.', { file: result.kept }), 8000);
+    return true;
+  }
+  return false;
+}
+
 function scheduleChapterSave(chId) {
   maybeDailySnapshot(); // SNAPSHOTS: the first change of the day keeps the day's start
   clearTimeout(saveTimers[chId]);
@@ -1070,9 +1085,16 @@ async function restoreSnapshot(chId) {
   }
   wordCache = {};
   for (const c of chId ? [chId] : book.chapterOrder) await persistChapter(c);
+  const bookId = book.id;
   await saveMeta();
   // chapters added since: out of the book, their words in the snapshot just taken
-  for (const c of gone) { delete chapterHTML[c]; await window.neo.deleteChapter(book.id, c); }
+  let kept = false;
+  for (const c of gone) {
+    if (!book || book.id !== bookId) return;
+    delete chapterHTML[c];
+    if (await removeChapterFile(bookId, c)) kept = true;
+  }
+  if (!book || book.id !== bookId) return;
   showDarlingsAgain();
   switchTab('manuscript');
   renderChapters();
@@ -1082,8 +1104,10 @@ async function restoreSnapshot(chId) {
   updateCounters();
   scheduleNavRefresh();
   const undo = IS_MAC ? '⌘Z' : 'Ctrl+Z';
-  toast(chId ? t('Chapter restored from {when}. {undo} undoes it; the text it replaced is in a snapshot too.', { when: snapWhen(snap.at), undo })
-    : t('Book restored from {when}. {undo} undoes it; the book as it was is in a snapshot too.', { when: snapWhen(snap.at), undo }), 7000);
+  if (!kept) {
+    toast(chId ? t('Chapter restored from {when}. {undo} undoes it; the text it replaced is in a snapshot too.', { when: snapWhen(snap.at), undo })
+      : t('Book restored from {when}. {undo} undoes it; the book as it was is in a snapshot too.', { when: snapWhen(snap.at), undo }), 7000);
+  }
 }
 
 // Esc on a snapshot goes back to the darlings (first, before the editor's

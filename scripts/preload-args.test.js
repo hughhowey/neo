@@ -36,3 +36,9 @@ test('writeChapter forwards the expected stamp to chapter:write', () => {
   api.writeChapter('b', 'c1', '<p>x</p>', 'stamp');
   assert.deepStrictEqual(calls[0], ['chapter:write', 'b', 'c1', '<p>x</p>', 'stamp']);
 });
+
+test('deleteChapter forwards the expected revision to chapter:delete', () => {
+  const { api, calls } = loadPreload();
+  api.deleteChapter('b', 'c1', '<p>base</p>');
+  assert.deepStrictEqual(calls[0], ['chapter:delete', 'b', 'c1', '<p>base</p>']);
+});

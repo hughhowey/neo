@@ -375,9 +375,32 @@
       await writeText(file, html);
       return true;
     },
-    deleteChapter: async (bookId, chId) => {
-      try { await FS().deleteFile(at(p(bookId, 'chapters', chId + '.html'))); } catch { /* fine */ }
-      return true;
+    deleteChapter: async (bookId, chId, expected) => {
+      await ready;
+      const dir = p(bookId, 'chapters');
+      const name = chId + '.html';
+      const file = p(dir, name);
+      const keptName = name + '.bak-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      const kept = p(dir, keptName);
+      const from = at(file);
+      const to = at(kept);
+      await fetchCloud(file);
+      try {
+        await FS().rename({ from: from.path, to: to.path, directory: from.directory, toDirectory: to.directory });
+      } catch (err) {
+        // Only an absent file is a successful no-op. Inspect the raw listing
+        // so an undownloaded iCloud placeholder is not mistaken for absence.
+        const ls = await FS().readdir(at(dir)).catch(() => null);
+        if (ls && !(ls.files || []).some((f) => [name, '.' + name + '.icloud'].includes(f.name || f))) return true;
+        throw err;
+      }
+      try {
+        if (typeof expected === 'string' && await readText(kept) === expected) {
+          await FS().deleteFile(at(kept));
+          return true;
+        }
+      } catch { /* recovery file stays beside the chapter */ }
+      return { kept: keptName };
     },
 
     /* ---------- snapshots of a book (SNAPSHOTS in app.js) ---------- */

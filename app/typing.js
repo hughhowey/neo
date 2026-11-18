@@ -670,7 +670,7 @@ function chapterStartBackspace(e, body, chId) {
     await persistChapter(prevId);
     if (!book || book.id !== bookId) return;
     await saveMeta();
-    await window.neo.deleteChapter(bookId, chId);
+    await removeChapterFile(bookId, chId);
   })().catch((err) => window.neo.logError('merge: ' + (err && err.message || err)));
   renderChapters();
   renderStickies();

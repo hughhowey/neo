@@ -160,6 +160,24 @@ test('a chapter deleted here is named in book.json, and a list written before th
   assert.ok(!(await page()).includes('DELETEME'));
 });
 
+test('deleting from the editor keeps both its Darlings copy and the newer disk revision', async () => {
+  const chId = await addChapterHere('Local words in the deleted chapter.');
+  await saved();
+  const chapters = path.join(dir, 'chapters');
+  const local = (await js(`chapterText(${JSON.stringify(chId)})`)).trim();
+  const remote = 'A newer revision of the chapter being deleted.';
+  theirChapter(chId, remote);
+  await js(`deleteChapterToDarlings(${JSON.stringify(chId)})`);
+  assert.ok(!readMeta().chapterOrder.includes(chId));
+  assert.equal(fs.existsSync(path.join(chapters, chId + '.html')), false);
+  const kept = fs.readdirSync(chapters).find((name) => name.startsWith(chId + '.html.bak-'));
+  assert.ok(kept);
+  assert.equal(fs.readFileSync(path.join(chapters, kept), 'utf8'), '<p>' + remote + '</p>');
+  const darlings = JSON.parse(fs.readFileSync(path.join(dir, 'darlings.json'), 'utf8'));
+  assert.ok(darlings.some((d) => d.text === local.slice(0, 2000)));
+  assert.ok((await js("document.getElementById('hint').textContent")).includes(kept));
+});
+
 test('ordinary saves go through: typing still writes book.json', async () => {
   await saved();
   const before = readMeta().modified;
