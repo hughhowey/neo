@@ -31,7 +31,7 @@ function menuOn(platform, { script = false, more = true, view = null } = {}) {
   const electron = {
     app: { commandLine: { appendSwitch() {} }, getPath: () => library, getLocale: () => 'en', requestSingleInstanceLock: () => true, whenReady: () => ({ then() {} }), on() {} },
     ipcMain: { on: (name, fn) => listeners.set(name, fn), handle() {} },
-    BrowserWindow: { getFocusedWindow: () => ({ webContents: { send: (_ch, msg) => sent.push(msg.type) } }), getAllWindows: () => [] },
+    BrowserWindow: { getFocusedWindow: () => ({ webContents: { send: (_ch, msg) => sent.push(msg.type) } }), getAllWindows: () => [], fromWebContents: () => null },
     // a built menu with no items: macOS's Edit menu watch has nothing to hold
     Menu: { buildFromTemplate: (items) => ({ items: [], template: items }), setApplicationMenu: (menu) => { builds++; template = menu.template; } },
     dialog: {},
@@ -179,5 +179,31 @@ describe('Format menu: Drop Cap Style ticks one choice (#422)', () => {
       }
     };
     for (const options of [{}, { script: true }]) groups(menuOn('darwin', { ...options, view: view({ dropCap: 'none' }) }));
+  });
+});
+
+describe('View → Page: one page is ticked, and the window takes its room color', () => {
+  const page = (template) => item(template.find((m) => m.label === 'View').submenu, 'Page').submenu;
+  const choices = { night: 'Night', paper: 'Paper', light: 'Light', parchment: 'Parchment' };
+  for (const platform of ['darwin', 'win32', 'linux']) {
+    for (const [value, label] of Object.entries(choices)) {
+      test(`${label} alone is ticked (${platform})`, () => {
+        assert.deepEqual(shownTicks(page(menuOn(platform, { view: view({ pageTheme: value }) }))), [label]);
+      });
+    }
+    test(`a page NEO doesn't know, or none, ticks Night (${platform})`, () => {
+      for (const pageTheme of [undefined, '', 'sepia']) {
+        assert.deepEqual(shownTicks(page(menuOn(platform, { view: view({ pageTheme }) }))), ['Night']);
+      }
+    });
+  }
+
+  test('each page has its own room color for the window, before the page draws', () => {
+    const roomColor = vm.runInNewContext(source.match(/^function roomColor\(theme\) \{[\s\S]*?^\}/m)[0] + '\nroomColor;');
+    assert.equal(roomColor('night'), '#191919');
+    assert.equal(roomColor('paper'), '#191919');
+    assert.equal(roomColor('light'), '#efede8');
+    assert.equal(roomColor('parchment'), '#e6d5b3');
+    assert.equal(roomColor(undefined), '#191919');
   });
 });
