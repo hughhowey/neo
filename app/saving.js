@@ -1104,8 +1104,10 @@ async function restoreSnapshot(chId) {
   updateCounters();
   scheduleNavRefresh();
   const undo = IS_MAC ? '⌘Z' : 'Ctrl+Z';
-  if (!kept) toast(chId ? t('Chapter restored from {when}. {undo} undoes it; the text it replaced is in a snapshot too.', { when: snapWhen(snap.at), undo })
-    : t('Book restored from {when}. {undo} undoes it; the book as it was is in a snapshot too.', { when: snapWhen(snap.at), undo }), 7000);
+  if (!kept) {
+    toast(chId ? t('Chapter restored from {when}. {undo} undoes it; the text it replaced is in a snapshot too.', { when: snapWhen(snap.at), undo })
+      : t('Book restored from {when}. {undo} undoes it; the book as it was is in a snapshot too.', { when: snapWhen(snap.at), undo }), 7000);
+  }
 }
 
 // Esc on a snapshot goes back to the darlings (first, before the editor's
