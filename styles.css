@@ -2464,3 +2464,108 @@ html:lang(ko) :is(#aux-paper h2, .pen-slot, .shelf-label, .shelf-bound-mark, .pt
   .side-cards-title, .side-card-head, .notes-part, .ns-label, #notes-up, #notes-outline b) {
   letter-spacing: 0.04em;
 }
+
+/* ================================================================== */
+/* E-INK (View → Page → E-Ink): black on white for e-ink screens.     */
+/* An e-ink screen redraws slowly and shows gray poorly: every fade   */
+/* redraws it several times and leaves a ghost, and light gray type   */
+/* is too faint to read. So the whole app is pure black on pure       */
+/* white, with no gray, color, shadow, fade or movement. What gray    */
+/* said elsewhere (quiet, current, picked) is said with a style:      */
+/* italic, a border, an underline, or white on black. Controls still  */
+/* stay hidden until hover or focus; they come and go at once.        */
+/* body.eink comes with body.light (app/menu.js), so every surface    */
+/* starts light; the rules here hold every element to black and       */
+/* white, so a rule added elsewhere with its own color stays black    */
+/* on white here too. Covers keep their art, in grays.                */
+/* ================================================================== */
+html:has(> body.eink) { background: #fff; }
+body.eink {
+  --bg: #fff; --bg-soft: #fff; --pane: #fff; --paper: #fff;
+  --ink: #000; --accent: #000; --muted: #000; --red: #000;
+  --nb-mark-tint: transparent;
+  background: #fff; color: #000;
+}
+body.eink *, body.eink *::before, body.eink *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}
+body.eink :not(.book, .book *), body.eink :not(.book, .book *)::before, body.eink :not(.book, .book *)::after {
+  color: #000 !important;
+  border-color: #000 !important;
+  outline-color: #000 !important;
+  text-decoration-color: #000 !important;
+  caret-color: #000 !important;
+  background-image: none !important;
+}
+/* a still caret: every blink is a redraw on e-ink (Chromium 139 and
+   later; an older engine ignores it and blinks as before) */
+body.eink * { caret-animation: manual; }
+body.eink ::placeholder { color: #000 !important; opacity: 1; font-style: italic; }
+body.eink ::selection, body.eink .sheet ::selection, body.eink #aux-paper ::selection,
+body.eink.focus-mode .sheet ::selection { background: #000; color: #fff; }
+
+/* covers: the art in grays, the title type as it is */
+body.eink .book, body.eink .book img, body.eink img { filter: grayscale(1); }
+
+/* surfaces: white, edged in black where they float over the page */
+body.eink .sheet, body.eink #aux-paper { border: 1px solid #000; }
+body.eink #searchbar, body.eink .side-card, body.eink .sticky, body.eink .ob-card,
+body.eink .modal, body.eink .spell-menu, body.eink .pop-menu, body.eink .popmenu {
+  background: #fff !important; border: 1px solid #000 !important;
+}
+body.eink .modal-backdrop { background: #fff !important; }
+body.eink .new-book, body.eink .ob-cell, body.eink .opt-row, body.eink .snap-item { background: transparent !important; }
+body.eink .notes-sep { background: #000 !important; }
+
+/* white on black: what is current or called out */
+body.eink .tab.active, body.eink #hint, body.eink .snap-item.on {
+  background: #000 !important; color: #fff !important; border-color: #000 !important;
+}
+body.eink .tab.active *, body.eink #hint *, body.eink .snap-item.on * { color: #fff !important; }
+/* the cards for where the caret is: the caret's own in a thick border */
+body.eink .side-card.current { border: 3px solid #000 !important; }
+
+/* no partial opacity: a dim control is hidden until hover or focus, a
+   dim word is full black */
+body.eink:not(.bright) #bottombar:not(:hover):not(.attn):not(:has(:focus-visible)) { opacity: 0; }
+body.eink .ch-sep, body.eink .chapter-head:hover .ch-sep, body.eink .chapter-head.has-title .ch-sep,
+body.eink .shelf-bound-mark, body.eink .ps-paper .ps-label, body.eink .ps-paper .tp-s,
+body.eink .walk-note, body.eink.focus-mode .walk-note, body.eink .snap-chapter.same .snap-body { opacity: 1; }
+body.eink .ps-paper .tp-s, body.eink .walk-note { font-style: italic; }
+body.eink .snap-band .snap-all:disabled { opacity: 1; text-decoration: line-through; }
+body.eink .shelf.dragging, body.eink .book.dragging, body.eink .nav-item.dragging,
+body.eink .ob-cell.ob-lifted .ob-card { opacity: 1; outline: 2px dashed #000; }
+body.eink .shelf.bound .shelf-books::after { opacity: 1; background: none; border-bottom: 2px dashed #000; }
+
+/* marks on the text (the CSS Highlight API): a line, or white on black */
+body.eink ::highlight(neo-search) { background: transparent; text-decoration: underline 2px #000; }
+body.eink ::highlight(neo-search-current) { background: #000; color: #fff; }
+body.eink ::highlight(neo-speak) { background: transparent; text-decoration: underline 2px #000; }
+body.eink ::highlight(neo-nb-mark) { background: transparent; text-decoration: underline dotted 1px #000; }
+body.eink .shy-ticks span { background: transparent; border-bottom: 1px dotted #000; }
+body.eink ::highlight(neo-spell) { background-color: transparent; text-decoration: underline wavy #000; }
+body.eink ::highlight(neo-snap-gone) { background-color: transparent; text-decoration: line-through 2px #000; }
+body.eink ::highlight(neo-focus) { color: #000; }
+
+/* the window's title stays out of sight where it does elsewhere */
+body.eink.full-screen #dragstrip, body.eink.focus-mode #dragstrip { color: transparent !important; }
+
+/* fields, keys and separators */
+body.eink input, body.eink textarea, body.eink select { background: #fff !important; }
+body.eink kbd { background: #fff !important; border: 1px solid #000 !important; }
+body.eink .sm-sep { background: #000 !important; }
+/* the main button of a dialog: white on black; a ticked choice: underlined */
+body.eink .btn-gold, body.eink .stats-row button { background: #000 !important; color: #fff !important; }
+body.eink .pop-menu button.on { background: transparent !important; text-decoration: underline 2px; font-weight: 600; }
+body.eink input { accent-color: #000; }
+/* a choice that removes something: a thick border */
+body.eink .danger { border: 2px solid #000 !important; }
+/* hover and keyboard focus on a choice: white on black, at once */
+body.eink :is(button, [role="menuitem"], [role="menuitemradio"], .tab, .nav-item):is(:hover, :focus-visible):not(:disabled) {
+  background: #000 !important; color: #fff !important;
+}
+body.eink :is(button, [role="menuitem"], [role="menuitemradio"], .tab, .nav-item):is(:hover, :focus-visible):not(:disabled) * { color: #fff !important; }

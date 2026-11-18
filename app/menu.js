@@ -42,7 +42,10 @@ function applyFonts() {
   refreshDropCaps(true);
   document.body.classList.toggle('night', library.pageTheme === 'night');
   // Light: the paper page in a light room, the whole app with it
-  document.body.classList.toggle('light', library.pageTheme === 'light');
+  // E-Ink: black on white for e-ink screens. It builds on Light (the light
+  // room and panes), then takes out every gray, shadow and fade
+  document.body.classList.toggle('light', library.pageTheme === 'light' || library.pageTheme === 'eink');
+  document.body.classList.toggle('eink', library.pageTheme === 'eink');
   // the system's "Increase contrast" turns it on too, until the writer
   // chooses in the View menu
   applyBright();
