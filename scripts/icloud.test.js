@@ -159,6 +159,27 @@ describe('files still in iCloud', { concurrency: 1 }, () => {
     assert.equal(fs.statSync(file).blocks, 0, 'not written over');
   });
 
+  test('book metadata saves wait for the iCloud file before comparing chapter order', () => {
+    const { book, bookDir } = libraryWithBook();
+    const file = path.join(bookDir, 'book.json');
+    const later = { ...book, chapterOrder: ['ch-aaa', 'ch-bbb'] };
+    const backup = fs.readFileSync(file + '.bak', 'utf8');
+    const edited = { ...book, title: 'A new title' };
+    sendToICloud(file);
+
+    assert.throws(() => main.call('book:writeMeta', book.id, edited, ['ch-aaa']), (err) => err.code === 'ECLOUD');
+    assert.equal(fs.statSync(file).blocks, 0);
+    assert.equal(fs.readFileSync(file + '.bak', 'utf8'), backup);
+    assert.ok(main.asked.includes(file));
+
+    fs.writeFileSync(file, JSON.stringify(later));
+    assert.deepEqual(Array.from(main.call('book:writeMeta', book.id, edited, ['ch-aaa']).unseen), ['ch-bbb']);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).chapterOrder, later.chapterOrder);
+    const stamp = main.call('book:writeMeta', book.id, { ...edited, chapterOrder: later.chapterOrder }, later.chapterOrder);
+    assert.equal(typeof stamp, 'string');
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).title, 'A new title');
+  });
+
   test('a save never goes over a chapter or notes still in iCloud', () => {
     const { book, bookDir } = libraryWithBook();
     const ch = path.join(bookDir, 'chapters', 'ch-aaa.html');
@@ -207,4 +228,33 @@ describe('files still in iCloud', { concurrency: 1 }, () => {
     assert.ok(zip.file(path.basename(bookDir) + '/book.json'), 'the rest is backed up');
     main.run('BACKUP_FILE_LIMIT_MS = 20000');
   });
+});
+
+test('the next flush retries a metadata write that held only a caret move', async () => {
+  const app = require('./app-files').appSource();
+  const saving = app.slice(app.indexOf('function metaSig('), app.indexOf('/*  SNAPSHOTS'));
+  const errors = [];
+  let attempts = 0;
+  const run = (s) => vm.runInContext(s, ctx);
+  const ctx = vm.createContext({
+    book: { id: 'b', chapterOrder: [], lastPosition: { chapterId: 'a', pIdx: 0, scroll: 0 } },
+    currentChapterId: 'a', currentTab: 'manuscript', captureCaret: () => ({ chId: 'a', pIdx: 1 }),
+    shelfExport: false, knownChapters: new Set(), savedOrder: [],
+    $: () => ({ scrollTop: 0 }), flushAux() {}, flushStickiesSave() {}, flushSidecars() {},
+    window: { neo: { logError: (e) => errors.push(e) } },
+    writeBookMeta: async () => {
+      if (++attempts === 1) throw new Error('Still in iCloud');
+      return 'saved';
+    }
+  });
+  run(saving + '\nlet savedMetaSig = metaSig(book);');
+  run("flushAllSaves('tick')");
+  await new Promise(setImmediate);
+  assert.equal(attempts, 1);
+  assert.match(errors[0], /Still in iCloud/);
+  run("flushAllSaves('tick')");
+  await new Promise(setImmediate);
+  assert.equal(attempts, 2, 'the same caret position is retried');
+  run("flushAllSaves('tick')");
+  assert.equal(attempts, 2, 'the successful retry clears the pending save');
 });

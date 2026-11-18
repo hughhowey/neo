@@ -380,9 +380,13 @@ function metaSig(m) {
   return JSON.stringify(c);
 }
 
+const metaSaveRetry = new Set();
+function saveMetaInBackground() {
+  saveMeta().catch((err) => window.neo.logError('save book metadata: ' + (err && err.message || err)));
+}
 function scheduleMetaSave() {
   clearTimeout(saveTimers.meta);
-  saveTimers.meta = setTimeout(saveMeta, 800);
+  saveTimers.meta = setTimeout(saveMetaInBackground, 800);
 }
 // Chapters taken out of the book here since book.json was last saved are
 // named in it, so another device can tell "deleted there" from "never heard
@@ -402,7 +406,16 @@ async function saveMeta(again) {
   for (const c of book.chapterOrder) knownChapters.add(c);
   const sig = metaSig(book);
   const order = [...book.chapterOrder];
-  const stamp = await writeBookMeta(bookId, book, [...knownChapters]);
+  let stamp;
+  try {
+    stamp = await writeBookMeta(bookId, book, [...knownChapters]);
+  } catch (err) {
+    // A rejected write may have held only a new caret position, which isn't
+    // in metaSig. The next flush must retry even if nothing else changed.
+    metaSaveRetry.add(bookId);
+    throw err;
+  }
+  if (typeof stamp === 'string') metaSaveRetry.delete(bookId);
   // the answer belongs to the book that was saved; another one may be open now
   if (!book || book.id !== bookId) return;
   if (stamp && Array.isArray(stamp.unseen)) {
@@ -456,7 +469,7 @@ function flushAllSaves(e) {
   flushAux();
   flushStickiesSave();
   flushSidecars();
-  if (moved || metaSig(book) !== savedMetaSig) saveMeta();
+  if (moved || metaSaveRetry.has(book.id) || metaSig(book) !== savedMetaSig) saveMetaInBackground();
 }
 
 /* ================================================================== */
