@@ -274,8 +274,8 @@ function persistChapter(chId, html) {
   const run = async () => {
     let r = await window.neo.writeChapter(bookId, chId, html, diskKnown[key]);
     for (let tries = 0; r && typeof r.conflict === 'string' && tries < 3; tries++) {
-      knowDisk(bookId, chId, r.conflict);
       if (worthKeeping(bookId, chId, r.conflict, html)) await keepOtherDeviceVersion(bookId, chId, r.conflict);
+      if (book && book.id === bookId && !book.chapterOrder.includes(chId)) return false;
       r = await window.neo.writeChapter(bookId, chId, html, r.conflict);
     }
     if (r && typeof r.conflict === 'string') throw new Error('chapter keeps changing on disk');
@@ -304,7 +304,9 @@ function persistChapter(chId, html) {
 // Nor is a copy kept twice: one already in the book is enough.
 function worthKeeping(bookId, chId, disk, mine) {
   if (!wordsBeyond(disk, mine)) return false;
-  if (book && book.id === bookId && book.chapterOrder.some((c) => c !== chId && chapterHTML[c] === disk)) return false;
+  if (book && book.id === bookId && savedOrder.some((c) => (
+    c !== chId && book.chapterOrder.includes(c) && diskKnown[bookId + '/' + c] === disk
+  ))) return false;
   return true;
 }
 
@@ -316,35 +318,58 @@ function twinChapterTitle(title) {
   const when = new Date().toLocaleTimeString(NeoI18n.getLocale(), { hour: 'numeric', minute: '2-digit' });
   return ((title || '') + ' ' + t('from other device, {time}', { time: when })).trim();
 }
+// Keep an incomplete recovery's id across retries, including when its file
+// was saved but book.json could not be written.
+const pendingTwins = new Map();
 async function keepOtherDeviceVersion(bookId, chId, disk) {
-  const twinId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-  if (book && book.id === bookId) {
-    const idx = book.chapterOrder.indexOf(chId);
-    book.chapterOrder.splice(idx < 0 ? book.chapterOrder.length : idx + 1, 0, twinId);
-    book.chapterTitles = book.chapterTitles || {};
-    book.chapterTitles[twinId] = twinChapterTitle(book.chapterTitles[chId]);
-    chapterHTML[twinId] = disk;
-    wordsFromDisk(); // the other device's copy is not today's writing (#345)
-    await persistChapter(twinId, disk);
-    await saveMeta();
-    const caret = captureCaret();
-    const keepScroll = $('#paper-scroll').scrollTop;
-    renderChapters();
-    $('#paper-scroll').scrollTop = keepScroll;
-    if (caret) restoreCaret(caret);
-    updateCounters();
-    scheduleNavRefresh();
-    toast(t('This chapter also changed on another device. That version is saved as the chapter after it.'), 8000);
-    return;
+  const key = bookId + '/' + chId;
+  let twins = pendingTwins.get(key);
+  if (!twins) pendingTwins.set(key, twins = new Map());
+  let twinId = twins.get(disk);
+  if (!twinId) {
+    twinId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    twins.set(disk, twinId);
   }
-  await window.neo.writeChapter(bookId, twinId, disk);
-  const meta = await window.neo.readBookMeta(bookId);
-  if (!meta || !Array.isArray(meta.chapterOrder)) return;
-  const idx = meta.chapterOrder.indexOf(chId);
-  meta.chapterOrder.splice(idx < 0 ? meta.chapterOrder.length : idx + 1, 0, twinId);
-  meta.chapterTitles = meta.chapterTitles || {};
-  meta.chapterTitles[twinId] = twinChapterTitle(meta.chapterTitles[chId]);
-  await writeBookMeta(bookId, meta);
+  if (diskKnown[bookId + '/' + twinId] !== disk) {
+    await window.neo.writeChapter(bookId, twinId, disk);
+    knowDisk(bookId, twinId, disk);
+  }
+
+  function addTwin(meta) {
+    if (meta.chapterOrder.includes(twinId)) return;
+    const idx = meta.chapterOrder.indexOf(chId);
+    meta.chapterOrder.splice(idx < 0 ? meta.chapterOrder.length : idx + 1, 0, twinId);
+    meta.chapterTitles = meta.chapterTitles || {};
+    meta.chapterTitles[twinId] = twinChapterTitle(meta.chapterTitles[chId]);
+  }
+
+  if (book && book.id === bookId && !shelfExport) {
+    addTwin(book);
+    if (chapterHTML[twinId] === undefined) {
+      chapterHTML[twinId] = disk;
+      savedHTML[twinId] = disk;
+      wordsFromDisk(); // the other device's copy is not today's writing (#345)
+    }
+    if (!await saveMeta()) throw new Error('recovery chapter metadata was not saved');
+  } else {
+    const meta = await window.neo.readBookMeta(bookId);
+    if (!meta || !Array.isArray(meta.chapterOrder)) throw new Error('could not read the recovery chapter metadata');
+    addTwin(meta);
+    const stamp = await writeBookMeta(bookId, meta, meta.chapterOrder);
+    if (typeof stamp !== 'string') throw new Error('recovery chapter metadata was not saved');
+  }
+  twins.delete(disk);
+  if (!twins.size) pendingTwins.delete(key);
+
+  if (!book || book.id !== bookId || shelfExport) return;
+  const caret = captureCaret();
+  const keepScroll = $('#paper-scroll').scrollTop;
+  renderChapters();
+  $('#paper-scroll').scrollTop = keepScroll;
+  if (caret) restoreCaret(caret);
+  updateCounters();
+  scheduleNavRefresh();
+  toast(t('This chapter also changed on another device. That version is saved as the chapter after it.'), 8000);
 }
 
 function scheduleChapterSave(chId) {
@@ -404,18 +429,20 @@ async function saveMeta(again) {
   const order = [...book.chapterOrder];
   const stamp = await writeBookMeta(bookId, book, [...knownChapters]);
   // the answer belongs to the book that was saved; another one may be open now
-  if (!book || book.id !== bookId) return;
+  if (!book || book.id !== bookId) return typeof stamp === 'string';
   if (stamp && Array.isArray(stamp.unseen)) {
     // another device added a chapter since this one last looked: nothing was
     // written. Take the chapter in, then save (once; the next save tries again)
     if (again) return;
     await refreshFromDisk();
-    if (book && book.id === bookId) await saveMeta(true);
-    return;
+    if (book && book.id === bookId) return saveMeta(true);
+    return false;
   }
-  if (typeof stamp === 'string') book.modified = stamp;
+  if (typeof stamp !== 'string') return false;
+  book.modified = stamp;
   savedMetaSig = sig;
   savedOrder = order;
+  return true;
 }
 
 function flushAllSaves(e) {
@@ -1301,7 +1328,6 @@ async function refreshFromDisk() {
       if (currentTab === 'darlings') renderDarlings();
     }
     let adopted = 0;
-    let conflicts = 0;
     const replaced = []; // page text a disk copy would otherwise have taken away
     for (const { chId, st, before, disk } of fresh) {
       if (!book.chapterOrder.includes(chId)) continue;
@@ -1334,27 +1360,13 @@ async function refreshFromDisk() {
         knowDisk(bookId, chId, disk);
         wordCache[chId] = null;
         adopted++;
-      } else if (!worthKeeping(bookId, chId, disk, chapterHTML[chId])) {
-        // an older copy (see worthKeeping): the page's words go over it
-        savedHTML[chId] = disk;
-        knowDisk(bookId, chId, disk);
-        persistChapter(chId);
       } else {
-        savedHTML[chId] = disk; // what's on disk now; our text goes over it on the next save
-        knowDisk(bookId, chId, disk);
-        const idx = book.chapterOrder.indexOf(chId);
-        const twinId = 'ch-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-        book.chapterOrder.splice(idx + 1, 0, twinId);
-        book.chapterTitles = book.chapterTitles || {};
-        book.chapterTitles[twinId] = twinChapterTitle(book.chapterTitles[chId]);
-        chapterHTML[twinId] = disk;
-        persistChapter(twinId, disk);
-        persistChapter(chId);
-        scheduleMetaSave();
-        conflicts++;
+        // Use the same recovery as a save that discovers the conflict.
+        // Leave the expected revision alone so the write compares against it.
+        persistChapter(chId).catch((err) => window.neo.logError('chapter refresh: ' + (err && err.message || err)));
       }
     }
-    if (restructured || adopted || conflicts) {
+    if (restructured || adopted) {
       const caret = captureCaret();
       const keepScroll = $('#paper-scroll').scrollTop;
       renderChapters();
@@ -1379,8 +1391,7 @@ async function refreshFromDisk() {
         writeSidecar(bookId, 'darlings', darlings);
       }
       if (currentTab === 'darlings' && (restructured || replaced.length)) renderDarlings();
-      if (conflicts) toast(t('This chapter also changed on another device. That version is saved as the chapter after it.'), 8000);
-      else if (replaced.length) toast(t('Updated from your other device — the text it replaced is in Darlings'), 8000);
+      if (replaced.length) toast(t('Updated from your other device — the text it replaced is in Darlings'), 8000);
       else toast(t('Updated from your other device'));
     } else if (dayMoved) {
       updateCounters();
