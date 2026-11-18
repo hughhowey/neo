@@ -119,6 +119,7 @@ document.addEventListener('focusin', (e) => {
   focusBeforeDialog = e.target.matches(':focus-visible') ? e.target : null;
 }, true);
 function dialogify(bd) {
+  if (bd.matches('dialog')) return; // the native dialog manages focus and modality
   const box = bd.querySelector('.modal');
   if (!box || box.getAttribute('role')) return;
   box.setAttribute('role', 'dialog');

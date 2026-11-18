@@ -82,8 +82,9 @@ async function openOptions() {
   if (optionsOpen) { optionsOpen.querySelector('.opt-panel').focus(); return; }
   const langs = window.neo.uiLanguages ? await window.neo.uiLanguages().catch(() => null) : null;
   const pressHoldShown = window.neo.platform === 'darwin' && !!window.neo.setPressHold;
-  const bd = document.createElement('div');
+  const bd = document.createElement('dialog');
   bd.className = 'modal-backdrop';
+  bd.setAttribute('aria-labelledby', 'opt-title');
   optionsOpen = bd;
   const features = FEATURES.filter((f) => !IS_POCKET || f.pocket);
   const check = (id, on, label, desc) => `
@@ -93,7 +94,7 @@ async function openOptions() {
     </label>`;
   const spellCodes = Object.keys(SPELL_LANGUAGE_NAMES);
   bd.innerHTML = `
-    <div class="modal options-modal" role="dialog" aria-modal="true" aria-labelledby="opt-title">
+    <div class="modal options-modal">
       <h2 id="opt-title">${t('Options')}</h2>
       <div class="opt-panel" tabindex="-1">
         <section>
@@ -123,7 +124,7 @@ async function openOptions() {
             <span class="opt-steps"><button type="button" data-zoom="-1" aria-label="${t('Smaller')}">−</button><span class="opt-zoom"></span><button type="button" data-zoom="1" aria-label="${t('Larger')}">+</button><button type="button" class="btn-link" data-zoom="0">${t('Reset')}</button></span></div>`}
         </section>
       </div>
-      <div class="opt-foot"><button class="m-ok btn-gold">${t('Done')}</button></div>
+      <div class="opt-foot"><button class="m-ok btn-gold" autofocus>${t('Done')}</button></div>
     </div>`;
   document.body.appendChild(bd);
   const allBtn = bd.querySelector('.opt-all');
@@ -173,9 +174,22 @@ async function openOptions() {
     applyFonts();
     paintZoom();
   });
-  const close = () => { bd.remove(); optionsOpen = null; };
+  const close = () => { bd.close(); bd.remove(); optionsOpen = null; };
   bd.querySelector('.m-ok').onclick = close;
-  bd.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
-  bd.addEventListener('mousedown', (e) => { if (e.target === bd) close(); });
-  bd.querySelector('.m-ok').focus();
+  bd.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  bd.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !e.isComposing) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
+    if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return;
+    const stops = [...bd.querySelectorAll('button:enabled, input:enabled, select:enabled')]
+      .filter((el) => el.getClientRects().length);
+    const edge = e.shiftKey ? stops[0] : stops.at(-1);
+    if (document.activeElement !== edge) return;
+    e.preventDefault();
+    (e.shiftKey ? stops.at(-1) : stops[0]).focus();
+  });
+  bd.showModal();
 }
