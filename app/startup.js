@@ -148,6 +148,16 @@ new MutationObserver((muts) => {
 }).observe(document.body, { childList: true });
 $$('.modal-backdrop').forEach(dialogify);
 
+// CSS zoom scales the footer as well as its wrapped rows. Reserve its actual
+// on-screen height so the last line and pane controls remain reachable.
+if (!IS_POCKET) {
+  const footer = $('#bottombar');
+  new ResizeObserver(() => {
+    const height = footer.getBoundingClientRect().height;
+    document.querySelector('#editor-view').style.setProperty('--editor-footer-height', height + 'px');
+  }).observe(footer);
+}
+
 // F6 walks the regions a mouse finds by hovering: the page, the chapters
 // pane, the notes pane, the bottom bar. ⇧F6 walks back; Esc returns to
 // the page from any of them. A pane opened this way closes when the

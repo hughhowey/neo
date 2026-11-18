@@ -116,6 +116,24 @@ test('Replace on one match that crosses formatting replaces just that match', as
     '<p>at noon, the hunger gone.</p>');
 });
 
+test('Find and the manuscript footer fit at larger interface sizes', async () => {
+  BrowserWindow.fromWebContents(wc).setContentSize(700, 650);
+  for (const zoom of [1.5, 2, 3]) {
+    await js(`library.uiZoom = ${zoom}; applyFonts(); openSearch()`);
+    await tick(300);
+    const layout = await js(`(() => {
+      const outside = [...document.querySelectorAll('#searchbar, #searchbar > *, #word-counter, #goal-counter, #tabs .tab')]
+        .filter((el) => { const r = el.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth; })
+        .map((el) => el.id || el.textContent);
+      const rect = (id) => document.getElementById(id).getBoundingClientRect();
+      const footer = rect('bottombar');
+      return { outside, footerTop: footer.top, pageBottom: rect('paper-scroll').bottom };
+    })()`);
+    assert.deepEqual(layout.outside, [], `horizontal clipping at ${zoom * 100}%`);
+    assert.ok(Math.abs(layout.pageBottom - layout.footerTop) < 1, `footer overlaps the page at ${zoom * 100}%`);
+  }
+});
+
 /* ---------- runner ---------- */
 
 async function main() {

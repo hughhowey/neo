@@ -1529,11 +1529,14 @@ body.full-screen.focus-mode #bottombar:not(:hover):not(.attn) { opacity: 0; }
   position: fixed; top: 34px; left: 50%; transform: translateX(-50%);
   background: #262626; border: 1px solid #3a3a3a; border-radius: 8px;
   padding: 8px 10px; display: flex; gap: 8px; align-items: center;
+  flex-wrap: wrap; width: max-content;
+  max-width: calc((100vw - 24px) / var(--ui-zoom));
+  max-height: calc((100vh - 46px) / var(--ui-zoom)); overflow: auto;
   z-index: 300; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
 }
 #searchbar input {
   background: var(--bg); border: 1px solid #3a3a3a; border-radius: 5px;
-  color: #eee; font-size: 13px; padding: 6px 10px; width: 170px;
+  color: #eee; font-size: 13px; padding: 6px 10px; width: 170px; max-width: 100%; min-width: 0;
 }
 #searchbar input:focus { outline: none; border-color: var(--accent); }
 /* outside the manuscript Find only finds */
@@ -1783,19 +1786,23 @@ body.bright .pop-menu button:disabled { color: #8a8a8a; }
   width: min(920px, calc(100vw / var(--ui-zoom) - 48px));
   height: min(720px, calc(100vh / var(--ui-zoom) - 80px));
 }
-/* An enlarged bottom bar in a small window keeps what matters: the tabs,
-   today's words and the word count. At Normal size nothing is shed. */
-.ui-zoomed #bottombar { container-type: inline-size; }
-.ui-zoomed #counters span, .ui-zoomed .tab, .ui-zoomed #back-to-shelf { white-space: nowrap; }
-@container (max-width: 900px) {
-  .ui-zoomed #pos-counter { display: none; }
-  .ui-zoomed .tab { padding: 5px 10px; }
-  .ui-zoomed .tab.darlings { margin-left: 8px; }
-  .ui-zoomed #counters { gap: 12px; }
+/* At larger interface sizes the desktop footer wraps. Its measured height
+   leaves room for every row below the manuscript and the hover panes. */
+.ui-zoomed #dragstrip ~ #editor-view #bottombar {
+  height: auto; min-height: 40px; padding-block: 4px;
+  flex-wrap: wrap; gap: 4px 12px;
 }
-@container (max-width: 700px) {
-  .ui-zoomed #zoom-control { display: none; }
-  .ui-zoomed #back-to-shelf span[data-i18n] { display: none; }
+.ui-zoomed #dragstrip ~ #editor-view :is(#tabs, #counters) {
+  flex: 1 1 auto; flex-wrap: wrap; min-width: 0; gap: 2px 8px;
+}
+.ui-zoomed #dragstrip ~ #editor-view #tabs { justify-content: flex-start; }
+.ui-zoomed #dragstrip ~ #editor-view .tab { padding: 5px 8px; }
+.ui-zoomed #dragstrip ~ #editor-view .tab.darlings { margin-left: 0; }
+.ui-zoomed #dragstrip ~ #editor-view :is(#paper-scroll, #nav-hotzone, #side-hotzone) {
+  bottom: var(--editor-footer-height, calc(40px * var(--ui-zoom)));
+}
+.ui-zoomed #dragstrip ~ #editor-view :is(#nav-pane, #side-pane) {
+  bottom: calc(var(--editor-footer-height, 40px * var(--ui-zoom)) / var(--ui-zoom));
 }
 
 /* Help → Check for Update…: the download bar */
