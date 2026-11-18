@@ -235,12 +235,13 @@ test('Options keeps keyboard focus inside and returns it on Escape', async () =>
     wc.sendInputEvent({ type: 'keyDown', keyCode: 'Tab', modifiers });
     wc.sendInputEvent({ type: 'keyUp', keyCode: 'Tab', modifiers });
     await tick();
-    return js('document.activeElement.className');
-  };
+      };
   await openOpts();
   assert.match(await js('document.activeElement.className'), /m-ok/);
-  assert.match(await tab(), /opt-all/);
-  assert.match(await tab(['shift']), /m-ok/);
+  await tab();
+  assert.equal(await js(`document.activeElement === document.querySelector('.opt-panel').querySelector('button:enabled, input:enabled, select:enabled')`), true);
+  await tab(['shift']);
+  assert.match(await js('document.activeElement.className'), /m-ok/);
   wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
   wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
   await tick();
