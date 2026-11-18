@@ -137,6 +137,42 @@ test('clicking a tab switches to it', async () => {
   }
 });
 
+test('a chapter can move with keyboard or click and the move can be undone', async () => {
+  const before = await js(`(() => {
+    const id = createChapterAt(storyEnd(), 'Two');
+    const row = document.querySelector('#nav-list [data-id="' + id + '"] .n-row');
+    document.querySelector('#nav-pane').classList.add('open');
+    row.focus();
+    return [...book.chapterOrder];
+  })()`);
+  const order = () => js('book.chapterOrder');
+  const sortButton = () => js('document.activeElement.className');
+  await press('Tab', []);
+  assert.equal(await sortButton(), 'n-move');
+  await press('Space', []);
+  assert.equal(await js('document.activeElement.getAttribute("role")'), 'menuitem');
+  await press('Escape', []);
+  assert.deepEqual(await order(), before);
+  assert.equal(await sortButton(), 'n-move');
+  await press('Space', []);
+  await press('Space', []);
+  assert.deepEqual(await order(), [...before].reverse());
+  assert.equal(await sortButton(), 'n-move');
+
+  const menu = await js(`(() => {
+    document.activeElement.click();
+    const button = document.querySelector('.pop-menu button:not(:disabled)');
+    const label = button.textContent;
+    button.click();
+    return label;
+  })()`);
+  assert.equal(menu, 'Move down');
+  await tick(300);
+  assert.deepEqual(await order(), before);
+  await js('structuralUndo()');
+  assert.deepEqual(await order(), [...before].reverse());
+});
+
 /* ---------- runner ---------- */
 
 async function main() {

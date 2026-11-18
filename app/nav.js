@@ -26,8 +26,10 @@ function renderNav() {
   if (isScript()) { renderScriptNav(); return; }
   const list = $('#nav-list');
   // a keyboard user on a chapter row keeps their place through the rebuild
-  const focusedRow = document.activeElement && document.activeElement.classList.contains('n-row') &&
-    document.activeElement.matches(':focus-visible') ? document.activeElement.closest('.nav-item').dataset.id : null;
+  const active = document.activeElement;
+  const focusedRow = active?.matches('#nav-list :is(.n-row, .n-move):focus-visible')
+    ? active.closest('.nav-item').dataset.id : null;
+  const restoreMove = active?.classList.contains('n-move');
   list.innerHTML = '';
   book.chapterNotes = book.chapterNotes || {};
   const solo = soloStory();
@@ -77,6 +79,22 @@ function renderNav() {
       item.classList.add('dragging');
     });
     rowEl.addEventListener('dragend', finishChapterDrag);
+    let move = null;
+    if (book.chapterOrder.length > 1) {
+      const controls = document.createElement('div');
+      controls.className = 'n-controls';
+      move = document.createElement('button');
+      move.className = 'n-move';
+      move.textContent = t('Move…');
+      move.setAttribute('aria-label', t('Move {chapter}', { chapter: item.querySelector('.n-label').textContent }));
+      move.setAttribute('aria-haspopup', 'menu');
+      move.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openChapterMove(chId, move);
+      });
+      rowEl.before(controls);
+      controls.append(rowEl, move);
+    }
     // right-click: what it is, or Delete
     item.addEventListener('contextmenu', (e) => {
       if (IS_POCKET) { e.preventDefault(); return; } // on a phone this pane is for hopping
@@ -141,7 +159,7 @@ function renderNav() {
     ].filter(Boolean).join(', '));
     list.appendChild(gap(i));
     list.appendChild(item);
-    if (chId === focusedRow) rowEl.focus({ preventScroll: true });
+    if (chId === focusedRow) (restoreMove && move ? move : rowEl).focus({ preventScroll: true });
   });
   list.appendChild(gap(book.chapterOrder.length));
   justAddedEntry = null;
@@ -339,15 +357,44 @@ navList.addEventListener('drop', async (e) => {
     }
     ind.remove();
   }
+  await reorderNavChapter(chId, index);
+});
+
+async function reorderNavChapter(chId, index) {
   const from = book.chapterOrder.indexOf(chId);
-  if (from === -1) return;
+  if (from === -1 || from === index) return;
+  const source = book;
   snapshotStructure('chapter reorder');
-  book.chapterOrder = book.chapterOrder.filter((c) => c !== chId);
-  book.chapterOrder.splice(index, 0, chId);
+  const order = book.chapterOrder.filter((c) => c !== chId);
+  order.splice(index, 0, chId);
+  book.chapterOrder = order;
   await saveMeta();
+  if (book !== source) return;
   renderChapters(); // renumbers heads and rebuilds the nav
   if (currentTab === 'outline') renderOutline();
-});
+}
+
+async function openChapterMove(chId, button) {
+  const source = book;
+  const from = book.chapterOrder.indexOf(chId);
+  button.focus({ preventScroll: true });
+  const step = await popMenu(0, 0, [
+    { label: t('Move up'), value: -1, disabled: from === 0 },
+    { label: t('Move down'), value: 1, disabled: from === book.chapterOrder.length - 1 }
+  ], { title: button.getAttribute('aria-label'), from: button });
+  if (step === null || book !== source) return;
+  const current = book.chapterOrder.indexOf(chId);
+  const next = current + step;
+  if (current === -1 || next < 0 || next >= book.chapterOrder.length) return;
+  await reorderNavChapter(chId, next);
+  if (book !== source || currentTab === 'notes' || document.activeElement !== document.body) return;
+  const row = [...navList.querySelectorAll('.nav-item')].find((item) => item.dataset.id === chId);
+  const control = row?.querySelector('.n-move');
+  if (control) {
+    control.focus({ preventScroll: true });
+    control.scrollIntoView({ block: 'nearest' });
+  }
+}
 
 function highlightNav() {
   $$('.nav-item').forEach((el) => el.classList.toggle('current', el.dataset.id === currentChapterId));
