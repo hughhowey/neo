@@ -69,6 +69,29 @@ const closeOpts = async () => { await js(`document.querySelector('.options-modal
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
+test('Options keeps keyboard focus inside and returns it on Escape', async () => {
+  await clickTab('manuscript');
+  await caretInFirst();
+  const anchor = await js('getSelection().anchorOffset');
+  const tab = async (modifiers = []) => {
+    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Tab', modifiers });
+    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Tab', modifiers });
+    await tick();
+      };
+  await openOpts();
+  assert.match(await js('document.activeElement.className'), /m-ok/);
+  await tab();
+  assert.equal(await js(`document.activeElement === document.querySelector('.opt-panel').querySelector('button:enabled, input:enabled, select:enabled')`), true);
+  await tab(['shift']);
+  assert.match(await js('document.activeElement.className'), /m-ok/);
+  wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await tick();
+  assert.equal(await js('!!document.querySelector(".options-modal")'), false);
+  assert.match(await js('document.activeElement.className'), /chapter-body/);
+  assert.equal(await js('getSelection().anchorOffset'), anchor);
+});
+
 test('a library from before 2.0 that used nothing behind the switch starts with every feature off, on disk', async () => {
   assert.equal(await js('Object.values(library.features).some(Boolean)'), false);
   assert.equal(Object.values(onDisk().features).some(Boolean), false);
@@ -225,29 +248,6 @@ test('one feature off at a time: Outline cards off makes the Outline the list ag
   await tick(300);
   assert.equal(await js('vimEnabled'), false);
   await closeOpts();
-});
-
-test('Options keeps keyboard focus inside and returns it on Escape', async () => {
-  await clickTab('manuscript');
-  await caretInFirst();
-  const anchor = await js('getSelection().anchorOffset');
-  const tab = async (modifiers = []) => {
-    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Tab', modifiers });
-    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Tab', modifiers });
-    await tick();
-      };
-  await openOpts();
-  assert.match(await js('document.activeElement.className'), /m-ok/);
-  await tab();
-  assert.equal(await js(`document.activeElement === document.querySelector('.opt-panel').querySelector('button:enabled, input:enabled, select:enabled')`), true);
-  await tab(['shift']);
-  assert.match(await js('document.activeElement.className'), /m-ok/);
-  wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-  wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-  await tick();
-  assert.equal(await js('!!document.querySelector(".options-modal")'), false);
-  assert.match(await js('document.activeElement.className'), /chapter-body/);
-  assert.equal(await js('getSelection().anchorOffset'), anchor);
 });
 
 test('Options settings: Markdown emphasis and the interface size', async () => {
