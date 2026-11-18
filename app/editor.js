@@ -268,7 +268,7 @@ async function deleteChapterToDarlings(chId, quiet = false) {
   const noted = isStory(chId) && await notesPageToDarlings(chId, kind === 'chapter' ? t('deleted Chapter {n}', { n: chapterNumber(chId) }) : name);
   if (noted) await writeSidecar(book.id, 'darlings', darlings);
   if (currentChapterId === chId) currentChapterId = null;
-  await deleteChapterQuiet(chId);
+  if (await deleteChapterQuiet(chId)) return true;
   if (text && !quiet) {
     toast(kind === 'chapter'
       ? t('Chapter removed — its words are in Darlings, or {key} to undo', { key: KZ })

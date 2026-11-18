@@ -173,6 +173,18 @@ async function main() {
       assert.deepEqual(errors, []);
     });
 
+    await test('Pocket keeps the newer disk revision when a chapter is deleted', async () => {
+      const bookId = await js('book.id');
+      const remote = '<p>Newer words from another device.</p>';
+      await js(`window.neo.writeChapter(book.id, 'c-delete-test', ${JSON.stringify(remote)})`);
+      const result = await js(`window.neo.deleteChapter(book.id, 'c-delete-test', '<p>Old words.</p>')`);
+      const dir = path.join(tmp, 'docs', 'NEO Library', bookId, 'chapters');
+      assert.equal(fs.existsSync(path.join(dir, 'c-delete-test.html')), false);
+      assert.match(result.kept, /^c-delete-test\.html\.bak-/);
+      assert.equal(fs.readFileSync(path.join(dir, result.kept), 'utf8'), remote);
+      assert.equal(await js(`window.neo.deleteChapter(book.id, 'c-delete-test', '<p>Old words.</p>')`), true);
+    });
+
     await test('a book still opens cleanly after all that', async () => {
       assert.deepEqual(errors, []);
     });

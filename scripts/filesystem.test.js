@@ -135,12 +135,46 @@ describe('filesystem', { concurrency: 1 }, () => {
       const file = path.join(dir, book.id, 'chapters', 'c1.html');
       const st = fs.statSync(file);
       assert.equal(main.call('chapter:stamps', book.id).c1, st.mtimeMs + ':' + st.size);
-      assert.equal(main.call('chapter:delete', book.id, 'c1'), true);
+      assert.equal(main.call('chapter:delete', book.id, 'c1', html), true);
       assert.equal(fs.existsSync(file), false);
       assert.equal(main.call('chapter:read', book.id, 'c1'), '');
       assert.equal(main.call('chapter:stamps', book.id).c1, undefined);
       assert.equal(main.call('chapter:delete', book.id, 'missing'), true);
     } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('deleting a chapter keeps a newer disk revision in a recovery file', () => {
+    const dir = tempLibrary();
+    try {
+      const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+      const old = '<p>As last read.</p>';
+      const latest = '<p>New words from another device.</p>';
+      main.call('chapter:write', book.id, 'c1', latest);
+      const result = main.call('chapter:delete', book.id, 'c1', old);
+      const chapters = path.join(dir, book.id, 'chapters');
+      assert.match(result.kept, /^c1\.html\.bak-/);
+      assert.equal(fs.readFileSync(path.join(chapters, result.kept), 'utf8'), latest);
+      assert.deepEqual(fs.readdirSync(chapters), [result.kept]);
+      assert.equal(main.call('chapter:delete', book.id, 'c1', old), true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a failed chapter recovery move leaves the chapter at its original path', () => {
+    const dir = tempLibrary();
+    const rename = fs.renameSync;
+    try {
+      const book = main.call('book:create', { title: 'Hello', author: 'Ada' });
+      const html = '<p>Still here.</p>';
+      main.call('chapter:write', book.id, 'c1', html);
+      fs.renameSync = () => { throw Object.assign(new Error('recovery move failed'), { code: 'EIO' }); };
+      assert.throws(() => main.call('chapter:delete', book.id, 'c1', html), /recovery move failed/);
+      assert.equal(main.call('chapter:read', book.id, 'c1'), html);
+    } finally {
+      fs.renameSync = rename;
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });

@@ -410,7 +410,7 @@ async function deleteChapterQuiet(chId) {
   renderStickies();
   // book.json lets go of the chapter before its file goes
   await saveMeta();
-  if (book && book.id === bookId) await window.neo.deleteChapter(bookId, chId);
+  return removeChapterFile(bookId, chId);
 }
 
 function focusChapter(chId) {

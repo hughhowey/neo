@@ -228,6 +228,23 @@ test('a copy with words the page lacks is still kept as the chapter after it', a
   assert.ok(/herewords/.test(fs.readFileSync(file, 'utf8')));
 });
 
+test('deleting from the editor keeps both its Darlings copy and the newer disk revision', async () => {
+  await saved();
+  const chId = (await order())[0];
+  const chapters = path.join(dir, 'chapters');
+  const remote = 'A newer revision of the chapter being deleted.';
+  theirChapter(chId, remote);
+  await js(`deleteChapterToDarlings(${JSON.stringify(chId)})`);
+  assert.ok(!readMeta().chapterOrder.includes(chId));
+  assert.equal(fs.existsSync(path.join(chapters, chId + '.html')), false);
+  const kept = fs.readdirSync(chapters).find((name) => name.startsWith(chId + '.html.bak-'));
+  assert.ok(kept);
+  assert.equal(fs.readFileSync(path.join(chapters, kept), 'utf8'), '<p>' + remote + '</p>');
+  const darlings = JSON.parse(fs.readFileSync(path.join(dir, 'darlings.json'), 'utf8'));
+  assert.ok(darlings.some((d) => d.html.includes('first chapter')));
+  assert.ok((await js("document.getElementById('hint').textContent")).includes(kept));
+});
+
 async function main() {
   await app.whenReady();
   let failed = 0;

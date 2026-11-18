@@ -1151,10 +1151,23 @@ function chapterDiverged(cur, expected, html) {
   return words !== '';
 }
 
-ipcMain.handle('chapter:delete', (_e, bookId, chapterId) => {
+ipcMain.handle('chapter:delete', (_e, bookId, chapterId, expected) => {
   const file = path.join(bookDir(bookId), 'chapters', libName(chapterId) + '.html');
-  if (fs.existsSync(file)) fs.unlinkSync(file);
-  return true;
+  if (isCloudOnly(file)) { requestDownload([file]); throw cloudError(file); }
+  const kept = file + '.bak-' + require('node:crypto').randomUUID();
+  // Move the exact file out of the manuscript before inspecting it. A sync
+  // client can replace the source between a read and an unlink.
+  try { renameIntoPlace(file, kept); } catch (err) {
+    if (err.code === 'ENOENT') return true;
+    throw err;
+  }
+  try {
+    if (typeof expected === 'string' && !isCloudOnly(kept) && fs.readFileSync(kept, 'utf8') === expected) {
+      fs.unlinkSync(kept);
+      return true;
+    }
+  } catch (err) { logError('chapter delete recovery', err); }
+  return { kept: path.basename(kept) };
 });
 
 // A notes or outline page (aux:*): the same revision contract as chapters.
