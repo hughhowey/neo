@@ -986,6 +986,25 @@ body.focus-mode .chapter-body.cap-sel.has-cap p[data-first]::before { position: 
 body.bright .spell-menu { border-color: #4a4a4a; }
 body.bright .spell-menu button { color: #eee; }
 
+/* Hold for accents, off the Mac (HOLD FOR ACCENTS in app/): the letter's
+   accented forms in a row above it, each with the number that takes it */
+.accent-pick {
+  position: fixed; z-index: 300; display: flex; gap: 2px;
+  background: #262626; border: 1px solid #3a3a3a; border-radius: 8px;
+  padding: 4px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+.accent-pick button {
+  display: flex; flex-direction: column; align-items: center; min-width: 30px;
+  background: none; border: none; border-radius: 5px; padding: 3px 6px 2px;
+  color: #ddd; cursor: pointer; font-family: Georgia, serif;
+}
+.accent-pick .ap-ch { font-size: 20px; line-height: 1.2; }
+.accent-pick .ap-n { font-size: 10px; color: var(--muted); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+.accent-pick button:hover, .accent-pick button.on { background: #3a3a3a; }
+.accent-pick button.on .ap-ch { color: var(--accent); }
+body.bright .accent-pick { border-color: #4a4a4a; }
+body.bright .accent-pick button { color: #eee; }
+
 /* Section breaks: Enter twice for ***, three times for a new chapter */
 /* (always centered: an alignment a break picked up from the paragraph it
    was made in, justified most of all, would set it flush left) */
@@ -1897,6 +1916,10 @@ body.light .sheet, body.light #aux-paper { box-shadow: 0 1px 3px rgba(0,0,0,0.06
 body.light .spell-menu { background: #fff; border-color: #d9d4ca; box-shadow: 0 6px 24px rgba(0,0,0,0.14); }
 body.light .spell-menu button { color: #2b2926; }
 body.light .spell-menu button:hover:not(:disabled), body.light .spell-menu button:focus-visible { background: #f0ede7; }
+body.light .accent-pick { background: #fff; border-color: #d9d4ca; box-shadow: 0 6px 24px rgba(0,0,0,0.14); }
+body.light .accent-pick button { color: #2b2926; }
+body.light .accent-pick button:hover, body.light .accent-pick button.on { background: #f0ede7; }
+body.light .accent-pick button.on .ap-ch { color: #8a6d2f; }
 body.light .spell-menu button:disabled { color: #857f75; }
 body.light .spell-menu .sm-sep { background: #e6e2da; }
 

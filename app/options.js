@@ -81,7 +81,7 @@ let optionsOpen = null;
 async function openOptions() {
   if (optionsOpen) { optionsOpen.querySelector('.opt-panel').focus(); return; }
   const langs = window.neo.uiLanguages ? await window.neo.uiLanguages().catch(() => null) : null;
-  const pressHoldShown = window.neo.platform === 'darwin' && !!window.neo.setPressHold;
+  const pressHoldShown = !IS_POCKET && !!window.neo.setPressHold; // a phone's keyboard has its own
   const bd = document.createElement('div');
   bd.className = 'modal-backdrop';
   optionsOpen = bd;
