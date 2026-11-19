@@ -237,7 +237,7 @@ async function main() {
     while (!(await js(`typeof library !== 'undefined' && !!library`).catch(() => false))) await tick(50);
     await tick(300);
     // a Mac hands a held key to its own picker; here NEO's strip is the one tested
-    if (process.platform === 'darwin') await js(`systemAccentPicker = () => false`);
+    if (process.platform === 'darwin') await js(`systemAccentPicker = () => false; true`);
     await js(`(async () => {
       document.getElementById('firstrun').hidden = true;
       await addImportedBooks([{ name: 'Accents', chapters: [
