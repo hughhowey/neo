@@ -2812,18 +2812,21 @@ ipcMain.on('pagewidth:state', (_e, v) => {
   pageWidthState = v;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
-// macOS only: hold a letter for the accent picker (View → Press and Hold for
-// Accents). Kept in settings.json; off unless the writer turns it on (the
-// picker once re-emitted held keys as phantom letters, so held keys repeat).
+// Hold a letter for its accents (Options → Press and hold for accents): the
+// system's picker on a Mac, NEO's own elsewhere (HOLD FOR ACCENTS in app/).
+// Kept in settings.json; off unless the writer turns it on (the Mac's picker
+// once re-emitted held keys as phantom letters, so held keys repeat).
 function pressAndHoldOn() {
-  return process.platform === 'darwin' && readSettings().pressAndHold === true;
+  return readSettings().pressAndHold === true;
 }
 ipcMain.on('pressHold:get', (e) => { e.returnValue = pressAndHoldOn(); });
 function setPressAndHold(on) {
   try { writeSettings({ ...readSettings(), pressAndHold: on }); } catch (err) { logError('settings', err); }
-  try {
-    require('electron').systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', on);
-  } catch (err) { logError('prefs', err); }
+  if (process.platform === 'darwin') {
+    try {
+      require('electron').systemPreferences.setUserDefault('ApplePressAndHoldEnabled', 'boolean', on);
+    } catch (err) { logError('prefs', err); }
+  }
   sendToWindow({ type: 'pressHold', value: on });
   try { buildMenu(); } catch (err) { logError('menu', err); }
 }

@@ -670,11 +670,15 @@ function replaceBefore(n, text) {
 // abbreviation; the same rules as capitalSlips) and, in English, "i" on its
 // own. ⌘Z (Ctrl+Z) right after keeps the lowercase. Poetry is left alone.
 let capJustSet = null; // the capital just set, for ⌘Z
-// macOS press-and-hold (View → Press and hold for accents): the held letter
+// macOS press-and-hold (Options → Press and hold for accents): the held letter
 // must reach the system untouched, so a sentence's first letter is typed as it
 // is and capitalised at the next key, whether it stayed or the picker made é.
+// Off the Mac the same switch opens NEO's own picker (HOLD FOR ACCENTS below).
 let pressHoldOn = false;
-try { pressHoldOn = !!(window.neo && window.neo.pressHold && window.neo.pressHold()); } catch (_) { /* not on a Mac */ }
+try { pressHoldOn = !!(window.neo && window.neo.pressHold && window.neo.pressHold()); } catch (_) { /* Pocket */ }
+function systemAccentPicker() {
+  return pressHoldOn && !!window.neo && window.neo.platform === 'darwin';
+}
 let capPending = null; // { block, at } a letter waiting for its capital
 function capPendingResolve(body) {
   const p = capPending;
@@ -700,7 +704,7 @@ function capPendingResolve(body) {
 }
 function autoCapKey(e, body) {
   if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing || e.keyCode === 229) return;
-  if (pressHoldOn) {
+  if (systemAccentPicker()) {
     if (e.repeat) return;
     if (capPending && !MODIFIER_KEYS.has(e.key)) capPendingResolve(body);
   }
@@ -724,7 +728,7 @@ function autoCapKey(e, body) {
       starts = !CAPS_ABBREV.has(word.toLowerCase()) && !/^\p{L}$/u.test(word);
     }
     if (!starts) return;
-    if (pressHoldOn) { capPending = { block, at: before.length }; return; }
+    if (systemAccentPicker()) { capPending = { block, at: before.length }; return; }
     e.preventDefault();
     const to = e.key.toLocaleUpperCase(lang);
     document.execCommand('insertText', false, to);
@@ -755,10 +759,135 @@ document.addEventListener('keydown', (e) => {
   selectChars(just.block, caret, caret);
 }, true);
 
+/*  HOLD FOR ACCENTS  */
+// Off the Mac (Windows, Linux), Options → Press and hold for accents makes a
+// held letter open a strip of its accented letters beside it, as macOS's own
+// picker does there (#579). 1–9 or a click takes one, so do ← → and Enter;
+// Esc keeps the letter, and any other key closes the strip and is typed as
+// usual. A letter with no accents still repeats. On a Mac the system's own
+// picker does this (systemAccentPicker above).
+const ACCENTS = {
+  a: 'àáâäæãåāą', c: 'çćč', d: 'ď', e: 'èéêëēėęě', g: 'ğ', i: 'îïíīįìı', l: 'ł',
+  n: 'ñńň', o: 'ôöòóœøōõő', r: 'ř', s: 'ßśšșş', t: 'țť', u: 'ûüùúūůű', y: 'ÿý', z: 'žźż'
+};
+function accentsFor(letter) {
+  const list = ACCENTS[letter.toLowerCase()];
+  if (!list) return [];
+  const upper = letter !== letter.toLowerCase();
+  const out = [];
+  for (const ch of list) {
+    const v = upper ? ch.toUpperCase() : ch;
+    // ß and dotless ı have no capital of their own to offer
+    if (!upper || (v.length === 1 && v !== letter)) out.push(v);
+  }
+  return out;
+}
+let accentPick = null; // { el, node, offset, letter, key, choices, index }
+function closeAccentPicker() {
+  const p = accentPick;
+  accentPick = null;
+  if (p) p.el.remove();
+}
+function accentHoldKey(e, body) {
+  if (!e.repeat || !pressHoldOn || systemAccentPicker() || accentPick) return false;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing || e.keyCode === 229) return false;
+  if (e.key.length !== 1 || !body.isContentEditable || !ACCENTS[e.key.toLowerCase()]) return false;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return false;
+  const { startContainer: node, startOffset: offset } = sel.getRangeAt(0);
+  if (node.nodeType !== Node.TEXT_NODE || !offset || !body.contains(node)) return false;
+  // the letter the first press typed, just before the caret: capitalised
+  // there if it began a sentence, and then its accents are capitals too
+  const letter = node.textContent[offset - 1];
+  if (letter.toLowerCase() !== e.key.toLowerCase()) return false;
+  const choices = accentsFor(letter);
+  if (!choices.length) return false;
+  e.preventDefault();
+  openAccentPicker(node, offset, letter, e.key, choices);
+  return true;
+}
+function openAccentPicker(node, offset, letter, key, choices) {
+  const el = document.createElement('div');
+  el.className = 'accent-pick';
+  el.setAttribute('role', 'listbox');
+  el.setAttribute('aria-label', t('Accents'));
+  choices.forEach((ch, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.tabIndex = -1;
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', 'false');
+    b.innerHTML = `<span class="ap-ch"></span><span class="ap-n">${i + 1}</span>`;
+    b.firstChild.textContent = ch;
+    b.addEventListener('click', () => pickAccent(i));
+    el.appendChild(b);
+  });
+  // a click on the strip leaves the caret where it is
+  el.addEventListener('mousedown', (e) => e.preventDefault());
+  document.body.appendChild(el);
+  accentPick = { el, node, offset, letter, key, choices, index: -1 };
+  const r = document.createRange();
+  r.setStart(node, offset - 1);
+  r.setEnd(node, offset);
+  const at = r.getBoundingClientRect();
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  el.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, at.left + at.width / 2 - w / 2)) + 'px';
+  el.style.top = (at.top - h - 6 >= 4 ? at.top - h - 6 : at.bottom + 6) + 'px';
+}
+function paintAccentPicker() {
+  const p = accentPick;
+  [...p.el.children].forEach((b, i) => {
+    b.classList.toggle('on', i === p.index);
+    b.setAttribute('aria-selected', String(i === p.index));
+  });
+}
+function pickAccent(i) {
+  const p = accentPick;
+  closeAccentPicker();
+  if (!p || !p.node.isConnected || p.node.textContent[p.offset - 1] !== p.letter) return;
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.setStart(p.node, p.offset - 1);
+  r.setEnd(p.node, p.offset);
+  sel.removeAllRanges();
+  sel.addRange(r);
+  document.execCommand('insertText', false, p.choices[i]);
+}
+// first in line while the strip is up (ahead of vim's keys and the page's)
+window.addEventListener('keydown', (e) => {
+  const p = accentPick;
+  if (!p || MODIFIER_KEYS.has(e.key)) return;
+  const take = () => { e.preventDefault(); e.stopPropagation(); };
+  // the letter still held
+  if (e.repeat && e.key === p.key) { take(); return; }
+  const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+  // the number's key, whatever the layout puts on it (AZERTY: & é " ' …)
+  const digit = /^[1-9]$/.test(e.key) ? +e.key : +((/^(?:Digit|Numpad)([1-9])$/.exec(e.code) || [])[1] || 0);
+  if (plain && digit && digit <= p.choices.length) { take(); pickAccent(digit - 1); return; }
+  if (plain && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    take();
+    const n = p.choices.length;
+    p.index = e.key === 'ArrowRight' ? (p.index + 1) % n : (p.index < 1 ? n - 1 : p.index - 1);
+    paintAccentPicker();
+    return;
+  }
+  if (plain && e.key === 'Enter' && p.index >= 0) { take(); pickAccent(p.index); return; }
+  if (e.key === 'Escape') { take(); closeAccentPicker(); return; }
+  closeAccentPicker(); // any other key is typed as usual
+}, true);
+document.addEventListener('mousedown', (e) => {
+  if (accentPick && !accentPick.el.contains(e.target)) closeAccentPicker();
+}, true);
+document.addEventListener('scroll', () => { if (accentPick) closeAccentPicker(); }, true);
+window.addEventListener('blur', closeAccentPicker);
+window.addEventListener('resize', closeAccentPicker);
+
 function smartKeys(e, body) {
   // a field can reach smartKeys twice (its own handler and the page-wide
   // one below): the first pass wins
   if (e.defaultPrevented) return;
+  if (accentHoldKey(e, body)) return;
   if (litrpgKey(e, body)) return;
   dialogueDashKey(e, body);
   autoCapKey(e, body);

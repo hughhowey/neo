@@ -27,6 +27,7 @@
     "test:danish": "electron scripts/danish.e2e.js",
     "test:litrpg": "electron scripts/litrpg.e2e.js",
     "test:pocket": "electron scripts/pocket.e2e.js",
+    "test:accents": "electron scripts/accents.e2e.js",
     "test:e2e": "node scripts/e2e-all.js",
     "test": "node --test \"scripts/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"scripts/*.test.js\"",
